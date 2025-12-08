@@ -52,17 +52,17 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-primary" />
-            <span>{tournament.location}</span>
+            <span className="truncate">{tournament.location}</span>
           </div>
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-primary" />
-            <span>{tournament.playersRegistered.length} Inscritos</span>
+            <span>Máx: {tournament.maxTeams} equipos</span>
           </div>
         </div>
       </CardContent>
       
       <CardFooter>
-        <Button asChild className="w-full font-display tracking-wider bg-white/10 hover:bg-primary hover:text-black transition-colors">
+        <Button asChild className="w-full font-display tracking-wider bg-white/10 hover:bg-primary hover:text-black transition-colors cursor-pointer" data-testid={`button-view-tournament-${tournament.id}`}>
           <Link href={`/tournaments/${tournament.id}`}>
             VER DETALLES
           </Link>

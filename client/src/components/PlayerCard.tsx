@@ -91,27 +91,27 @@ export function PlayerCard({ player, className, size = "md", onClick, showSensit
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-display text-foreground/90 px-2">
             <div className="flex justify-between items-center">
               <span className="opacity-60">RIT</span>
-              <span className="font-bold">{player.stats.pace}</span>
+              <span className="font-bold">{player.pace}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="opacity-60">REG</span>
-              <span className="font-bold">{player.stats.dribbling}</span>
+              <span className="font-bold">{player.dribbling}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="opacity-60">TIR</span>
-              <span className="font-bold">{player.stats.shooting}</span>
+              <span className="font-bold">{player.shooting}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="opacity-60">DEF</span>
-              <span className="font-bold">{player.stats.defense}</span>
+              <span className="font-bold">{player.defense}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="opacity-60">PAS</span>
-              <span className="font-bold">{player.stats.passing}</span>
+              <span className="font-bold">{player.passing}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="opacity-60">FIS</span>
-              <span className="font-bold">{player.stats.physical}</span>
+              <span className="font-bold">{player.physical}</span>
             </div>
           </div>
         </div>

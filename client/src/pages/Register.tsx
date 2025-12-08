@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Camera } from "lucide-react";
 
 // Max file size 2MB
@@ -37,10 +37,16 @@ export default function Register() {
   const params = new URLSearchParams(search);
   const preSelectedTournamentId = params.get("tournamentId");
 
-  const { registerPlayer, tournaments, joinTournament } = useStore();
+  const { registerPlayer, tournaments, fetchTournaments } = useStore();
   const { toast } = useToast();
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch tournaments on mount
+  useEffect(() => {
+    fetchTournaments();
+  }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -85,37 +91,40 @@ export default function Register() {
     }
   };
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    const newPlayer = {
-      name: values.name,
-      mobile: values.mobile,
-      avatar: previewImage || undefined,
-      stats: {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
+    
+    try {
+      const playerData = {
+        name: values.name,
+        mobile: values.mobile,
+        avatar: previewImage || undefined,
         pace: values.pace,
         shooting: values.shooting,
         passing: values.passing,
         dribbling: values.dribbling,
         defense: values.defense,
         physical: values.physical,
-      },
-    };
-    
-    // In real app, we would wait for ID from backend response
-    // Here we trust the store generates it synchronously
-    registerPlayer(newPlayer);
-    
-    // We need to find the newly created player to get their ID and join the tournament
-    // This is a bit hacky for the mock store, in real app the API returns the ID
-    // We'll simulate a delay and then "find" them or just rely on the user flow
-    
-    toast({
-      title: "Registro Completado",
-      description: "Tu perfil ha sido creado y enviado a la bolsa de jugadores.",
-    });
+        tournamentId: values.tournamentId,
+      };
+      
+      await registerPlayer(playerData);
+      
+      toast({
+        title: "Registro Completado",
+        description: "Tu perfil ha sido creado y enviado a la bolsa de jugadores.",
+      });
 
-    // Simulate joining the tournament immediately (in real app, use returned ID)
-    // For this mock, we'll just redirect to home
-    setLocation("/");
+      setLocation("/");
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error en el registro",
+        description: error.message || "No se pudo completar el registro",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -346,8 +355,14 @@ export default function Register() {
                   </div>
                 </div>
 
-                <Button type="submit" size="lg" className="w-full font-display text-xl h-14 bg-primary text-black hover:bg-white hover:scale-[1.01] transition-all">
-                  COMPLETAR REGISTRO
+                <Button 
+                  type="submit" 
+                  size="lg" 
+                  className="w-full font-display text-xl h-14 bg-primary text-black hover:bg-white hover:scale-[1.01] transition-all cursor-pointer"
+                  disabled={isSubmitting}
+                  data-testid="button-submit-registration"
+                >
+                  {isSubmitting ? 'REGISTRANDO...' : 'COMPLETAR REGISTRO'}
                 </Button>
               </form>
             </Form>

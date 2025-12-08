@@ -8,34 +8,69 @@ import { Calendar, MapPin, Users, Trophy } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { PlayerCard } from "@/components/PlayerCard";
+import { useState, useEffect } from "react";
+import { tournamentsApi, type Player, type Tournament } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function TournamentDetails() {
   const [match, params] = useRoute("/tournaments/:id");
-  const { tournaments, players, currentUser } = useStore();
+  const { currentUser } = useStore();
+  const [tournament, setTournament] = useState<Tournament | null>(null);
+  const [registeredPlayers, setRegisteredPlayers] = useState<Player[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
   
+  useEffect(() => {
+    if (match && params?.id) {
+      loadTournament(params.id);
+    }
+  }, [match, params?.id]);
+
+  async function loadTournament(id: string) {
+    try {
+      setIsLoading(true);
+      const data = await tournamentsApi.getById(id);
+      setTournament(data.tournament);
+      setRegisteredPlayers(data.registeredPlayers);
+    } catch (error) {
+      console.error("Failed to load tournament:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo cargar el torneo",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   if (!match || !params) return null;
   
-  const tournament = tournaments.find(t => t.id === params.id);
-  
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <Navbar />
+        <div className="container mx-auto px-4 py-20 flex justify-center items-center">
+          <p className="text-xl">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!tournament) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-4xl font-display mb-4">Torneo no encontrado</h1>
           <Link href="/">
-            <Button>Volver a Inicio</Button>
+            <Button className="cursor-pointer">Volver a Inicio</Button>
           </Link>
         </div>
       </div>
     );
   }
 
-  const registeredPlayers = players.filter(p => tournament.playersRegistered.includes(p.id));
-  // In this mock, we don't have persistent auth ID check effectively without real backend, 
-  // but let's assume if currentUser is set we check ID. 
-  // But wait, Register page just registers a new player, it doesn't log them in persistently as that user.
-  // So 'isRegistered' check is loose here.
-  const isRegistered = currentUser && tournament.playersRegistered.includes(currentUser.id);
+  const isRegistered = currentUser && registeredPlayers.some(p => p.id === currentUser.id);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -44,9 +79,9 @@ export default function TournamentDetails() {
       <div className="container mx-auto px-4 py-20">
         {/* Header */}
         <div className="mb-8">
-          <Link href="/tournaments">
-            <Button variant="ghost" className="mb-4 pl-0 hover:bg-transparent hover:text-primary">
-              ← Volver a Torneos
+          <Link href="/">
+            <Button variant="ghost" className="mb-4 pl-0 hover:bg-transparent hover:text-primary cursor-pointer">
+              ← Volver a Inicio
             </Button>
           </Link>
           
@@ -70,7 +105,8 @@ export default function TournamentDetails() {
                 <Link href={`/register?tournamentId=${tournament.id}`}>
                   <Button 
                     size="lg" 
-                    className="font-display text-xl px-8 h-14 bg-primary text-black hover:bg-white transition-all"
+                    className="font-display text-xl px-8 h-14 bg-primary text-black hover:bg-white transition-all cursor-pointer"
+                    data-testid="button-register-tournament"
                   >
                     INSCRIBIRSE AHORA
                   </Button>
@@ -99,7 +135,7 @@ export default function TournamentDetails() {
               </div>
               <div className="flex items-center gap-3 text-lg">
                 <Users className="w-6 h-6 text-primary" />
-                <span>{registeredPlayers.length} / {tournament.maxTeams * 5} Plazas Máx</span>
+                <span>{registeredPlayers.length} jugadores inscritos</span>
               </div>
               <div className="flex items-center gap-3 text-lg">
                 <Trophy className="w-6 h-6 text-primary" />

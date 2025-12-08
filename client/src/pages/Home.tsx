@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { Navbar } from "@/components/Navbar";
 import { TournamentCard } from "@/components/TournamentCard";
@@ -8,9 +9,14 @@ import heroBg from "@assets/generated_images/dark_abstract_basketball_background
 import { Link } from "wouter";
 
 export default function Home() {
-  const { tournaments, players } = useStore();
+  const { tournaments, players, fetchTournaments, fetchPlayers } = useStore();
   const activeTournaments = tournaments.filter(t => t.status === 'open' || t.status === 'active');
   const pastTournaments = tournaments.filter(t => t.status === 'completed');
+
+  useEffect(() => {
+    fetchTournaments();
+    fetchPlayers();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -51,14 +57,14 @@ export default function Home() {
             transition={{ delay: 0.4 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
-            <Button asChild size="lg" className="h-14 px-8 text-lg font-display tracking-widest bg-primary text-black hover:bg-white hover:scale-105 transition-all">
+            <Button asChild size="lg" className="h-14 px-8 text-lg font-display tracking-widest bg-primary text-black hover:bg-white hover:scale-105 transition-all cursor-pointer" data-testid="button-register-player">
               <Link href="/register">
                 REGISTRARSE COMO JUGADOR
               </Link>
             </Button>
             
-            <Button asChild size="lg" variant="outline" className="h-14 px-8 text-lg font-display tracking-widest border-white/20 hover:bg-white/10">
-              <Link href="/tournaments">
+            <Button asChild size="lg" variant="outline" className="h-14 px-8 text-lg font-display tracking-widest border-white/20 hover:bg-white/10 cursor-pointer" data-testid="button-view-tournaments">
+              <Link href="#torneos">
                 VER TORNEOS
               </Link>
             </Button>
@@ -71,9 +77,6 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between mb-12">
             <h2 className="text-4xl font-display font-bold">MEJORES VALORADOS</h2>
-            <Button asChild variant="link" className="text-primary">
-              <Link href="/players">Ver Todos</Link>
-            </Button>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
@@ -93,14 +96,20 @@ export default function Home() {
       </section>
 
       {/* Active Tournaments */}
-      <section className="py-20">
+      <section id="torneos" className="py-20">
         <div className="container mx-auto px-4">
           <h2 className="text-4xl font-display font-bold mb-12">TORNEOS ACTIVOS</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {activeTournaments.map((tournament) => (
-              <TournamentCard key={tournament.id} tournament={tournament} />
-            ))}
-          </div>
+          {activeTournaments.length === 0 ? (
+            <div className="text-center py-20 border border-dashed border-white/10 rounded-lg">
+              <p className="text-muted-foreground text-xl">No hay torneos activos en este momento.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeTournaments.map((tournament) => (
+                <TournamentCard key={tournament.id} tournament={tournament} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
