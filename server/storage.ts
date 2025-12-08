@@ -57,13 +57,23 @@ export class DatabaseStorage implements IStorage {
 
   async createPlayer(insertPlayer: InsertPlayer): Promise<Player> {
     // Calculate overall from stats
-    const overall = Math.round(
-      (insertPlayer.pace + insertPlayer.shooting + insertPlayer.passing + 
-       insertPlayer.dribbling + insertPlayer.defense + insertPlayer.physical) / 6
-    );
+    const pace = insertPlayer.pace ?? 50;
+    const shooting = insertPlayer.shooting ?? 50;
+    const passing = insertPlayer.passing ?? 50;
+    const dribbling = insertPlayer.dribbling ?? 50;
+    const defense = insertPlayer.defense ?? 50;
+    const physical = insertPlayer.physical ?? 50;
+    
+    const overall = Math.round((pace + shooting + passing + dribbling + defense + physical) / 6);
     
     const [player] = await db.insert(players).values({
       ...insertPlayer,
+      pace,
+      shooting,
+      passing,
+      dribbling,
+      defense,
+      physical,
       overall,
     }).returning();
     return player!;
@@ -145,7 +155,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(players, eq(tournamentRegistrations.playerId, players.id))
       .where(eq(tournamentRegistrations.tournamentId, tournamentId));
     
-    return result.map(r => r.player);
+    return result.map((r: { player: Player }) => r.player);
   }
 
   async getTournamentsForPlayer(playerId: string): Promise<Tournament[]> {
@@ -155,7 +165,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(tournaments, eq(tournamentRegistrations.tournamentId, tournaments.id))
       .where(eq(tournamentRegistrations.playerId, playerId));
     
-    return result.map(r => r.tournament);
+    return result.map((r: { tournament: Tournament }) => r.tournament);
   }
 
   // Teams
@@ -183,7 +193,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(players, eq(teamPlayers.playerId, players.id))
       .where(eq(teamPlayers.teamId, teamId));
     
-    return result.map(r => r.player);
+    return result.map((r: { player: Player }) => r.player);
   }
 }
 
