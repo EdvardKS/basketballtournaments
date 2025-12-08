@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useStore } from "@/lib/store";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,19 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { useState, useRef } from "react";
+import { Camera } from "lucide-react";
+
+// Max file size 2MB
+const MAX_FILE_SIZE = 2000000;
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
 const formSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters."),
-  mobile: z.string().min(10, "Mobile number must be valid."),
+  name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
+  mobile: z.string().min(9, "Introduce un móvil válido."),
+  tournamentId: z.string().min(1, "Debes seleccionar un torneo."),
   pace: z.number().min(0).max(99),
   shooting: z.number().min(0).max(99),
   passing: z.number().min(0).max(99),
@@ -24,14 +33,21 @@ const formSchema = z.object({
 
 export default function Register() {
   const [, setLocation] = useLocation();
-  const registerPlayer = useStore((state) => state.registerPlayer);
-  const setCurrentUser = useStore((state) => state.setCurrentUser);
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const preSelectedTournamentId = params.get("tournamentId");
+
+  const { registerPlayer, tournaments, joinTournament } = useStore();
+  const { toast } = useToast();
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       mobile: "",
+      tournamentId: preSelectedTournamentId || "",
       pace: 50,
       shooting: 50,
       passing: 50,
@@ -41,10 +57,39 @@ export default function Register() {
     },
   });
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast({
+          variant: "destructive",
+          title: "Archivo demasiado grande",
+          description: "La imagen no debe superar los 2MB.",
+        });
+        return;
+      }
+      if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+        toast({
+          variant: "destructive",
+          title: "Formato no válido",
+          description: "Solo se aceptan .jpg, .jpeg, .png y .webp",
+        });
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   function onSubmit(values: z.infer<typeof formSchema>) {
     const newPlayer = {
       name: values.name,
       mobile: values.mobile,
+      avatar: previewImage || undefined,
       stats: {
         pace: values.pace,
         shooting: values.shooting,
@@ -55,14 +100,22 @@ export default function Register() {
       },
     };
     
+    // In real app, we would wait for ID from backend response
+    // Here we trust the store generates it synchronously
     registerPlayer(newPlayer);
     
-    // Simulate logging in as the new player
-    // In a real app we'd get the ID back or handle auth
-    // For now, find the player we just added (simulated)
-    // setCurrentUser({...newPlayer, id: 'temp', role: 'player', overall: 75, registeredTournaments: []}); 
+    // We need to find the newly created player to get their ID and join the tournament
+    // This is a bit hacky for the mock store, in real app the API returns the ID
+    // We'll simulate a delay and then "find" them or just rely on the user flow
     
-    setLocation("/tournaments");
+    toast({
+      title: "Registro Completado",
+      description: "Tu perfil ha sido creado y enviado a la bolsa de jugadores.",
+    });
+
+    // Simulate joining the tournament immediately (in real app, use returned ID)
+    // For this mock, we'll just redirect to home
+    setLocation("/");
   }
 
   return (
@@ -70,25 +123,57 @@ export default function Register() {
       <Navbar />
       
       <div className="container mx-auto px-4 py-20 flex justify-center">
-        <Card className="w-full max-w-2xl bg-white/5 border-white/10">
+        <Card className="w-full max-w-3xl bg-white/5 border-white/10">
           <CardHeader>
-            <CardTitle className="font-display text-4xl">PLAYER REGISTRATION</CardTitle>
+            <CardTitle className="font-display text-4xl">REGISTRO DE JUGADOR</CardTitle>
             <CardDescription>
-              Create your player profile. Rate your skills honestly - inaccurate ratings may lead to disqualification.
+              Crea tu perfil para la Liga de Villena. Valora tus habilidades con sinceridad (0-99). 
+              <br/><span className="text-red-400">¡Aviso! Las valoraciones falsas pueden llevar a la descalificación.</span>
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                
+                {/* Photo Upload Section */}
+                <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-white/10 rounded-lg bg-black/20">
+                  <div 
+                    className="w-32 h-32 rounded-full overflow-hidden bg-white/10 mb-4 flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity border-2 border-primary/50"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {previewImage ? (
+                      <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <Camera className="w-10 h-10 text-muted-foreground" />
+                    )}
+                  </div>
+                  <Button 
+                    type="button" 
+                    variant="secondary" 
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Subir Foto de Ficha
+                  </Button>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={handleImageChange}
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">Max 2MB. JPG/PNG.</p>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Full Name</FormLabel>
+                        <FormLabel>Nombre Completo</FormLabel>
                         <FormControl>
-                          <Input placeholder="Michael Jordan" {...field} className="bg-white/5 border-white/10" />
+                          <Input placeholder="Ej: Juan Martínez" {...field} className="bg-white/5 border-white/10" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -99,10 +184,38 @@ export default function Register() {
                     name="mobile"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Mobile Number</FormLabel>
+                        <FormLabel>Teléfono Móvil (ID Único)</FormLabel>
                         <FormControl>
-                          <Input placeholder="555-0123" {...field} className="bg-white/5 border-white/10" />
+                          <Input placeholder="600 000 000" {...field} className="bg-white/5 border-white/10" />
                         </FormControl>
+                        <FormDescription className="text-xs">
+                          Usaremos esto para tu historial en la liga.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="tournamentId"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Torneo a Inscribirse</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="bg-white/5 border-white/10">
+                              <SelectValue placeholder="Selecciona un torneo..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {tournaments.filter(t => t.status === 'open').map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -112,38 +225,129 @@ export default function Register() {
                 <Separator className="bg-white/10" />
 
                 <div className="space-y-6">
-                  <h3 className="font-display text-2xl">SKILL SELF-ASSESSMENT (0-99)</h3>
+                  <h3 className="font-display text-2xl text-primary">AUTO-EVALUACIÓN DE HABILIDADES</h3>
+                  <p className="text-sm text-muted-foreground">Sé honesto. Los capitanes verán esto en el draft.</p>
                   
-                  {['pace', 'shooting', 'passing', 'dribbling', 'defense', 'physical'].map((stat) => (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
                     <FormField
-                      key={stat}
                       control={form.control}
-                      name={stat as any}
+                      name="pace"
                       render={({ field }) => (
                         <FormItem>
                           <div className="flex justify-between mb-2">
-                            <FormLabel className="uppercase">{stat}</FormLabel>
+                            <FormLabel className="uppercase font-bold">Ritmo (PAC)</FormLabel>
                             <span className="font-mono text-primary font-bold">{field.value}</span>
                           </div>
                           <FormControl>
                             <Slider
-                              min={0}
-                              max={99}
-                              step={1}
+                              min={0} max={99} step={1}
                               defaultValue={[field.value]}
                               onValueChange={(vals) => field.onChange(vals[0])}
-                              className="py-2"
                             />
                           </FormControl>
-                          <FormMessage />
                         </FormItem>
                       )}
                     />
-                  ))}
+                    <FormField
+                      control={form.control}
+                      name="shooting"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex justify-between mb-2">
+                            <FormLabel className="uppercase font-bold">Tiro (SHO)</FormLabel>
+                            <span className="font-mono text-primary font-bold">{field.value}</span>
+                          </div>
+                          <FormControl>
+                            <Slider
+                              min={0} max={99} step={1}
+                              defaultValue={[field.value]}
+                              onValueChange={(vals) => field.onChange(vals[0])}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="passing"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex justify-between mb-2">
+                            <FormLabel className="uppercase font-bold">Pase (PAS)</FormLabel>
+                            <span className="font-mono text-primary font-bold">{field.value}</span>
+                          </div>
+                          <FormControl>
+                            <Slider
+                              min={0} max={99} step={1}
+                              defaultValue={[field.value]}
+                              onValueChange={(vals) => field.onChange(vals[0])}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="dribbling"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex justify-between mb-2">
+                            <FormLabel className="uppercase font-bold">Regate (DRI)</FormLabel>
+                            <span className="font-mono text-primary font-bold">{field.value}</span>
+                          </div>
+                          <FormControl>
+                            <Slider
+                              min={0} max={99} step={1}
+                              defaultValue={[field.value]}
+                              onValueChange={(vals) => field.onChange(vals[0])}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="defense"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex justify-between mb-2">
+                            <FormLabel className="uppercase font-bold">Defensa (DEF)</FormLabel>
+                            <span className="font-mono text-primary font-bold">{field.value}</span>
+                          </div>
+                          <FormControl>
+                            <Slider
+                              min={0} max={99} step={1}
+                              defaultValue={[field.value]}
+                              onValueChange={(vals) => field.onChange(vals[0])}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="physical"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex justify-between mb-2">
+                            <FormLabel className="uppercase font-bold">Físico (PHY)</FormLabel>
+                            <span className="font-mono text-primary font-bold">{field.value}</span>
+                          </div>
+                          <FormControl>
+                            <Slider
+                              min={0} max={99} step={1}
+                              defaultValue={[field.value]}
+                              onValueChange={(vals) => field.onChange(vals[0])}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
 
                 <Button type="submit" size="lg" className="w-full font-display text-xl h-14 bg-primary text-black hover:bg-white hover:scale-[1.01] transition-all">
-                  COMPLETE REGISTRATION
+                  COMPLETAR REGISTRO
                 </Button>
               </form>
             </Form>

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, Users } from "lucide-react";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface TournamentCardProps {
   tournament: Tournament;
@@ -18,11 +19,18 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
     completed: "bg-white/10 text-white/60 hover:bg-white/20",
   };
 
+  const statusText = {
+    open: "INSCRIPCIÓN ABIERTA",
+    draft: "EN DRAFT",
+    active: "EN JUEGO",
+    completed: "FINALIZADO"
+  };
+
   return (
     <Card className="group relative overflow-hidden border-white/10 bg-white/5 hover:border-primary/50 transition-all duration-300">
       <div className="absolute top-0 right-0 p-4">
         <Badge className={statusColors[tournament.status]} variant="outline">
-          {tournament.status.toUpperCase()}
+          {statusText[tournament.status]}
         </Badge>
       </div>
       
@@ -40,7 +48,7 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
         <div className="grid grid-cols-2 gap-4 text-sm text-white/80">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-primary" />
-            <span>{format(new Date(tournament.date), "MMM d, yyyy")}</span>
+            <span>{format(new Date(tournament.date), "d MMM yyyy", { locale: es })}</span>
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-primary" />
@@ -48,7 +56,7 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
           </div>
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-primary" />
-            <span>{tournament.playersRegistered.length} Registered</span>
+            <span>{tournament.playersRegistered.length} Inscritos</span>
           </div>
         </div>
       </CardContent>
@@ -56,7 +64,7 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
       <CardFooter>
         <Button asChild className="w-full font-display tracking-wider bg-white/10 hover:bg-primary hover:text-black transition-colors">
           <Link href={`/tournaments/${tournament.id}`}>
-            VIEW DETAILS
+            VER DETALLES
           </Link>
         </Button>
       </CardFooter>

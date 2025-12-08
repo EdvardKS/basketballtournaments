@@ -21,6 +21,7 @@ export interface Player {
   overall: number;
   avatar?: string;
   registeredTournaments: string[]; // Tournament IDs
+  password?: string; // For captains
 }
 
 export interface Team {
@@ -44,7 +45,7 @@ export interface Tournament {
 }
 
 interface AppState {
-  currentUser: Player | null; // For simulation
+  currentUser: Player | null; 
   players: Player[];
   tournaments: Tournament[];
   teams: Team[];
@@ -53,8 +54,9 @@ interface AppState {
   registerPlayer: (player: Omit<Player, 'id' | 'role' | 'overall' | 'registeredTournaments'>) => void;
   createTournament: (tournament: Omit<Tournament, 'id' | 'playersRegistered' | 'status'>) => void;
   joinTournament: (playerId: string, tournamentId: string) => void;
-  setCurrentUser: (user: Player | null) => void;
-  assignCaptain: (playerId: string, tournamentId: string) => void; // Promotes to captain for that tournament context (simplified for now)
+  login: (identifier: string, password?: string) => boolean;
+  logout: () => void;
+  assignCaptain: (playerId: string, password: string) => void; 
   draftPlayer: (captainId: string, playerId: string, tournamentId: string) => void;
 }
 
@@ -62,44 +64,39 @@ interface AppState {
 const MOCK_PLAYERS: Player[] = [
   {
     id: '1',
-    name: 'Alex "The Glide" Rivera',
+    name: 'Alex "El Deslizador" Rivera',
     mobile: '555-0101',
     role: 'captain',
     stats: { pace: 88, shooting: 82, passing: 75, dribbling: 85, defense: 60, physical: 70 },
     overall: 80,
     registeredTournaments: ['t1'],
+    password: 'password123',
+    avatar: 'https://images.unsplash.com/photo-1546519638-68e109498ee3?w=800&auto=format&fit=crop&q=60'
   },
   {
     id: '2',
-    name: 'Marcus "Tower" Johnson',
+    name: 'Marcos "La Torre" Johnson',
     mobile: '555-0102',
     role: 'player',
     stats: { pace: 60, shooting: 70, passing: 65, dribbling: 55, defense: 90, physical: 92 },
     overall: 78,
     registeredTournaments: ['t1'],
+    avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=800&auto=format&fit=crop&q=60'
   },
   {
     id: '3',
-    name: 'Sarah "Sniper" Chen',
+    name: 'Sara "Francotiradora" Chen',
     mobile: '555-0103',
     role: 'player',
     stats: { pace: 85, shooting: 94, passing: 78, dribbling: 80, defense: 45, physical: 50 },
     overall: 82,
     registeredTournaments: ['t1'],
-  },
-    {
-    id: '4',
-    name: 'David "Handles" Kim',
-    mobile: '555-0104',
-    role: 'player',
-    stats: { pace: 90, shooting: 75, passing: 88, dribbling: 92, defense: 55, physical: 60 },
-    overall: 81,
-    registeredTournaments: ['t1'],
+    avatar: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=800&auto=format&fit=crop&q=60'
   },
   {
     id: 'admin',
-    name: 'League Commissioner',
-    mobile: '000-0000',
+    name: 'Comisionado de la Liga',
+    mobile: 'edvardks', // Using mobile field for username for admin
     role: 'admin',
     stats: { pace: 99, shooting: 99, passing: 99, dribbling: 99, defense: 99, physical: 99 },
     overall: 99,
@@ -110,46 +107,63 @@ const MOCK_PLAYERS: Player[] = [
 const MOCK_TOURNAMENTS: Tournament[] = [
   {
     id: 't1',
-    name: 'Summer Streetball Classic 2024',
+    name: 'Clásico Callejero Villena 2024',
     date: '2024-07-15',
     status: 'open',
-    location: 'Rucker Park, NYC',
-    description: 'The legendary tournament returns. 5v5 full court. Winner takes all.',
+    location: 'Pistas Polideportivo Villena',
+    description: 'El torneo legendario regresa a Villena. 5v5 cancha completa. El ganador se lo lleva todo.',
     maxTeams: 8,
-    playersRegistered: ['1', '2', '3', '4'],
+    playersRegistered: ['1', '2', '3'],
   },
   {
     id: 't2',
-    name: 'Winter Indoor League',
+    name: 'Liga de Invierno Indoor',
     date: '2024-12-01',
     status: 'open',
-    location: 'Downtown Arena',
-    description: 'Indoor pro-am league. Register now.',
+    location: 'Pabellón Cubierto Municipal',
+    description: 'Liga pro-am indoor. Regístrate ahora.',
     maxTeams: 12,
     playersRegistered: [],
-  },
-    {
-    id: 't3',
-    name: 'Spring Draft 2023',
-    date: '2023-04-20',
-    status: 'completed',
-    location: 'City Gym',
-    description: 'Last season championships.',
-    maxTeams: 6,
-    playersRegistered: [],
-    winnerId: 'team1'
   },
 ];
 
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
-      currentUser: MOCK_PLAYERS[4], // Default as admin for demo
+      currentUser: null,
       players: MOCK_PLAYERS,
       tournaments: MOCK_TOURNAMENTS,
       teams: [],
 
-      setCurrentUser: (user) => set({ currentUser: user }),
+      login: (identifier, password) => {
+        // Admin Login
+        if (identifier === 'edvardks' && password === 'SX515wifi') {
+          const admin = get().players.find(p => p.role === 'admin');
+          if (admin) {
+            set({ currentUser: admin });
+            return true;
+          }
+        }
+
+        // Captain/User Login
+        const user = get().players.find(p => p.mobile === identifier);
+        if (user) {
+          // If captain, check password
+          if (user.role === 'captain') {
+            if (user.password === password) {
+              set({ currentUser: user });
+              return true;
+            }
+            return false;
+          }
+          // Regular players don't have password login in this mock requirements, 
+          // but let's assume for now they can just "check in" or we only use login for Admin/Captain
+          return false; 
+        }
+        return false;
+      },
+
+      logout: () => set({ currentUser: null }),
 
       registerPlayer: (newPlayer) => set((state) => {
         const id = Math.random().toString(36).substr(2, 9);
@@ -182,21 +196,18 @@ export const useStore = create<AppState>()(
         )
       })),
 
-      assignCaptain: (playerId, tournamentId) => {
-          // Logic to assign captain role for specific tournament context would go here
-          // For now just updating global role for demo
+      assignCaptain: (playerId, password) => {
            set((state) => ({
-              players: state.players.map(p => p.id === playerId ? { ...p, role: 'captain' } : p)
+              players: state.players.map(p => p.id === playerId ? { ...p, role: 'captain', password } : p)
            }))
       },
 
       draftPlayer: (captainId, playerId, tournamentId) => {
-          // Logic for drafting
-          console.log(`Captain ${captainId} drafted ${playerId} for tournament ${tournamentId}`);
+          console.log(`Capitán ${captainId} drafteó a ${playerId} para el torneo ${tournamentId}`);
       }
     }),
     {
-      name: 'draft-league-storage',
+      name: 'draft-league-villena-storage',
     }
   )
 );

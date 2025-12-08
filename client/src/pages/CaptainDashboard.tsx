@@ -9,12 +9,10 @@ import { Search, Filter } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 export default function CaptainDashboard() {
-  const { players, draftPlayer } = useStore();
+  const { players, draftPlayer, currentUser } = useStore();
   const [search, setSearch] = useState("");
   const [minRating, setMinRating] = useState(0);
   
-  // Filter only draftable players (not captains, not admin)
-  // In a real app, we'd also filter out already drafted players for this specific tournament
   const draftablePlayers = useMemo(() => {
     return players.filter(p => 
       p.role === 'player' && 
@@ -22,6 +20,9 @@ export default function CaptainDashboard() {
       p.overall >= minRating
     );
   }, [players, search, minRating]);
+
+  // Determine if viewing as admin or captain
+  const isCaptainView = currentUser?.role === 'captain';
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -32,11 +33,11 @@ export default function CaptainDashboard() {
         <aside className="hidden md:block w-80 border-r border-white/10 bg-black/20 p-6 fixed h-full overflow-y-auto">
           <div className="space-y-8">
             <div>
-              <h2 className="font-display text-2xl mb-4">DRAFT FILTERS</h2>
+              <h2 className="font-display text-2xl mb-4">FILTROS DRAFT</h2>
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Search player..." 
+                  placeholder="Buscar jugador..." 
                   className="pl-9 bg-white/5 border-white/10"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -46,7 +47,7 @@ export default function CaptainDashboard() {
 
             <div className="space-y-4">
               <div className="flex justify-between">
-                <span className="text-sm font-medium">Min Overall</span>
+                <span className="text-sm font-medium">Media Mínima</span>
                 <span className="text-sm text-primary font-bold">{minRating}</span>
               </div>
               <Slider 
@@ -58,11 +59,13 @@ export default function CaptainDashboard() {
               />
             </div>
             
-            <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
-              <h3 className="font-display text-lg text-primary mb-2">YOUR SQUAD</h3>
-              <p className="text-sm text-muted-foreground">0 Players Selected</p>
-              {/* List selected players here */}
-            </div>
+            {isCaptainView && (
+              <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
+                <h3 className="font-display text-lg text-primary mb-2">TU PLANTILLA</h3>
+                <p className="text-sm text-muted-foreground">0 Jugadores Seleccionados</p>
+                {/* List selected players here */}
+              </div>
+            )}
           </div>
         </aside>
 
@@ -71,23 +74,23 @@ export default function CaptainDashboard() {
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" className="w-full">
-                <Filter className="w-4 h-4 mr-2" /> Filters & Squad
+                <Filter className="w-4 h-4 mr-2" /> Filtros y Equipo
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="bg-card border-r border-white/10">
               <SheetHeader>
-                <SheetTitle className="font-display text-left">DRAFT ROOM</SheetTitle>
+                <SheetTitle className="font-display text-left">SALA DE DRAFT</SheetTitle>
               </SheetHeader>
               <div className="py-6 space-y-6">
                 <Input 
-                  placeholder="Search player..." 
+                  placeholder="Buscar jugador..." 
                   className="bg-white/5 border-white/10"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
                 <div className="space-y-4">
                   <div className="flex justify-between">
-                    <span className="text-sm font-medium">Min Overall</span>
+                    <span className="text-sm font-medium">Media Mínima</span>
                     <span className="text-sm text-primary font-bold">{minRating}</span>
                   </div>
                   <Slider 
@@ -106,20 +109,25 @@ export default function CaptainDashboard() {
         {/* Main Content - Player Grid */}
         <main className="flex-1 md:ml-80 p-6 md:p-8">
           <div className="flex justify-between items-center mb-8">
-            <h1 className="font-display text-4xl font-bold">AVAILABLE AGENTS</h1>
-            <span className="text-muted-foreground">{draftablePlayers.length} Found</span>
+            <h1 className="font-display text-4xl font-bold">AGENTES LIBRES</h1>
+            <span className="text-muted-foreground">{draftablePlayers.length} Disponibles</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 justify-items-center">
             {draftablePlayers.map((player) => (
               <div key={player.id} className="relative group">
-                <PlayerCard player={player} />
-                <Button 
-                  className="absolute bottom-4 left-1/2 -translate-x-1/2 w-3/4 opacity-0 group-hover:opacity-100 transition-opacity font-display tracking-wider bg-primary text-black hover:bg-white z-30"
-                  onClick={() => draftPlayer('current-captain', player.id, 'current-tournament')}
-                >
-                  DRAFT PLAYER
-                </Button>
+                <PlayerCard 
+                  player={player} 
+                  showSensitive={!!currentUser} // Show sensitive info (mobile) only to logged in users (captains/admin)
+                />
+                {isCaptainView && (
+                  <Button 
+                    className="absolute bottom-4 left-1/2 -translate-x-1/2 w-3/4 opacity-0 group-hover:opacity-100 transition-opacity font-display tracking-wider bg-primary text-black hover:bg-white z-30"
+                    onClick={() => draftPlayer(currentUser.id, player.id, 'current-tournament')}
+                  >
+                    DRAFTEAR
+                  </Button>
+                )}
               </div>
             ))}
           </div>

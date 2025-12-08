@@ -1,0 +1,86 @@
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { useStore } from "@/lib/store";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Navbar } from "@/components/Navbar";
+import { useToast } from "@/hooks/use-toast";
+
+export default function Login() {
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [, setLocation] = useLocation();
+  const login = useStore((state) => state.login);
+  const { toast } = useToast();
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const success = login(identifier, password);
+    if (success) {
+      const user = useStore.getState().currentUser;
+      toast({
+        title: "Sesión iniciada",
+        description: `Bienvenido de nuevo, ${user?.name}`,
+      });
+      if (user?.role === 'admin') {
+        setLocation("/admin");
+      } else if (user?.role === 'captain') {
+        setLocation("/draft");
+      } else {
+        setLocation("/");
+      }
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Error de acceso",
+        description: "Credenciales incorrectas",
+      });
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <Navbar />
+      <div className="container mx-auto px-4 py-20 flex justify-center items-center h-[80vh]">
+        <Card className="w-full max-w-md bg-white/5 border-white/10">
+          <CardHeader>
+            <CardTitle className="font-display text-3xl text-center">ACCESO PRIVADO</CardTitle>
+            <CardDescription className="text-center">
+              Administradores y Capitanes de Villena League
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="identifier">Usuario / Móvil</Label>
+                <Input 
+                  id="identifier" 
+                  placeholder="Usuario o Nº Teléfono" 
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  className="bg-black/20 border-white/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Contraseña</Label>
+                <Input 
+                  id="password" 
+                  type="password" 
+                  placeholder="••••••••" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="bg-black/20 border-white/10"
+                />
+              </div>
+              <Button type="submit" className="w-full font-display text-lg bg-primary text-black hover:bg-white transition-colors">
+                ENTRAR
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

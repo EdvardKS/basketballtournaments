@@ -33,7 +33,7 @@ export default function Home() {
             animate={{ y: 0, opacity: 1 }}
             className="font-display text-6xl md:text-8xl lg:text-9xl font-bold tracking-tighter text-transparent bg-clip-text bg-linear-to-r from-white via-white to-white/50 mb-6"
           >
-            RISE TO THE <br/> <span className="text-primary">CHALLENGE</span>
+            VILLENA <br/> <span className="text-primary">BASKET LEAGUE</span>
           </motion.h1>
           
           <motion.p 
@@ -42,7 +42,7 @@ export default function Home() {
             transition={{ delay: 0.2 }}
             className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-8 font-light"
           >
-            The premier draft league platform. Register, get rated, get drafted, and dominate the court.
+            La plataforma oficial de torneos de Villena. Inscríbete, demuestra tu nivel, entra en el draft y conviértete en leyenda.
           </motion.p>
           
           <motion.div 
@@ -53,13 +53,13 @@ export default function Home() {
           >
             <Button asChild size="lg" className="h-14 px-8 text-lg font-display tracking-widest bg-primary text-black hover:bg-white hover:scale-105 transition-all">
               <Link href="/register">
-                REGISTER AS PLAYER
+                REGISTRARSE COMO JUGADOR
               </Link>
             </Button>
             
             <Button asChild size="lg" variant="outline" className="h-14 px-8 text-lg font-display tracking-widest border-white/20 hover:bg-white/10">
               <Link href="/tournaments">
-                VIEW TOURNAMENTS
+                VER TORNEOS
               </Link>
             </Button>
           </motion.div>
@@ -70,14 +70,14 @@ export default function Home() {
       <section className="py-20 bg-secondary/20">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between mb-12">
-            <h2 className="text-4xl font-display font-bold">TOP RATED PLAYERS</h2>
+            <h2 className="text-4xl font-display font-bold">MEJORES VALORADOS</h2>
             <Button asChild variant="link" className="text-primary">
-              <Link href="/players">View All Leaders</Link>
+              <Link href="/players">Ver Todos</Link>
             </Button>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
-            {players.slice(0, 4).map((player, i) => (
+            {players.filter(p => p.role !== 'admin').slice(0, 4).map((player, i) => (
               <motion.div
                 key={player.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -95,7 +95,7 @@ export default function Home() {
       {/* Active Tournaments */}
       <section className="py-20">
         <div className="container mx-auto px-4">
-          <h2 className="text-4xl font-display font-bold mb-12">ACTIVE TOURNAMENTS</h2>
+          <h2 className="text-4xl font-display font-bold mb-12">TORNEOS ACTIVOS</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {activeTournaments.map((tournament) => (
               <TournamentCard key={tournament.id} tournament={tournament} />
@@ -107,12 +107,16 @@ export default function Home() {
        {/* Past Tournaments */}
        <section className="py-20 border-t border-white/5">
         <div className="container mx-auto px-4">
-          <h2 className="text-4xl font-display font-bold mb-12 opacity-60">HALL OF FAME</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {pastTournaments.map((tournament) => (
-              <TournamentCard key={tournament.id} tournament={tournament} />
-            ))}
-          </div>
+          <h2 className="text-4xl font-display font-bold mb-12 opacity-60">SALÓN DE LA FAMA</h2>
+          {pastTournaments.length === 0 ? (
+             <p className="text-muted-foreground">Aún no hay torneos finalizados.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {pastTournaments.map((tournament) => (
+                <TournamentCard key={tournament.id} tournament={tournament} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>
