@@ -28,12 +28,12 @@ export function Navbar() {
           {currentUser ? (
             <div className="flex items-center gap-4">
               <span className="text-sm hidden sm:inline-block">Hola, {currentUser.name}</span>
-              <Button onClick={() => logout()} variant="ghost" size="sm" className="hover:text-destructive">
+              <Button onClick={() => logout()} variant="ghost" size="sm" className="hover:text-destructive cursor-pointer" data-testid="button-logout">
                 Salir
               </Button>
               {currentUser.role === 'admin' && (
                 <Link href="/admin">
-                  <Button variant="outline" size="sm" className="hidden sm:flex border-primary text-primary hover:bg-primary hover:text-black">
+                  <Button variant="outline" size="sm" className="hidden sm:flex border-primary text-primary hover:bg-primary hover:text-black cursor-pointer" data-testid="button-admin-panel">
                     Panel Admin
                   </Button>
                 </Link>
@@ -42,12 +42,12 @@ export function Navbar() {
           ) : (
              <div className="flex items-center gap-4">
                 <Link href="/login">
-                  <Button variant="ghost" size="sm" className="hidden sm:flex">
+                  <Button variant="ghost" size="sm" className="hidden sm:flex cursor-pointer" data-testid="button-nav-login">
                     Acceso
                   </Button>
                 </Link>
                 <Link href="/register">
-                  <Button className="font-display tracking-wide" size="sm">
+                  <Button className="font-display tracking-wide cursor-pointer" size="sm" data-testid="button-nav-register">
                     Inscribirse
                   </Button>
                 </Link>
