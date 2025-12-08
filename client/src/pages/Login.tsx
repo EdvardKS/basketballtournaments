@@ -11,32 +11,46 @@ import { useToast } from "@/hooks/use-toast";
 export default function Login() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [, setLocation] = useLocation();
   const login = useStore((state) => state.login);
+  const currentUser = useStore((state) => state.currentUser);
   const { toast } = useToast();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = login(identifier, password);
-    if (success) {
-      const user = useStore.getState().currentUser;
-      toast({
-        title: "Sesión iniciada",
-        description: `Bienvenido de nuevo, ${user?.name}`,
-      });
-      if (user?.role === 'admin') {
-        setLocation("/admin");
-      } else if (user?.role === 'captain') {
-        setLocation("/draft");
+    setIsLoading(true);
+    
+    try {
+      const success = await login(identifier, password);
+      if (success) {
+        const user = useStore.getState().currentUser;
+        toast({
+          title: "Sesión iniciada",
+          description: `Bienvenido de nuevo, ${user?.name}`,
+        });
+        if (user?.role === 'admin') {
+          setLocation("/admin");
+        } else if (user?.role === 'captain') {
+          setLocation("/draft");
+        } else {
+          setLocation("/");
+        }
       } else {
-        setLocation("/");
+        toast({
+          variant: "destructive",
+          title: "Error de acceso",
+          description: "Credenciales incorrectas",
+        });
       }
-    } else {
+    } catch (error) {
       toast({
         variant: "destructive",
         title: "Error de acceso",
         description: "Credenciales incorrectas",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -61,6 +75,8 @@ export default function Login() {
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="bg-black/20 border-white/10"
+                  data-testid="input-identifier"
+                  disabled={isLoading}
                 />
               </div>
               <div className="space-y-2">
@@ -72,10 +88,17 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="bg-black/20 border-white/10"
+                  data-testid="input-password"
+                  disabled={isLoading}
                 />
               </div>
-              <Button type="submit" className="w-full font-display text-lg bg-primary text-black hover:bg-white transition-colors">
-                ENTRAR
+              <Button 
+                type="submit" 
+                className="w-full font-display text-lg bg-primary text-black hover:bg-white transition-colors cursor-pointer"
+                data-testid="button-login"
+                disabled={isLoading}
+              >
+                {isLoading ? 'ENTRANDO...' : 'ENTRAR'}
               </Button>
             </form>
           </CardContent>

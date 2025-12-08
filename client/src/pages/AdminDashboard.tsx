@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,23 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AdminDashboard() {
-  const { tournaments, players, createTournament, assignCaptain } = useStore();
+  const { 
+    tournaments, 
+    players, 
+    createTournament, 
+    updateTournament, 
+    deleteTournament, 
+    assignCaptain,
+    fetchPlayers,
+    fetchTournaments
+  } = useStore();
+  
+  const [isLoading, setIsLoading] = useState(false);
   const [newTournamentName, setNewTournamentName] = useState("");
   const [newTournamentDate, setNewTournamentDate] = useState("");
+  const [newTournamentLocation, setNewTournamentLocation] = useState("Pistas Municipales Villena");
+  const [newTournamentDescription, setNewTournamentDescription] = useState("");
+  const [newTournamentMaxTeams, setNewTournamentMaxTeams] = useState("8");
   const { toast } = useToast();
 
   // For Captain Promotion
@@ -21,30 +35,131 @@ export default function AdminDashboard() {
   const [captainPassword, setCaptainPassword] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const handleCreateTournament = () => {
-    if (!newTournamentName || !newTournamentDate) return;
-    createTournament({
-      name: newTournamentName,
-      date: newTournamentDate,
-      location: "Pistas Municipales Villena",
-      description: "Nuevo torneo de la liga",
-      maxTeams: 8,
-      winnerId: undefined
-    });
-    setNewTournamentName("");
-    setNewTournamentDate("");
-    toast({ title: "Torneo Creado", description: "El torneo ha sido añadido al calendario." });
-  };
+  // For Tournament Editing
+  const [editingTournamentId, setEditingTournamentId] = useState<string | null>(null);
+  const [editTournamentName, setEditTournamentName] = useState("");
+  const [editTournamentDate, setEditTournamentDate] = useState("");
+  const [editTournamentLocation, setEditTournamentLocation] = useState("");
+  const [editTournamentDescription, setEditTournamentDescription] = useState("");
+  const [editTournamentMaxTeams, setEditTournamentMaxTeams] = useState("");
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  const handlePromoteCaptain = () => {
-    if (selectedPlayerId && captainPassword) {
-      assignCaptain(selectedPlayerId, captainPassword);
-      setIsDialogOpen(false);
-      setCaptainPassword("");
-      setSelectedPlayerId(null);
-      toast({ title: "Capitán Asignado", description: "El jugador ahora tiene rol de capitán." });
+  // Fetch data on mount
+  useEffect(() => {
+    setIsLoading(true);
+    Promise.all([fetchPlayers(), fetchTournaments()])
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const handleCreateTournament = async () => {
+    if (!newTournamentName || !newTournamentDate) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Nombre y fecha son requeridos",
+      });
+      return;
+    }
+
+    try {
+      await createTournament({
+        name: newTournamentName,
+        date: newTournamentDate,
+        location: newTournamentLocation || "Pistas Municipales Villena",
+        description: newTournamentDescription || "Nuevo torneo de la liga",
+        maxTeams: parseInt(newTournamentMaxTeams) || 8,
+      });
+      setNewTournamentName("");
+      setNewTournamentDate("");
+      setNewTournamentLocation("Pistas Municipales Villena");
+      setNewTournamentDescription("");
+      setNewTournamentMaxTeams("8");
+      toast({ title: "Torneo Creado", description: "El torneo ha sido añadido al calendario." });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Error al crear torneo",
+      });
     }
   };
+
+  const handleEditTournament = (tournament: typeof tournaments[0]) => {
+    setEditingTournamentId(tournament.id);
+    setEditTournamentName(tournament.name);
+    setEditTournamentDate(tournament.date);
+    setEditTournamentLocation(tournament.location);
+    setEditTournamentDescription(tournament.description);
+    setEditTournamentMaxTeams(tournament.maxTeams.toString());
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEditTournament = async () => {
+    if (!editingTournamentId) return;
+
+    try {
+      await updateTournament(editingTournamentId, {
+        name: editTournamentName,
+        date: editTournamentDate,
+        location: editTournamentLocation,
+        description: editTournamentDescription,
+        maxTeams: parseInt(editTournamentMaxTeams) || 8,
+      });
+      setIsEditDialogOpen(false);
+      setEditingTournamentId(null);
+      toast({ title: "Torneo Actualizado", description: "Los cambios han sido guardados." });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Error al actualizar torneo",
+      });
+    }
+  };
+
+  const handleDeleteTournament = async (id: string) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar este torneo?")) return;
+
+    try {
+      await deleteTournament(id);
+      toast({ title: "Torneo Eliminado", description: "El torneo ha sido eliminado." });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Error al eliminar torneo",
+      });
+    }
+  };
+
+  const handlePromoteCaptain = async () => {
+    if (selectedPlayerId && captainPassword) {
+      try {
+        await assignCaptain(selectedPlayerId, captainPassword);
+        setIsDialogOpen(false);
+        setCaptainPassword("");
+        setSelectedPlayerId(null);
+        toast({ title: "Capitán Asignado", description: "El jugador ahora tiene rol de capitán." });
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: error.message || "Error al asignar capitán",
+        });
+      }
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <Navbar />
+        <div className="container mx-auto px-4 py-20 flex justify-center items-center">
+          <p className="text-xl">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -55,8 +170,8 @@ export default function AdminDashboard() {
         
         <Tabs defaultValue="tournaments" className="w-full">
           <TabsList className="bg-white/5 border border-white/10 mb-8">
-            <TabsTrigger value="tournaments">Gestión de Torneos</TabsTrigger>
-            <TabsTrigger value="players">Jugadores y Capitanes</TabsTrigger>
+            <TabsTrigger value="tournaments" className="cursor-pointer">Gestión de Torneos</TabsTrigger>
+            <TabsTrigger value="players" className="cursor-pointer">Jugadores y Capitanes</TabsTrigger>
           </TabsList>
           
           <TabsContent value="tournaments">
@@ -72,14 +187,38 @@ export default function AdminDashboard() {
                     value={newTournamentName}
                     onChange={(e) => setNewTournamentName(e.target.value)}
                     className="bg-black/20"
+                    data-testid="input-tournament-name"
                   />
                   <Input 
                     type="date"
                     value={newTournamentDate}
                     onChange={(e) => setNewTournamentDate(e.target.value)}
                     className="bg-black/20"
+                    data-testid="input-tournament-date"
                   />
-                  <Button onClick={handleCreateTournament} className="w-full font-display">
+                  <Input 
+                    placeholder="Ubicación" 
+                    value={newTournamentLocation}
+                    onChange={(e) => setNewTournamentLocation(e.target.value)}
+                    className="bg-black/20"
+                    data-testid="input-tournament-location"
+                  />
+                  <Input 
+                    placeholder="Descripción" 
+                    value={newTournamentDescription}
+                    onChange={(e) => setNewTournamentDescription(e.target.value)}
+                    className="bg-black/20"
+                    data-testid="input-tournament-description"
+                  />
+                  <Input 
+                    type="number"
+                    placeholder="Equipos máximos" 
+                    value={newTournamentMaxTeams}
+                    onChange={(e) => setNewTournamentMaxTeams(e.target.value)}
+                    className="bg-black/20"
+                    data-testid="input-tournament-max-teams"
+                  />
+                  <Button onClick={handleCreateTournament} className="w-full font-display cursor-pointer" data-testid="button-create-tournament">
                     AÑADIR EVENTO
                   </Button>
                 </CardContent>
@@ -102,14 +241,31 @@ export default function AdminDashboard() {
                     </TableHeader>
                     <TableBody>
                       {tournaments.map((t) => (
-                        <TableRow key={t.id} className="border-white/10 hover:bg-white/5">
+                        <TableRow key={t.id} className="border-white/10 hover:bg-white/5" data-testid={`row-tournament-${t.id}`}>
                           <TableCell className="font-medium">{t.name}</TableCell>
                           <TableCell>{t.date}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{t.status}</Badge>
                           </TableCell>
-                          <TableCell>
-                             <Button size="sm" variant="ghost">Editar</Button>
+                          <TableCell className="space-x-2">
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="cursor-pointer"
+                              onClick={() => handleEditTournament(t)}
+                              data-testid={`button-edit-tournament-${t.id}`}
+                            >
+                              Editar
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="cursor-pointer text-red-500 hover:text-red-400"
+                              onClick={() => handleDeleteTournament(t.id)}
+                              data-testid={`button-delete-tournament-${t.id}`}
+                            >
+                              Eliminar
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -137,27 +293,34 @@ export default function AdminDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {players.map((p) => (
-                        <TableRow key={p.id} className="border-white/10 hover:bg-white/5">
+                      {players.filter(p => p.role !== 'admin').map((p) => (
+                        <TableRow key={p.id} className="border-white/10 hover:bg-white/5" data-testid={`row-player-${p.id}`}>
                           <TableCell className="font-medium">{p.name}</TableCell>
                           <TableCell>{p.mobile}</TableCell>
                           <TableCell>
                             <Badge 
                               className={p.role === 'captain' ? 'bg-primary text-black' : 'bg-white/10'}
                             >
-                              {p.role === 'captain' ? 'CAPITÁN' : p.role === 'admin' ? 'ADMIN' : 'JUGADOR'}
+                              {p.role === 'captain' ? 'CAPITÁN' : 'JUGADOR'}
                             </Badge>
                           </TableCell>
                           <TableCell className="font-bold text-primary">{p.overall}</TableCell>
                           <TableCell>
                              {p.role === 'player' && (
-                               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                               <Dialog open={isDialogOpen && selectedPlayerId === p.id} onOpenChange={(open) => {
+                                 setIsDialogOpen(open);
+                                 if (!open) {
+                                   setSelectedPlayerId(null);
+                                   setCaptainPassword("");
+                                 }
+                               }}>
                                  <DialogTrigger asChild>
                                    <Button 
                                      size="sm" 
                                      variant="outline" 
-                                     className="h-7 text-xs"
+                                     className="h-7 text-xs cursor-pointer"
                                      onClick={() => setSelectedPlayerId(p.id)}
+                                     data-testid={`button-promote-captain-${p.id}`}
                                    >
                                      Hacer Capitán
                                    </Button>
@@ -174,8 +337,9 @@ export default function AdminDashboard() {
                                        placeholder="Contraseña de acceso" 
                                        value={captainPassword}
                                        onChange={(e) => setCaptainPassword(e.target.value)}
+                                       data-testid="input-captain-password"
                                      />
-                                     <Button onClick={handlePromoteCaptain} className="w-full">Confirmar Ascenso</Button>
+                                     <Button onClick={handlePromoteCaptain} className="w-full cursor-pointer" data-testid="button-confirm-promote">Confirmar Ascenso</Button>
                                    </div>
                                  </DialogContent>
                                </Dialog>
@@ -190,6 +354,56 @@ export default function AdminDashboard() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Edit Tournament Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="bg-card border-white/10">
+          <DialogHeader>
+            <DialogTitle>Editar Torneo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Input 
+              placeholder="Nombre del Torneo" 
+              value={editTournamentName}
+              onChange={(e) => setEditTournamentName(e.target.value)}
+              className="bg-black/20"
+              data-testid="input-edit-tournament-name"
+            />
+            <Input 
+              type="date"
+              value={editTournamentDate}
+              onChange={(e) => setEditTournamentDate(e.target.value)}
+              className="bg-black/20"
+              data-testid="input-edit-tournament-date"
+            />
+            <Input 
+              placeholder="Ubicación" 
+              value={editTournamentLocation}
+              onChange={(e) => setEditTournamentLocation(e.target.value)}
+              className="bg-black/20"
+              data-testid="input-edit-tournament-location"
+            />
+            <Input 
+              placeholder="Descripción" 
+              value={editTournamentDescription}
+              onChange={(e) => setEditTournamentDescription(e.target.value)}
+              className="bg-black/20"
+              data-testid="input-edit-tournament-description"
+            />
+            <Input 
+              type="number"
+              placeholder="Equipos máximos" 
+              value={editTournamentMaxTeams}
+              onChange={(e) => setEditTournamentMaxTeams(e.target.value)}
+              className="bg-black/20"
+              data-testid="input-edit-tournament-max-teams"
+            />
+            <Button onClick={handleSaveEditTournament} className="w-full cursor-pointer" data-testid="button-save-edit-tournament">
+              Guardar Cambios
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
