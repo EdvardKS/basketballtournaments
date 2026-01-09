@@ -88,7 +88,7 @@ export function PlayerCard({ player, className, size = "md", onClick, showSensit
 
           <div className="flex-1 relative flex items-center justify-center -mt-2 mb-3">
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-10" />
-            <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-white/20 shadow-xl">
+            <div className="relative w-28 h-28 rounded-lg overflow-hidden border-2 border-white/20 shadow-xl">
               <img 
                 src={player.avatar || placeholderAvatar} 
                 alt={player.name}
