@@ -107,6 +107,21 @@ export const playersApi = {
     }
     return res.json();
   },
+
+  async update(id: string, data: Partial<RegisterPlayerData>): Promise<{ player: Player }> {
+    const res = await fetch(`/api/players/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to update player');
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`/api/players/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete player');
+  },
 };
 
 // Tournaments API
@@ -169,6 +184,46 @@ export const tournamentsApi = {
       const error = await res.json();
       throw new Error(error.error || 'Failed to register for tournament');
     }
+  },
+};
+
+// Teams API
+export interface Team {
+  id: string;
+  tournamentId: string;
+  captainId: string;
+  name: string;
+}
+
+export const teamsApi = {
+  async getForTournament(tournamentId: string): Promise<{ teams: Team[] }> {
+    const res = await fetch(`/api/tournaments/${tournamentId}/teams`);
+    if (!res.ok) throw new Error('Failed to fetch teams');
+    return res.json();
+  },
+
+  async create(data: { tournamentId: string; captainId: string; name: string }): Promise<{ team: Team }> {
+    const res = await fetch('/api/teams', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to create team');
+    }
+    return res.json();
+  },
+
+  async delete(id: string): Promise<void> {
+    const res = await fetch(`/api/teams/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete team');
+  },
+
+  async getByCaptain(captainId: string): Promise<{ team: Team; players: Player[] }> {
+    const res = await fetch(`/api/teams/captain/${captainId}`);
+    if (!res.ok) throw new Error('No team found');
+    return res.json();
   },
 };
 

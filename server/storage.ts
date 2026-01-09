@@ -16,6 +16,7 @@ export interface IStorage {
   getAllPlayers(): Promise<Player[]>;
   createPlayer(player: InsertPlayer): Promise<Player>;
   updatePlayer(id: string, player: Partial<InsertPlayer>): Promise<Player | undefined>;
+  deletePlayer(id: string): Promise<boolean>;
   promotePlayerToCaptain(id: string, password: string): Promise<Player | undefined>;
   
   // Tournaments
@@ -31,12 +32,16 @@ export interface IStorage {
   getTournamentsForPlayer(playerId: string): Promise<Tournament[]>;
   
   // Teams
+  getTeam(id: string): Promise<Team | undefined>;
   createTeam(team: InsertTeam): Promise<Team>;
+  deleteTeam(id: string): Promise<boolean>;
   getTeamsForTournament(tournamentId: string): Promise<Team[]>;
+  getTeamByCaptain(captainId: string): Promise<Team | undefined>;
   
   // Draft
   draftPlayer(teamId: string, playerId: string): Promise<TeamPlayer>;
   getPlayersForTeam(teamId: string): Promise<Player[]>;
+  getDraftedPlayerIds(tournamentId: string): Promise<string[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -112,6 +117,11 @@ export class DatabaseStorage implements IStorage {
     return player;
   }
 
+  async deletePlayer(id: string): Promise<boolean> {
+    await db.delete(players).where(eq(players.id, id));
+    return true;
+  }
+
   // Tournaments
   async getTournament(id: string): Promise<Tournament | undefined> {
     const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, id));
@@ -169,13 +179,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Teams
+  async getTeam(id: string): Promise<Team | undefined> {
+    const [team] = await db.select().from(teams).where(eq(teams.id, id));
+    return team;
+  }
+
   async createTeam(team: InsertTeam): Promise<Team> {
     const [newTeam] = await db.insert(teams).values(team).returning();
     return newTeam!;
   }
 
+  async deleteTeam(id: string): Promise<boolean> {
+    await db.delete(teams).where(eq(teams.id, id));
+    return true;
+  }
+
   async getTeamsForTournament(tournamentId: string): Promise<Team[]> {
     return await db.select().from(teams).where(eq(teams.tournamentId, tournamentId));
+  }
+
+  async getTeamByCaptain(captainId: string): Promise<Team | undefined> {
+    const [team] = await db.select().from(teams).where(eq(teams.captainId, captainId));
+    return team;
   }
 
   // Draft
@@ -194,6 +219,20 @@ export class DatabaseStorage implements IStorage {
       .where(eq(teamPlayers.teamId, teamId));
     
     return result.map((r: { player: Player }) => r.player);
+  }
+
+  async getDraftedPlayerIds(tournamentId: string): Promise<string[]> {
+    const tournamentTeams = await this.getTeamsForTournament(tournamentId);
+    const teamIds = tournamentTeams.map(t => t.id);
+    
+    if (teamIds.length === 0) return [];
+    
+    const result = await db
+      .select({ playerId: teamPlayers.playerId })
+      .from(teamPlayers)
+      .where(sql`${teamPlayers.teamId} IN (${sql.join(teamIds.map(id => sql`${id}`), sql`, `)})`);
+    
+    return result.map(r => r.playerId);
   }
 }
 

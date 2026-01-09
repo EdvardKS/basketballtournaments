@@ -4,12 +4,15 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useStore } from "@/lib/store";
+import { useEffect, useState } from "react";
+import { authApi } from "./lib/api";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import TournamentDetails from "@/pages/TournamentDetails";
 import Register from "@/pages/Register";
 import AdminDashboard from "@/pages/AdminDashboard";
 import CaptainDashboard from "@/pages/CaptainDashboard";
+import PlayersPage from "@/pages/PlayersPage";
 import Login from "@/pages/Login";
 
 function Router() {
@@ -32,10 +35,7 @@ function Router() {
         {currentUser?.role === 'captain' || currentUser?.role === 'admin' ? <CaptainDashboard /> : <Redirect to="/login" />}
       </Route>
       
-      <Route path="/players">
-         {/* Public can view players, but we might want to restrict details? For now open as per request "public view to see" */}
-         <CaptainDashboard /> 
-      </Route>
+      <Route path="/players" component={PlayersPage} />
 
       <Route component={NotFound} />
     </Switch>
@@ -43,6 +43,28 @@ function Router() {
 }
 
 function App() {
+  const setCurrentUser = useStore((state) => state.setCurrentUser);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    authApi.me().then((data) => {
+      if (data?.player) {
+        setCurrentUser(data.player);
+      }
+    }).catch(() => {
+    }).finally(() => {
+      setIsLoading(false);
+    });
+  }, [setCurrentUser]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-primary font-display text-xl">Cargando...</div>
+      </div>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

@@ -87,9 +87,14 @@ export async function registerRoutes(
   app.get("/api/players", async (req, res) => {
     try {
       const players = await storage.getAllPlayers();
-      // Don't send passwords to client
+      const isAuthenticated = !!req.session.playerId;
+      
+      // Don't send passwords to client, hide mobile for non-authenticated users
       const safePlayers = players.map(p => {
         const { password, ...safe } = p;
+        if (!isAuthenticated) {
+          return { ...safe, mobile: "***" };
+        }
         return safe;
       });
       res.json({ players: safePlayers });
@@ -102,6 +107,10 @@ export async function registerRoutes(
   // Register player
   app.post("/api/players/register", async (req, res) => {
     try {
+      if (!req.body.avatar) {
+        return res.status(400).json({ error: "La foto es obligatoria" });
+      }
+      
       const validatedData = insertPlayerSchema.parse(req.body);
       const newPlayer = await storage.createPlayer(validatedData);
       
@@ -265,6 +274,125 @@ export async function registerRoutes(
         return res.status(409).json({ error: "Ya estás inscrito en este torneo" });
       }
       res.status(500).json({ error: "Error al inscribirse al torneo" });
+    }
+  });
+
+  // ============ TEAM ROUTES ============
+
+  // Get teams for tournament
+  app.get("/api/tournaments/:id/teams", async (req, res) => {
+    try {
+      const teams = await storage.getTeamsForTournament(req.params.id);
+      res.json({ teams });
+    } catch (error) {
+      console.error("Get teams error:", error);
+      res.status(500).json({ error: "Error al obtener equipos" });
+    }
+  });
+
+  // Create team (Admin only)
+  app.post("/api/teams", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden crear equipos" });
+    }
+
+    try {
+      const { tournamentId, captainId, name } = req.body;
+      if (!tournamentId || !captainId || !name) {
+        return res.status(400).json({ error: "Faltan campos requeridos" });
+      }
+
+      const team = await storage.createTeam({ tournamentId, captainId, name });
+      res.json({ team });
+    } catch (error) {
+      console.error("Create team error:", error);
+      res.status(500).json({ error: "Error al crear equipo" });
+    }
+  });
+
+  // Delete team (Admin only)
+  app.delete("/api/teams/:id", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden eliminar equipos" });
+    }
+
+    try {
+      await storage.deleteTeam(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete team error:", error);
+      res.status(500).json({ error: "Error al eliminar equipo" });
+    }
+  });
+
+  // Get team by captain
+  app.get("/api/teams/captain/:captainId", async (req, res) => {
+    try {
+      const team = await storage.getTeamByCaptain(req.params.captainId);
+      if (!team) {
+        return res.status(404).json({ error: "Equipo no encontrado" });
+      }
+      const players = await storage.getPlayersForTeam(team.id);
+      res.json({ team, players });
+    } catch (error) {
+      console.error("Get team by captain error:", error);
+      res.status(500).json({ error: "Error al obtener equipo" });
+    }
+  });
+
+  // ============ PLAYER MANAGEMENT ROUTES (Admin) ============
+
+  // Update player (Admin only)
+  app.patch("/api/players/:id", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden editar jugadores" });
+    }
+
+    try {
+      const player = await storage.updatePlayer(req.params.id, req.body);
+      if (!player) {
+        return res.status(404).json({ error: "Jugador no encontrado" });
+      }
+      const { password, ...safePlayer } = player;
+      res.json({ player: safePlayer });
+    } catch (error) {
+      console.error("Update player error:", error);
+      res.status(500).json({ error: "Error al actualizar jugador" });
+    }
+  });
+
+  // Delete player (Admin only)
+  app.delete("/api/players/:id", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden eliminar jugadores" });
+    }
+
+    try {
+      await storage.deletePlayer(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete player error:", error);
+      res.status(500).json({ error: "Error al eliminar jugador" });
     }
   });
 

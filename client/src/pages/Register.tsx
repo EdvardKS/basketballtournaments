@@ -92,6 +92,15 @@ export default function Register() {
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!previewImage) {
+      toast({
+        variant: "destructive",
+        title: "Foto requerida",
+        description: "Debes subir una foto para completar el registro.",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
@@ -171,7 +180,7 @@ export default function Register() {
                     accept="image/*"
                     onChange={handleImageChange}
                   />
-                  <p className="text-xs text-muted-foreground mt-2">Max 2MB. JPG/PNG.</p>
+                  <p className="text-xs text-muted-foreground mt-2">Max 2MB. JPG/PNG. <span className="text-red-400">*Obligatorio</span></p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
