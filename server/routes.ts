@@ -398,7 +398,117 @@ export async function registerRoutes(
 
   // ============ DRAFT ROUTES ============
   
-  // Draft a player to a team (Captain/Admin only)
+  // Start draft for a tournament (Admin only)
+  app.post("/api/draft/start/:tournamentId", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden iniciar el draft" });
+    }
+
+    try {
+      const tournamentId = req.params.tournamentId;
+      const { maxRounds } = req.body;
+      
+      // Check tournament exists and is in draft status
+      const tournament = await storage.getTournament(tournamentId);
+      if (!tournament) {
+        return res.status(404).json({ error: "Torneo no encontrado" });
+      }
+      
+      if (tournament.status !== 'draft') {
+        return res.status(400).json({ error: "El torneo debe estar en estado 'draft' para iniciar" });
+      }
+      
+      // Get teams for this tournament
+      const teams = await storage.getTeamsForTournament(tournamentId);
+      if (teams.length < 2) {
+        return res.status(400).json({ error: "Se necesitan al menos 2 equipos para iniciar el draft" });
+      }
+      
+      // Check if draft already exists
+      const existingDraft = await storage.getDraftState(tournamentId);
+      if (existingDraft && existingDraft.isActive === 'true') {
+        return res.status(400).json({ error: "Ya hay un draft activo para este torneo" });
+      }
+      
+      // Shuffle team order randomly
+      const shuffledTeamIds = teams.map(t => t.id).sort(() => Math.random() - 0.5);
+      
+      // Create or update draft state
+      if (existingDraft) {
+        await storage.updateDraftState(tournamentId, {
+          teamOrder: JSON.stringify(shuffledTeamIds),
+          currentTeamIndex: 0,
+          currentRound: 1,
+          maxRounds: maxRounds || 5,
+          isActive: 'true',
+        });
+      } else {
+        await storage.createDraftState({
+          tournamentId,
+          teamOrder: JSON.stringify(shuffledTeamIds),
+          currentTeamIndex: 0,
+          currentRound: 1,
+          maxRounds: maxRounds || 5,
+          isActive: 'true',
+        });
+      }
+      
+      const draftState = await storage.getDraftState(tournamentId);
+      res.json({ draftState, teams });
+    } catch (error) {
+      console.error("Start draft error:", error);
+      res.status(500).json({ error: "Error al iniciar el draft" });
+    }
+  });
+
+  // Get draft state for a tournament
+  app.get("/api/draft/state/:tournamentId", async (req, res) => {
+    try {
+      const tournamentId = req.params.tournamentId;
+      const draftState = await storage.getDraftState(tournamentId);
+      
+      if (!draftState) {
+        return res.status(404).json({ error: "No hay draft activo para este torneo" });
+      }
+      
+      const teams = await storage.getTeamsForTournament(tournamentId);
+      const teamOrder = JSON.parse(draftState.teamOrder);
+      const currentTeamId = teamOrder[draftState.currentTeamIndex];
+      const currentTeam = teams.find(t => t.id === currentTeamId);
+      
+      // Get captain info for current team
+      let currentCaptain = null;
+      if (currentTeam) {
+        currentCaptain = await storage.getPlayer(currentTeam.captainId);
+        if (currentCaptain) {
+          const { password, ...safeCaptain } = currentCaptain;
+          currentCaptain = safeCaptain;
+        }
+      }
+      
+      // Get draft history
+      const history = await storage.getDraftHistory(tournamentId);
+      
+      res.json({ 
+        draftState, 
+        currentTeam, 
+        currentCaptain,
+        teams,
+        history,
+        teamOrder,
+      });
+    } catch (error) {
+      console.error("Get draft state error:", error);
+      res.status(500).json({ error: "Error al obtener estado del draft" });
+    }
+  });
+
+  // Draft a player to a team (Captain/Admin only) - WITH TURN VALIDATION
   app.post("/api/draft", async (req, res) => {
     if (!req.session.playerId) {
       return res.status(401).json({ error: "No autenticado" });
@@ -415,11 +525,123 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Se requiere teamId y playerId" });
       }
 
+      // Get the team
+      const team = await storage.getTeam(teamId);
+      if (!team) {
+        return res.status(404).json({ error: "Equipo no encontrado" });
+      }
+
+      // Get draft state
+      const draftState = await storage.getDraftState(team.tournamentId);
+      if (!draftState || draftState.isActive !== 'true') {
+        return res.status(400).json({ error: "No hay draft activo para este torneo" });
+      }
+
+      // Validate it's this team's turn (unless admin overrides)
+      const teamOrder = JSON.parse(draftState.teamOrder);
+      const currentTeamId = teamOrder[draftState.currentTeamIndex];
+      
+      if (currentPlayer.role !== 'admin') {
+        // Validate captain owns this team
+        if (team.captainId !== currentPlayer.id) {
+          return res.status(403).json({ error: "No puedes draftear para un equipo que no es tuyo" });
+        }
+        
+        // Validate it's their turn
+        if (teamId !== currentTeamId) {
+          const currentTeam = await storage.getTeam(currentTeamId);
+          const captain = currentTeam ? await storage.getPlayer(currentTeam.captainId) : null;
+          return res.status(403).json({ 
+            error: `No es tu turno. Es el turno de ${captain?.name || 'otro capitán'}` 
+          });
+        }
+      }
+
+      // Check player is not already drafted
+      const draftedIds = await storage.getDraftedPlayerIds(team.tournamentId);
+      if (draftedIds.includes(playerId)) {
+        return res.status(400).json({ error: "Este jugador ya ha sido drafteado" });
+      }
+
+      // Check player is registered in the tournament
+      const registeredPlayers = await storage.getPlayersForTournament(team.tournamentId);
+      if (!registeredPlayers.some(p => p.id === playerId)) {
+        return res.status(400).json({ error: "Este jugador no está inscrito en el torneo" });
+      }
+
+      // Draft the player
       const teamPlayer = await storage.draftPlayer(teamId, playerId);
-      res.json({ teamPlayer });
-    } catch (error) {
+      
+      // Calculate pick order for history
+      const history = await storage.getDraftHistory(team.tournamentId);
+      const pickOrder = history.length + 1;
+      
+      // Add to draft history
+      await storage.addDraftHistory({
+        tournamentId: team.tournamentId,
+        teamId,
+        playerId,
+        round: draftState.currentRound,
+        pickOrder,
+      });
+
+      // Advance to next turn
+      let newTeamIndex = draftState.currentTeamIndex + 1;
+      let newRound = draftState.currentRound;
+      
+      if (newTeamIndex >= teamOrder.length) {
+        // End of round - next round starts
+        newTeamIndex = 0;
+        newRound = draftState.currentRound + 1;
+        
+        // Check if draft is complete
+        if (newRound > draftState.maxRounds) {
+          await storage.updateDraftState(team.tournamentId, { isActive: 'false' });
+          return res.json({ 
+            teamPlayer, 
+            draftComplete: true,
+            message: "¡Draft completado!" 
+          });
+        }
+      }
+      
+      await storage.updateDraftState(team.tournamentId, {
+        currentTeamIndex: newTeamIndex,
+        currentRound: newRound,
+      });
+
+      const updatedState = await storage.getDraftState(team.tournamentId);
+      res.json({ teamPlayer, draftState: updatedState });
+    } catch (error: any) {
       console.error("Draft error:", error);
+      if (error.code === '23505') {
+        return res.status(400).json({ error: "Este jugador ya está en un equipo" });
+      }
       res.status(500).json({ error: "Error al draftear jugador" });
+    }
+  });
+
+  // End draft (Admin only)
+  app.post("/api/draft/end/:tournamentId", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden finalizar el draft" });
+    }
+
+    try {
+      await storage.updateDraftState(req.params.tournamentId, { isActive: 'false' });
+      
+      // Update tournament status to active
+      await storage.updateTournament(req.params.tournamentId, { status: 'active' });
+      
+      res.json({ success: true, message: "Draft finalizado. Torneo ahora activo." });
+    } catch (error) {
+      console.error("End draft error:", error);
+      res.status(500).json({ error: "Error al finalizar el draft" });
     }
   });
 

@@ -101,3 +101,42 @@ export const insertTeamPlayerSchema = createInsertSchema(teamPlayers).omit({
 
 export type InsertTeamPlayer = z.infer<typeof insertTeamPlayerSchema>;
 export type TeamPlayer = typeof teamPlayers.$inferSelect;
+
+// Draft State Table - Controls turn-based drafting
+export const draftState = pgTable("draft_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tournamentId: varchar("tournament_id").notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+  teamOrder: text("team_order").notNull(), // JSON array of team IDs in draft order
+  currentTeamIndex: integer("current_team_index").notNull().default(0),
+  currentRound: integer("current_round").notNull().default(1),
+  maxRounds: integer("max_rounds").notNull().default(5),
+  isActive: text("is_active").notNull().default('true'), // 'true' | 'false'
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertDraftStateSchema = createInsertSchema(draftState).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertDraftState = z.infer<typeof insertDraftStateSchema>;
+export type DraftState = typeof draftState.$inferSelect;
+
+// Draft History - Log of all picks for admin monitoring
+export const draftHistory = pgTable("draft_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tournamentId: varchar("tournament_id").notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+  teamId: varchar("team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  playerId: varchar("player_id").notNull().references(() => players.id),
+  round: integer("round").notNull(),
+  pickOrder: integer("pick_order").notNull(),
+  pickedAt: timestamp("picked_at").notNull().defaultNow(),
+});
+
+export const insertDraftHistorySchema = createInsertSchema(draftHistory).omit({
+  id: true,
+  pickedAt: true,
+});
+
+export type InsertDraftHistory = z.infer<typeof insertDraftHistorySchema>;
+export type DraftHistory = typeof draftHistory.$inferSelect;

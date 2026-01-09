@@ -4,10 +4,12 @@ import {
   type TournamentRegistration, type InsertTournamentRegistration,
   type Team, type InsertTeam,
   type TeamPlayer, type InsertTeamPlayer,
-  players, tournaments, tournamentRegistrations, teams, teamPlayers
+  type DraftState, type InsertDraftState,
+  type DraftHistory, type InsertDraftHistory,
+  players, tournaments, tournamentRegistrations, teams, teamPlayers, draftState, draftHistory
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Players
@@ -42,6 +44,16 @@ export interface IStorage {
   draftPlayer(teamId: string, playerId: string): Promise<TeamPlayer>;
   getPlayersForTeam(teamId: string): Promise<Player[]>;
   getDraftedPlayerIds(tournamentId: string): Promise<string[]>;
+  
+  // Draft State
+  getDraftState(tournamentId: string): Promise<DraftState | undefined>;
+  createDraftState(state: InsertDraftState): Promise<DraftState>;
+  updateDraftState(tournamentId: string, update: Partial<InsertDraftState>): Promise<DraftState | undefined>;
+  deleteDraftState(tournamentId: string): Promise<boolean>;
+  
+  // Draft History
+  addDraftHistory(history: InsertDraftHistory): Promise<DraftHistory>;
+  getDraftHistory(tournamentId: string): Promise<DraftHistory[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -233,6 +245,42 @@ export class DatabaseStorage implements IStorage {
       .where(sql`${teamPlayers.teamId} IN (${sql.join(teamIds.map(id => sql`${id}`), sql`, `)})`);
     
     return result.map(r => r.playerId);
+  }
+
+  // Draft State
+  async getDraftState(tournamentId: string): Promise<DraftState | undefined> {
+    const [state] = await db.select().from(draftState).where(eq(draftState.tournamentId, tournamentId));
+    return state;
+  }
+
+  async createDraftState(state: InsertDraftState): Promise<DraftState> {
+    const [newState] = await db.insert(draftState).values(state).returning();
+    return newState!;
+  }
+
+  async updateDraftState(tournamentId: string, update: Partial<InsertDraftState>): Promise<DraftState | undefined> {
+    const [state] = await db.update(draftState)
+      .set(update)
+      .where(eq(draftState.tournamentId, tournamentId))
+      .returning();
+    return state;
+  }
+
+  async deleteDraftState(tournamentId: string): Promise<boolean> {
+    await db.delete(draftState).where(eq(draftState.tournamentId, tournamentId));
+    return true;
+  }
+
+  // Draft History
+  async addDraftHistory(history: InsertDraftHistory): Promise<DraftHistory> {
+    const [newHistory] = await db.insert(draftHistory).values(history).returning();
+    return newHistory!;
+  }
+
+  async getDraftHistory(tournamentId: string): Promise<DraftHistory[]> {
+    return await db.select().from(draftHistory)
+      .where(eq(draftHistory.tournamentId, tournamentId))
+      .orderBy(desc(draftHistory.pickedAt));
   }
 }
 

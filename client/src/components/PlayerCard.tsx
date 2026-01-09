@@ -1,8 +1,7 @@
 import { motion } from "framer-motion";
 import { Player } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { Crown, Star } from "lucide-react";
-import placeholderAvatar from "@assets/generated_images/default_player_silhouette_avatar.png";
+import { Crown, Star, User, Shield, ShieldCheck } from "lucide-react";
 
 interface PlayerCardProps {
   player: Player;
@@ -88,12 +87,16 @@ export function PlayerCard({ player, className, size = "md", onClick, showSensit
 
           <div className="flex-1 relative flex items-center justify-center -mt-2 mb-3">
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-10" />
-            <div className="relative w-28 h-28 rounded-lg overflow-hidden border-2 border-white/20 shadow-xl">
-              <img 
-                src={player.avatar || placeholderAvatar} 
-                alt={player.name}
-                className="w-full h-full object-cover"
-              />
+            <div className="relative w-28 h-28 rounded-lg overflow-hidden border-2 border-white/20 shadow-xl bg-slate-700 flex items-center justify-center">
+              {player.avatar ? (
+                <img 
+                  src={player.avatar} 
+                  alt={player.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <RoleIcon role={player.role} />
+              )}
             </div>
             {player.overall >= 85 && (
               <div className="absolute -top-1 -right-1 z-20">
@@ -139,4 +142,14 @@ function StatItem({ label, value }: { label: string; value: number }) {
       </span>
     </div>
   );
+}
+
+function RoleIcon({ role }: { role: string }) {
+  if (role === 'admin') {
+    return <ShieldCheck className="w-16 h-16 text-red-400" />;
+  }
+  if (role === 'captain') {
+    return <Shield className="w-16 h-16 text-amber-400" />;
+  }
+  return <User className="w-16 h-16 text-slate-400" />;
 }

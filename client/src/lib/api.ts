@@ -228,8 +228,59 @@ export const teamsApi = {
 };
 
 // Draft API
+export interface DraftState {
+  id: string;
+  tournamentId: string;
+  teamOrder: string;
+  currentTeamIndex: number;
+  currentRound: number;
+  maxRounds: number;
+  isActive: string;
+}
+
+export interface DraftHistory {
+  id: string;
+  tournamentId: string;
+  teamId: string;
+  playerId: string;
+  round: number;
+  pickOrder: number;
+  pickedAt: string;
+}
+
+export interface DraftStateResponse {
+  draftState: DraftState;
+  currentTeam: Team | null;
+  currentCaptain: Player | null;
+  teams: Team[];
+  history: DraftHistory[];
+  teamOrder: string[];
+}
+
 export const draftApi = {
-  async draftPlayer(teamId: string, playerId: string): Promise<void> {
+  async start(tournamentId: string, maxRounds: number = 5): Promise<{ draftState: DraftState; teams: Team[] }> {
+    const res = await fetch(`/api/draft/start/${tournamentId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxRounds }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to start draft');
+    }
+    return res.json();
+  },
+
+  async getState(tournamentId: string): Promise<DraftStateResponse> {
+    const res = await fetch(`/api/draft/state/${tournamentId}`);
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to get draft state');
+    }
+    return res.json();
+  },
+
+  async draftPlayer(teamId: string, playerId: string): Promise<{ draftComplete?: boolean; message?: string }> {
     const res = await fetch('/api/draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -238,6 +289,17 @@ export const draftApi = {
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.error || 'Failed to draft player');
+    }
+    return res.json();
+  },
+
+  async end(tournamentId: string): Promise<void> {
+    const res = await fetch(`/api/draft/end/${tournamentId}`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to end draft');
     }
   },
 };
