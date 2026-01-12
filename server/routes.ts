@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPlayerSchema, insertTournamentSchema, type Player } from "@shared/schema";
+import { seedSampleData } from "./seedSampleData";
 
 declare module 'express-session' {
   interface SessionData {
@@ -79,6 +80,25 @@ export async function registerRoutes(
     }
 
     res.json({ player });
+  });
+
+  // Seed sample data (admin only)
+  app.post("/api/admin/seed-sample-data", async (req, res) => {
+    try {
+      if (!req.session.playerId) {
+        return res.status(401).json({ error: "No autenticado" });
+      }
+      const player = await storage.getPlayer(req.session.playerId);
+      if (!player || player.role !== 'admin') {
+        return res.status(403).json({ error: "Solo administradores" });
+      }
+      
+      const result = await seedSampleData();
+      res.json(result);
+    } catch (error) {
+      console.error("Seed error:", error);
+      res.status(500).json({ error: "Error al crear datos de ejemplo" });
+    }
   });
 
   // ============ PLAYER ROUTES ============

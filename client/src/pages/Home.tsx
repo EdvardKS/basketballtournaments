@@ -2,20 +2,18 @@ import { useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { Navbar } from "@/components/Navbar";
 import { TournamentCard } from "@/components/TournamentCard";
-import { PlayerCard } from "@/components/PlayerCard";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import heroBg from "@assets/generated_images/dark_abstract_basketball_background.png";
 import { Link } from "wouter";
 
 export default function Home() {
-  const { tournaments, players, fetchTournaments, fetchPlayers } = useStore();
+  const { tournaments, fetchTournaments } = useStore();
   const activeTournaments = tournaments.filter(t => t.status === 'open' || t.status === 'active');
   const pastTournaments = tournaments.filter(t => t.status === 'completed');
 
   useEffect(() => {
     fetchTournaments();
-    fetchPlayers();
   }, []);
 
   return (
@@ -69,29 +67,6 @@ export default function Home() {
               </Link>
             </Button>
           </motion.div>
-        </div>
-      </section>
-
-      {/* Featured Players Section */}
-      <section className="py-20 bg-secondary/20">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-12">
-            <h2 className="text-4xl font-display font-bold">MEJORES VALORADOS</h2>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
-            {players.filter(p => p.role !== 'admin').slice(0, 4).map((player, i) => (
-              <motion.div
-                key={player.id}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-                viewport={{ once: true }}
-              >
-                <PlayerCard player={player} />
-              </motion.div>
-            ))}
-          </div>
         </div>
       </section>
 

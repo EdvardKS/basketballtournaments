@@ -4,10 +4,9 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Users, Trophy, Crown, AlertCircle, UserPlus, RefreshCw } from "lucide-react";
+import { Calendar, MapPin, Users, Trophy, Crown, AlertCircle, UserPlus, RefreshCw, User } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { PlayerCard } from "@/components/PlayerCard";
 import { useState, useEffect, useCallback } from "react";
 import { tournamentsApi, teamsApi, draftApi, playersApi, type Player, type Tournament, type Team, type DraftStateResponse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -414,51 +413,71 @@ export default function TournamentDetails() {
 
         <div>
           <h2 className="text-4xl font-display font-bold mb-8">
-            {isDraftActive ? 'JUGADORES DISPONIBLES' : 'BOLSA DE JUGADORES'} ({availablePlayers.length})
+            {isDraftActive ? 'JUGADORES DISPONIBLES' : 'JUGADORES INSCRITOS'} ({registeredPlayers.filter(p => p.role === 'player').length})
           </h2>
           
-          {availablePlayers.length === 0 ? (
+          {registeredPlayers.filter(p => p.role === 'player').length === 0 ? (
             <div className="text-center py-20 border border-dashed border-white/10 rounded-lg">
               <p className="text-muted-foreground text-xl">
                 {isDraftActive ? 'No quedan jugadores disponibles' : 'Aún no hay jugadores inscritos. ¡Sé el primero!'}
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
-              {availablePlayers.map(player => (
-                <div key={player.id} className="relative group">
-                  <PlayerCard player={player} showSensitive={!!currentUser} />
-                  
-                  {isDraftActive && (isMyTurn || isAdmin) && (
-                    <Button 
-                      className="absolute bottom-4 left-1/2 -translate-x-1/2 w-3/4 opacity-0 group-hover:opacity-100 transition-opacity font-display tracking-wider bg-primary text-black hover:bg-white z-30 cursor-pointer"
-                      onClick={() => handleDraftPlayer(player.id)}
-                      disabled={isDrafting}
-                      data-testid={`button-draft-${player.id}`}
-                    >
-                      {isDrafting ? 'DRAFTEANDO...' : 'DRAFTEAR'}
-                    </Button>
-                  )}
-                </div>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {registeredPlayers.filter(p => p.role === 'player').map(player => {
+                const isDrafted = draftedPlayerIds.includes(player.id);
+                
+                return (
+                  <Card 
+                    key={player.id} 
+                    className={`bg-white/5 border-white/10 ${isDrafted ? 'opacity-60' : ''} ${!isDrafted && isDraftActive && (isMyTurn || isAdmin) ? 'hover:border-primary/50 cursor-pointer' : ''}`}
+                    data-testid={`player-row-${player.id}`}
+                  >
+                    <CardContent className="py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                            <User className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">{player.name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              OVR: <span className="text-primary font-bold">{player.overall}</span>
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {isDrafted ? (
+                            <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30">
+                              Seleccionado
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30">
+                              Por seleccionar
+                            </Badge>
+                          )}
+                          
+                          {isDraftActive && (isMyTurn || isAdmin) && !isDrafted && (
+                            <Button 
+                              size="sm"
+                              className="font-display bg-primary text-black hover:bg-white cursor-pointer"
+                              onClick={() => handleDraftPlayer(player.id)}
+                              disabled={isDrafting}
+                              data-testid={`button-draft-${player.id}`}
+                            >
+                              DRAFTEAR
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
-
-        {draftedPlayerIds.length > 0 && (
-          <div className="mt-12">
-            <h2 className="text-3xl font-display font-bold mb-8 text-muted-foreground">
-              JUGADORES YA DRAFTEADOS ({draftedPlayerIds.length})
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center opacity-50">
-              {registeredPlayers
-                .filter(p => draftedPlayerIds.includes(p.id))
-                .map(player => (
-                  <PlayerCard key={player.id} player={player} showSensitive={!!currentUser} />
-                ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

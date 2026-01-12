@@ -282,56 +282,108 @@ export default function AdminDashboard() {
       <div className="container mx-auto px-4 py-20">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-display font-bold">PANEL DE ADMINISTRADOR</h1>
-          <Dialog open={isCreateTournamentOpen} onOpenChange={setIsCreateTournamentOpen}>
-            <DialogTrigger asChild>
-              <Button className="font-display cursor-pointer" data-testid="button-new-tournament">
-                + NUEVO TORNEO
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-card border-white/10">
-              <DialogHeader>
-                <DialogTitle className="font-display text-xl">Crear Nuevo Torneo</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <Input 
-                  placeholder="Nombre del Torneo" 
-                  value={newTournamentName}
-                  onChange={(e) => setNewTournamentName(e.target.value)}
-                  className="bg-black/20"
-                  data-testid="input-tournament-name"
-                />
-                <Input 
-                  type="date"
-                  value={newTournamentDate}
-                  onChange={(e) => setNewTournamentDate(e.target.value)}
-                  className="bg-black/20"
-                  data-testid="input-tournament-date"
-                />
-                <Input 
-                  placeholder="Ubicación" 
-                  value={newTournamentLocation}
-                  onChange={(e) => setNewTournamentLocation(e.target.value)}
-                  className="bg-black/20"
-                  data-testid="input-tournament-location"
-                />
-                <Input 
-                  placeholder="Descripción" 
-                  value={newTournamentDescription}
-                  onChange={(e) => setNewTournamentDescription(e.target.value)}
-                  className="bg-black/20"
-                  data-testid="input-tournament-description"
-                />
-                <Input 
-                  type="number"
-                  placeholder="Equipos máximos" 
-                  value={newTournamentMaxTeams}
-                  onChange={(e) => setNewTournamentMaxTeams(e.target.value)}
-                  className="bg-black/20"
-                  data-testid="input-tournament-max-teams"
-                />
-                <Button onClick={handleCreateTournament} className="w-full font-display cursor-pointer" data-testid="button-create-tournament">
-                  CREAR TORNEO
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="font-display cursor-pointer"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/admin/seed-sample-data', { method: 'POST', credentials: 'include' });
+                  const data = await res.json();
+                  if (data.success) {
+                    toast({ title: "Datos de ejemplo creados", description: "Se ha creado un torneo pasado con jugadores y equipos." });
+                    fetchTournaments();
+                    fetchPlayers();
+                  } else {
+                    toast({ variant: "destructive", title: "Error", description: data.error || data.message });
+                  }
+                } catch (e) {
+                  toast({ variant: "destructive", title: "Error al generar datos" });
+                }
+              }}
+              data-testid="button-seed-data"
+            >
+              Generar Demo
+            </Button>
+            <Dialog open={isCreateTournamentOpen} onOpenChange={setIsCreateTournamentOpen}>
+              <DialogTrigger asChild>
+                <Button className="font-display cursor-pointer" data-testid="button-new-tournament">
+                  + NUEVO TORNEO
                 </Button>
+              </DialogTrigger>
+            <DialogContent className="bg-card border-white/10 max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="font-display text-2xl">Crear Nuevo Torneo</DialogTitle>
+                <p className="text-sm text-muted-foreground">Completa la información del torneo. Todos los campos son importantes para que los jugadores conozcan los detalles.</p>
+              </DialogHeader>
+              <div className="space-y-5 py-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Nombre del Torneo *</label>
+                  <Input 
+                    placeholder="Ej: Torneo Verano 2026" 
+                    value={newTournamentName}
+                    onChange={(e) => setNewTournamentName(e.target.value)}
+                    className="bg-black/20 h-12"
+                    data-testid="input-tournament-name"
+                  />
+                  <p className="text-xs text-muted-foreground">Nombre descriptivo que identifique el torneo</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Fecha del Torneo *</label>
+                    <Input 
+                      type="date"
+                      value={newTournamentDate}
+                      onChange={(e) => setNewTournamentDate(e.target.value)}
+                      className="bg-black/20 h-12"
+                      data-testid="input-tournament-date"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Nº Máximo de Equipos</label>
+                    <Input 
+                      type="number"
+                      min="2"
+                      max="16"
+                      placeholder="8" 
+                      value={newTournamentMaxTeams}
+                      onChange={(e) => setNewTournamentMaxTeams(e.target.value)}
+                      className="bg-black/20 h-12"
+                      data-testid="input-tournament-max-teams"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Ubicación</label>
+                  <Input 
+                    placeholder="Ej: Pistas Municipales Villena" 
+                    value={newTournamentLocation}
+                    onChange={(e) => setNewTournamentLocation(e.target.value)}
+                    className="bg-black/20 h-12"
+                    data-testid="input-tournament-location"
+                  />
+                  <p className="text-xs text-muted-foreground">Dirección o nombre del lugar donde se jugará</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Descripción</label>
+                  <textarea 
+                    placeholder="Describe el formato del torneo, premios, horarios estimados, etc."
+                    value={newTournamentDescription}
+                    onChange={(e) => setNewTournamentDescription(e.target.value)}
+                    className="w-full bg-black/20 border border-input rounded-md px-3 py-2 min-h-[100px] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                    data-testid="input-tournament-description"
+                  />
+                </div>
+
+                <div className="pt-2 border-t border-white/10">
+                  <Button onClick={handleCreateTournament} className="w-full h-12 font-display text-lg tracking-wider cursor-pointer" data-testid="button-create-tournament">
+                    CREAR TORNEO
+                  </Button>
+                  <p className="text-xs text-center text-muted-foreground mt-2">Una vez creado, podrás editar estos datos en cualquier momento</p>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
