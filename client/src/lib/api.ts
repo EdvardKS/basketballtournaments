@@ -1,6 +1,6 @@
 // API Client for Basketball Tournament App
 
-interface Player {
+export interface Player {
   id: string;
   name: string;
   mobile: string;
@@ -15,7 +15,7 @@ interface Player {
   avatar?: string;
 }
 
-interface Tournament {
+export interface Tournament {
   id: string;
   name: string;
   date: string;

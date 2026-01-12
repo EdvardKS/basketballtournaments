@@ -4,34 +4,66 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Users, Trophy } from "lucide-react";
+import { Calendar, MapPin, Users, Trophy, Crown, AlertCircle, UserPlus, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { PlayerCard } from "@/components/PlayerCard";
-import { useState, useEffect } from "react";
-import { tournamentsApi, type Player, type Tournament } from "@/lib/api";
+import { useState, useEffect, useCallback } from "react";
+import { tournamentsApi, teamsApi, draftApi, playersApi, type Player, type Tournament, type Team, type DraftStateResponse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
 
 export default function TournamentDetails() {
   const [match, params] = useRoute("/tournaments/:id");
   const { currentUser } = useStore();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [registeredPlayers, setRegisteredPlayers] = useState<Player[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [draftState, setDraftState] = useState<DraftStateResponse | null>(null);
+  const [draftedPlayerIds, setDraftedPlayerIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDrafting, setIsDrafting] = useState(false);
   const { toast } = useToast();
-  
-  useEffect(() => {
-    if (match && params?.id) {
-      loadTournament(params.id);
-    }
-  }, [match, params?.id]);
 
-  async function loadTournament(id: string) {
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [newPlayerMobile, setNewPlayerMobile] = useState("");
+  const [newPlayerStats, setNewPlayerStats] = useState({
+    pace: 50, shooting: 50, passing: 50, dribbling: 50, defense: 50, physical: 50
+  });
+  const [isRegistering, setIsRegistering] = useState(false);
+  
+  const loadTournament = useCallback(async (id: string) => {
     try {
-      setIsLoading(true);
       const data = await tournamentsApi.getById(id);
       setTournament(data.tournament);
       setRegisteredPlayers(data.registeredPlayers);
+
+      const { teams: tournamentTeams } = await teamsApi.getForTournament(id);
+      setTeams(tournamentTeams);
+
+      const allDraftedIds: string[] = [];
+      for (const team of tournamentTeams) {
+        try {
+          const teamData = await teamsApi.getByCaptain(team.captainId);
+          if (teamData.players) {
+            allDraftedIds.push(...teamData.players.map(p => p.id));
+          }
+        } catch {}
+      }
+      setDraftedPlayerIds(allDraftedIds);
+
+      if (data.tournament.status === 'draft') {
+        try {
+          const state = await draftApi.getState(id);
+          setDraftState(state);
+        } catch {
+          setDraftState(null);
+        }
+      }
     } catch (error) {
       console.error("Failed to load tournament:", error);
       toast({
@@ -39,10 +71,84 @@ export default function TournamentDetails() {
         title: "Error",
         description: "No se pudo cargar el torneo",
       });
-    } finally {
-      setIsLoading(false);
     }
-  }
+  }, [toast]);
+
+  useEffect(() => {
+    if (match && params?.id) {
+      setIsLoading(true);
+      loadTournament(params.id).finally(() => setIsLoading(false));
+    }
+  }, [match, params?.id, loadTournament]);
+
+  const handleRefresh = async () => {
+    if (params?.id) {
+      await loadTournament(params.id);
+      toast({ title: "Actualizado" });
+    }
+  };
+
+  const handleDraftPlayer = async (playerId: string) => {
+    if (!currentUser || !draftState?.currentTeam) return;
+
+    const myTeam = teams.find(t => t.captainId === currentUser.id);
+    const teamToDraft = currentUser.role === 'admin' ? draftState.currentTeam : myTeam;
+
+    if (!teamToDraft) {
+      toast({ variant: "destructive", title: "No tienes equipo asignado" });
+      return;
+    }
+
+    setIsDrafting(true);
+    try {
+      const result = await draftApi.draftPlayer(teamToDraft.id, playerId);
+      
+      if (result.draftComplete) {
+        toast({ title: "Draft completado", description: result.message });
+      } else {
+        toast({ title: "Jugador drafteado" });
+      }
+
+      if (params?.id) {
+        await loadTournament(params.id);
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al draftear", description: error.message });
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
+  const handleRegisterNewPlayer = async () => {
+    if (!newPlayerName || !newPlayerMobile) {
+      toast({ variant: "destructive", title: "Nombre y móvil son requeridos" });
+      return;
+    }
+
+    setIsRegistering(true);
+    try {
+      await playersApi.register({
+        name: newPlayerName,
+        mobile: newPlayerMobile,
+        ...newPlayerStats,
+        tournamentId: params?.id,
+      });
+
+      toast({ title: "Jugador inscrito", description: `${newPlayerName} ha sido añadido al torneo` });
+      setIsRegisterOpen(false);
+      setNewPlayerName("");
+      setNewPlayerMobile("");
+      setNewPlayerStats({ pace: 50, shooting: 50, passing: 50, dribbling: 50, defense: 50, physical: 50 });
+
+      if (params?.id) {
+        await loadTournament(params.id);
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al inscribir", description: error.message });
+    } finally {
+      setIsRegistering(false);
+    }
+  };
 
   if (!match || !params) return null;
   
@@ -71,17 +177,26 @@ export default function TournamentDetails() {
   }
 
   const isRegistered = currentUser && registeredPlayers.some(p => p.id === currentUser.id);
+  const isAdmin = currentUser?.role === 'admin';
+  const isCaptain = currentUser?.role === 'captain';
+  const isDraftActive = tournament.status === 'draft' && draftState?.draftState?.isActive === 'true';
+  
+  const myTeam = isCaptain ? teams.find(t => t.captainId === currentUser?.id) : null;
+  const isMyTurn = isDraftActive && draftState?.currentTeam?.id === myTeam?.id;
+
+  const availablePlayers = registeredPlayers.filter(p => 
+    p.role === 'player' && !draftedPlayerIds.includes(p.id)
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
       
       <div className="container mx-auto px-4 py-20">
-        {/* Header */}
         <div className="mb-8">
-          <Link href="/">
+          <Link href={isAdmin ? "/admin" : isCaptain ? "/captain" : "/"}>
             <Button variant="ghost" className="mb-4 pl-0 hover:bg-transparent hover:text-primary cursor-pointer">
-              ← Volver a Inicio
+              ← Volver
             </Button>
           </Link>
           
@@ -92,7 +207,9 @@ export default function TournamentDetails() {
                   {tournament.name}
                 </h1>
                 <Badge variant="outline" className="text-lg px-4 py-1 border-primary text-primary">
-                  {tournament.status}
+                  {tournament.status === 'open' ? 'Inscripciones Abiertas' : 
+                   tournament.status === 'draft' ? 'En Draft' :
+                   tournament.status === 'active' ? 'En Curso' : 'Finalizado'}
                 </Badge>
               </div>
               <p className="text-xl text-muted-foreground max-w-2xl">
@@ -101,6 +218,10 @@ export default function TournamentDetails() {
             </div>
             
             <div className="flex gap-4">
+              <Button variant="outline" onClick={handleRefresh} className="cursor-pointer">
+                <RefreshCw className="w-4 h-4 mr-2" /> Actualizar
+              </Button>
+              
               {!isRegistered && tournament.status === 'open' && (
                 <Link href={`/register?tournamentId=${tournament.id}`}>
                   <Button 
@@ -121,7 +242,6 @@ export default function TournamentDetails() {
           </div>
         </div>
 
-        {/* Info Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
           <Card className="bg-white/5 border-white/10">
             <CardContent className="pt-6 space-y-4">
@@ -139,40 +259,206 @@ export default function TournamentDetails() {
               </div>
               <div className="flex items-center gap-3 text-lg">
                 <Trophy className="w-6 h-6 text-primary" />
-                <span>Premio: Trofeo y Reconocimiento</span>
+                <span>{teams.length} equipos creados</span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2 bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="font-display text-2xl">Reglas y Formato</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-muted-foreground">
-              <p>• Formato 5v5 Cancha Completa</p>
-              <p>• Eliminación Doble</p>
-              <p>• Dos partes de 20 minutos</p>
-              <p>• Selección por Draft de Capitanes</p>
-              <p>• Reglas FIBA</p>
-            </CardContent>
-          </Card>
+          {isDraftActive && draftState && (
+            <Card className="lg:col-span-2 bg-amber-500/10 border-amber-500/30">
+              <CardHeader>
+                <CardTitle className="font-display text-2xl flex items-center gap-2">
+                  <Crown className="w-6 h-6 text-amber-400" />
+                  DRAFT EN CURSO
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-black/20 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Ronda Actual</p>
+                    <p className="text-3xl font-display text-amber-400">
+                      {draftState.draftState.currentRound} / {draftState.draftState.maxRounds}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-black/20 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Jugadores Disponibles</p>
+                    <p className="text-3xl font-display text-primary">
+                      {availablePlayers.length}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-primary/20 rounded-lg border border-primary/30">
+                  <p className="text-sm text-muted-foreground mb-1">TURNO DE:</p>
+                  <p className="text-2xl font-display text-primary">
+                    {draftState.currentTeam?.name || 'Cargando...'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Capitán: {draftState.currentCaptain?.name || 'N/A'}
+                  </p>
+                </div>
+
+                {isMyTurn && (
+                  <div className="p-4 bg-green-500/20 rounded-lg border border-green-500/30 flex items-center gap-3">
+                    <AlertCircle className="w-6 h-6 text-green-400" />
+                    <p className="font-display text-green-400">¡ES TU TURNO! Selecciona un jugador</p>
+                  </div>
+                )}
+
+                {isAdmin && tournament.status === 'draft' && (
+                  <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="w-full bg-blue-500 hover:bg-blue-400 text-white font-display cursor-pointer">
+                        <UserPlus className="w-4 h-4 mr-2" /> INSCRIBIR NUEVO JUGADOR
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-card border-white/10 max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="font-display">Inscribir Jugador al Draft</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div>
+                          <Label>Nombre</Label>
+                          <Input 
+                            value={newPlayerName}
+                            onChange={(e) => setNewPlayerName(e.target.value)}
+                            placeholder="Nombre del jugador"
+                            className="bg-black/20"
+                          />
+                        </div>
+                        <div>
+                          <Label>Móvil</Label>
+                          <Input 
+                            value={newPlayerMobile}
+                            onChange={(e) => setNewPlayerMobile(e.target.value)}
+                            placeholder="Número de móvil"
+                            className="bg-black/20"
+                          />
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {Object.entries(newPlayerStats).map(([stat, value]) => (
+                            <div key={stat} className="space-y-1">
+                              <div className="flex justify-between">
+                                <Label className="capitalize">{stat}</Label>
+                                <span className="text-primary font-bold">{value}</span>
+                              </div>
+                              <Slider
+                                min={1}
+                                max={99}
+                                value={[value]}
+                                onValueChange={([v]) => setNewPlayerStats(prev => ({ ...prev, [stat]: v }))}
+                              />
+                            </div>
+                          ))}
+                        </div>
+
+                        <Button 
+                          onClick={handleRegisterNewPlayer} 
+                          className="w-full font-display cursor-pointer"
+                          disabled={isRegistering}
+                        >
+                          {isRegistering ? 'Inscribiendo...' : 'INSCRIBIR JUGADOR'}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {!isDraftActive && (
+            <Card className="lg:col-span-2 bg-white/5 border-white/10">
+              <CardHeader>
+                <CardTitle className="font-display text-2xl">Reglas y Formato</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-muted-foreground">
+                <p>• Formato 5v5 Cancha Completa</p>
+                <p>• Eliminación Doble</p>
+                <p>• Dos partes de 20 minutos</p>
+                <p>• Selección por Draft de Capitanes</p>
+                <p>• Reglas FIBA</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* Registered Players */}
+        {teams.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-3xl font-display font-bold mb-6">EQUIPOS ({teams.length})</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {teams.map(team => {
+                const captain = registeredPlayers.find(p => p.id === team.captainId);
+                const isCurrentTurn = isDraftActive && draftState?.currentTeam?.id === team.id;
+                return (
+                  <Card 
+                    key={team.id} 
+                    className={`bg-white/5 border-white/10 ${isCurrentTurn ? 'border-primary ring-2 ring-primary/50' : ''}`}
+                  >
+                    <CardContent className="pt-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        {isCurrentTurn && <Crown className="w-5 h-5 text-primary animate-pulse" />}
+                        <h3 className="font-display text-lg">{team.name}</h3>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Capitán: {captain?.name || 'N/A'}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div>
-          <h2 className="text-4xl font-display font-bold mb-8">BOLSA DE JUGADORES ({registeredPlayers.length})</h2>
-          {registeredPlayers.length === 0 ? (
+          <h2 className="text-4xl font-display font-bold mb-8">
+            {isDraftActive ? 'JUGADORES DISPONIBLES' : 'BOLSA DE JUGADORES'} ({availablePlayers.length})
+          </h2>
+          
+          {availablePlayers.length === 0 ? (
             <div className="text-center py-20 border border-dashed border-white/10 rounded-lg">
-              <p className="text-muted-foreground text-xl">Aún no hay jugadores inscritos. ¡Sé el primero!</p>
+              <p className="text-muted-foreground text-xl">
+                {isDraftActive ? 'No quedan jugadores disponibles' : 'Aún no hay jugadores inscritos. ¡Sé el primero!'}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
-              {registeredPlayers.map(player => (
-                <PlayerCard key={player.id} player={player} />
+              {availablePlayers.map(player => (
+                <div key={player.id} className="relative group">
+                  <PlayerCard player={player} showSensitive={!!currentUser} />
+                  
+                  {isDraftActive && (isMyTurn || isAdmin) && (
+                    <Button 
+                      className="absolute bottom-4 left-1/2 -translate-x-1/2 w-3/4 opacity-0 group-hover:opacity-100 transition-opacity font-display tracking-wider bg-primary text-black hover:bg-white z-30 cursor-pointer"
+                      onClick={() => handleDraftPlayer(player.id)}
+                      disabled={isDrafting}
+                      data-testid={`button-draft-${player.id}`}
+                    >
+                      {isDrafting ? 'DRAFTEANDO...' : 'DRAFTEAR'}
+                    </Button>
+                  )}
+                </div>
               ))}
             </div>
           )}
         </div>
+
+        {draftedPlayerIds.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-3xl font-display font-bold mb-8 text-muted-foreground">
+              JUGADORES YA DRAFTEADOS ({draftedPlayerIds.length})
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center opacity-50">
+              {registeredPlayers
+                .filter(p => draftedPlayerIds.includes(p.id))
+                .map(player => (
+                  <PlayerCard key={player.id} player={player} showSensitive={!!currentUser} />
+                ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

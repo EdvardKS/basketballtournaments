@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { teamsApi, playersApi, tournamentsApi, type Team } from "@/lib/api";
+import { teamsApi, playersApi, tournamentsApi, draftApi, type Team } from "@/lib/api";
+import { Link } from "wouter";
+import { Calendar, MapPin, Users, Play, Eye, Settings, Trophy, Clock } from "lucide-react";
 
 export default function AdminDashboard() {
   const { 
@@ -32,12 +34,10 @@ export default function AdminDashboard() {
   const [newTournamentMaxTeams, setNewTournamentMaxTeams] = useState("8");
   const { toast } = useToast();
 
-  // For Captain Promotion
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [captainPassword, setCaptainPassword] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // For Tournament Editing
   const [editingTournamentId, setEditingTournamentId] = useState<string | null>(null);
   const [editTournamentName, setEditTournamentName] = useState("");
   const [editTournamentDate, setEditTournamentDate] = useState("");
@@ -46,18 +46,21 @@ export default function AdminDashboard() {
   const [editTournamentMaxTeams, setEditTournamentMaxTeams] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  // For Teams Management
   const [selectedTournamentForTeams, setSelectedTournamentForTeams] = useState<string>("");
   const [teamsForTournament, setTeamsForTournament] = useState<Team[]>([]);
   const [newTeamName, setNewTeamName] = useState("");
   const [selectedCaptainId, setSelectedCaptainId] = useState("");
 
-  // Fetch data on mount
+  const [isCreateTournamentOpen, setIsCreateTournamentOpen] = useState(false);
+
   useEffect(() => {
     setIsLoading(true);
     Promise.all([fetchPlayers(), fetchTournaments()])
       .finally(() => setIsLoading(false));
   }, []);
+
+  const activeTournaments = tournaments.filter(t => t.status === 'active' || t.status === 'draft' || t.status === 'open');
+  const pastTournaments = tournaments.filter(t => t.status === 'completed');
 
   const handleCreateTournament = async () => {
     if (!newTournamentName || !newTournamentDate) {
@@ -82,6 +85,7 @@ export default function AdminDashboard() {
       setNewTournamentLocation("Pistas Municipales Villena");
       setNewTournamentDescription("");
       setNewTournamentMaxTeams("8");
+      setIsCreateTournamentOpen(false);
       toast({ title: "Torneo Creado", description: "El torneo ha sido añadido al calendario." });
     } catch (error: any) {
       toast({
@@ -168,6 +172,24 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleStartDraft = async (tournamentId: string) => {
+    try {
+      const existingState = await draftApi.getState(tournamentId);
+      if (existingState?.draftState?.isActive === 'true') {
+        toast({ title: "Draft ya activo", description: "Usa la vista del torneo para gestionar el draft." });
+        return;
+      }
+    } catch {}
+    
+    try {
+      await draftApi.start(tournamentId, 5);
+      await fetchTournaments();
+      toast({ title: "Draft iniciado", description: "Los capitanes pueden empezar a elegir jugadores." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al iniciar draft", description: error.message });
+    }
+  };
+
   const loadTeams = async (tournamentId: string) => {
     if (!tournamentId) return;
     try {
@@ -220,6 +242,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      open: "bg-green-500/20 text-green-400 border-green-500/50",
+      draft: "bg-amber-500/20 text-amber-400 border-amber-500/50",
+      active: "bg-blue-500/20 text-blue-400 border-blue-500/50",
+      completed: "bg-gray-500/20 text-gray-400 border-gray-500/50",
+    };
+    const labels: Record<string, string> = {
+      open: "Inscripciones Abiertas",
+      draft: "En Draft",
+      active: "En Curso",
+      completed: "Finalizado",
+    };
+    return (
+      <Badge variant="outline" className={styles[status] || styles.open}>
+        {labels[status] || status}
+      </Badge>
+    );
+  };
+
   const captains = players.filter(p => p.role === 'captain');
 
   if (isLoading) {
@@ -238,129 +280,190 @@ export default function AdminDashboard() {
       <Navbar />
       
       <div className="container mx-auto px-4 py-20">
-        <h1 className="text-4xl font-display font-bold mb-8">PANEL DE ADMINISTRADOR</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-4xl font-display font-bold">PANEL DE ADMINISTRADOR</h1>
+          <Dialog open={isCreateTournamentOpen} onOpenChange={setIsCreateTournamentOpen}>
+            <DialogTrigger asChild>
+              <Button className="font-display cursor-pointer" data-testid="button-new-tournament">
+                + NUEVO TORNEO
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-white/10">
+              <DialogHeader>
+                <DialogTitle className="font-display text-xl">Crear Nuevo Torneo</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <Input 
+                  placeholder="Nombre del Torneo" 
+                  value={newTournamentName}
+                  onChange={(e) => setNewTournamentName(e.target.value)}
+                  className="bg-black/20"
+                  data-testid="input-tournament-name"
+                />
+                <Input 
+                  type="date"
+                  value={newTournamentDate}
+                  onChange={(e) => setNewTournamentDate(e.target.value)}
+                  className="bg-black/20"
+                  data-testid="input-tournament-date"
+                />
+                <Input 
+                  placeholder="Ubicación" 
+                  value={newTournamentLocation}
+                  onChange={(e) => setNewTournamentLocation(e.target.value)}
+                  className="bg-black/20"
+                  data-testid="input-tournament-location"
+                />
+                <Input 
+                  placeholder="Descripción" 
+                  value={newTournamentDescription}
+                  onChange={(e) => setNewTournamentDescription(e.target.value)}
+                  className="bg-black/20"
+                  data-testid="input-tournament-description"
+                />
+                <Input 
+                  type="number"
+                  placeholder="Equipos máximos" 
+                  value={newTournamentMaxTeams}
+                  onChange={(e) => setNewTournamentMaxTeams(e.target.value)}
+                  className="bg-black/20"
+                  data-testid="input-tournament-max-teams"
+                />
+                <Button onClick={handleCreateTournament} className="w-full font-display cursor-pointer" data-testid="button-create-tournament">
+                  CREAR TORNEO
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
         
-        <Tabs defaultValue="tournaments" className="w-full">
+        <section className="mb-12">
+          <h2 className="text-2xl font-display font-bold mb-6 flex items-center gap-2">
+            <Play className="w-6 h-6 text-primary" />
+            TORNEOS ACTIVOS
+          </h2>
+          
+          {activeTournaments.length === 0 ? (
+            <Card className="bg-white/5 border-white/10">
+              <CardContent className="py-12 text-center">
+                <p className="text-muted-foreground">No hay torneos activos. Crea uno nuevo.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeTournaments.map((t) => (
+                <Card key={t.id} className="bg-white/5 border-white/10 hover:border-primary/50 transition-colors" data-testid={`card-tournament-${t.id}`}>
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="font-display text-xl">{t.name}</CardTitle>
+                      {getStatusBadge(t.status)}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4" />
+                        <span>{t.date}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        <span>{t.location}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        <span>Máx. {t.maxTeams} equipos</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={`/tournaments/${t.id}`}>
+                        <Button size="sm" variant="outline" className="cursor-pointer">
+                          <Eye className="w-4 h-4 mr-1" /> Ver
+                        </Button>
+                      </Link>
+                      <Button size="sm" variant="outline" className="cursor-pointer" onClick={() => handleEditTournament(t)}>
+                        <Settings className="w-4 h-4 mr-1" /> Editar
+                      </Button>
+                      
+                      <Select value={t.status} onValueChange={(status) => handleStatusChange(t.id, status)}>
+                        <SelectTrigger className="w-32 h-8 bg-transparent border-white/20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">Abierto</SelectItem>
+                          <SelectItem value="draft">En Draft</SelectItem>
+                          <SelectItem value="active">Activo</SelectItem>
+                          <SelectItem value="completed">Finalizado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {t.status === 'draft' && (
+                      <Button 
+                        size="sm" 
+                        className="w-full bg-amber-500 hover:bg-amber-400 text-black font-display cursor-pointer"
+                        onClick={() => handleStartDraft(t.id)}
+                        data-testid={`button-start-draft-${t.id}`}
+                      >
+                        <Play className="w-4 h-4 mr-1" /> INICIAR DRAFT
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="mb-12">
+          <h2 className="text-2xl font-display font-bold mb-6 flex items-center gap-2">
+            <Trophy className="w-6 h-6 text-muted-foreground" />
+            TORNEOS PASADOS
+          </h2>
+          
+          {pastTournaments.length === 0 ? (
+            <Card className="bg-white/5 border-white/10">
+              <CardContent className="py-8 text-center">
+                <p className="text-muted-foreground">No hay torneos finalizados.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {pastTournaments.map((t) => (
+                <Card key={t.id} className="bg-white/5 border-white/10 opacity-75" data-testid={`card-past-tournament-${t.id}`}>
+                  <CardContent className="pt-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-display text-lg">{t.name}</h3>
+                      {getStatusBadge(t.status)}
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3">{t.date}</p>
+                    <div className="flex gap-2">
+                      <Link href={`/tournaments/${t.id}`}>
+                        <Button size="sm" variant="ghost" className="cursor-pointer">
+                          <Eye className="w-4 h-4 mr-1" /> Ver
+                        </Button>
+                      </Link>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="text-red-500 cursor-pointer"
+                        onClick={() => handleDeleteTournament(t.id)}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <Tabs defaultValue="teams" className="w-full">
           <TabsList className="bg-white/5 border border-white/10 mb-8">
-            <TabsTrigger value="tournaments" className="cursor-pointer">Torneos</TabsTrigger>
             <TabsTrigger value="teams" className="cursor-pointer">Equipos</TabsTrigger>
             <TabsTrigger value="players" className="cursor-pointer">Jugadores</TabsTrigger>
           </TabsList>
-          
-          <TabsContent value="tournaments">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {/* Create Tournament */}
-              <Card className="bg-white/5 border-white/10 h-fit">
-                <CardHeader>
-                  <CardTitle className="font-display">Crear Torneo</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Input 
-                    placeholder="Nombre del Torneo" 
-                    value={newTournamentName}
-                    onChange={(e) => setNewTournamentName(e.target.value)}
-                    className="bg-black/20"
-                    data-testid="input-tournament-name"
-                  />
-                  <Input 
-                    type="date"
-                    value={newTournamentDate}
-                    onChange={(e) => setNewTournamentDate(e.target.value)}
-                    className="bg-black/20"
-                    data-testid="input-tournament-date"
-                  />
-                  <Input 
-                    placeholder="Ubicación" 
-                    value={newTournamentLocation}
-                    onChange={(e) => setNewTournamentLocation(e.target.value)}
-                    className="bg-black/20"
-                    data-testid="input-tournament-location"
-                  />
-                  <Input 
-                    placeholder="Descripción" 
-                    value={newTournamentDescription}
-                    onChange={(e) => setNewTournamentDescription(e.target.value)}
-                    className="bg-black/20"
-                    data-testid="input-tournament-description"
-                  />
-                  <Input 
-                    type="number"
-                    placeholder="Equipos máximos" 
-                    value={newTournamentMaxTeams}
-                    onChange={(e) => setNewTournamentMaxTeams(e.target.value)}
-                    className="bg-black/20"
-                    data-testid="input-tournament-max-teams"
-                  />
-                  <Button onClick={handleCreateTournament} className="w-full font-display cursor-pointer" data-testid="button-create-tournament">
-                    AÑADIR EVENTO
-                  </Button>
-                </CardContent>
-              </Card>
-              
-              {/* Tournament List */}
-              <Card className="md:col-span-2 bg-white/5 border-white/10">
-                <CardHeader>
-                  <CardTitle className="font-display">Torneos Existentes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-white/10 hover:bg-white/5">
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tournaments.map((t) => (
-                        <TableRow key={t.id} className="border-white/10 hover:bg-white/5" data-testid={`row-tournament-${t.id}`}>
-                          <TableCell className="font-medium">{t.name}</TableCell>
-                          <TableCell>{t.date}</TableCell>
-                          <TableCell>
-                            <Select 
-                              value={t.status}
-                              onValueChange={(status) => handleStatusChange(t.id, status)}
-                            >
-                              <SelectTrigger className="w-32 h-8 bg-transparent border-white/20">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="open">Abierto</SelectItem>
-                                <SelectItem value="draft">En Draft</SelectItem>
-                                <SelectItem value="active">Activo</SelectItem>
-                                <SelectItem value="completed">Finalizado</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell className="space-x-2">
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="cursor-pointer"
-                              onClick={() => handleEditTournament(t)}
-                              data-testid={`button-edit-tournament-${t.id}`}
-                            >
-                              Editar
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="cursor-pointer text-red-500 hover:text-red-400"
-                              onClick={() => handleDeleteTournament(t.id)}
-                              data-testid={`button-delete-tournament-${t.id}`}
-                            >
-                              Eliminar
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
 
           <TabsContent value="teams">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -374,7 +477,7 @@ export default function AdminDashboard() {
                       <SelectValue placeholder="Selecciona torneo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {tournaments.map(t => (
+                      {tournaments.filter(t => t.status === 'draft' || t.status === 'open').map(t => (
                         <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -543,40 +646,35 @@ export default function AdminDashboard() {
         </Tabs>
       </div>
 
-      {/* Edit Tournament Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="bg-card border-white/10">
           <DialogHeader>
-            <DialogTitle>Editar Torneo</DialogTitle>
+            <DialogTitle className="font-display">Editar Torneo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <Input 
-              placeholder="Nombre del Torneo" 
+              placeholder="Nombre" 
               value={editTournamentName}
               onChange={(e) => setEditTournamentName(e.target.value)}
               className="bg-black/20"
-              data-testid="input-edit-tournament-name"
             />
             <Input 
               type="date"
               value={editTournamentDate}
               onChange={(e) => setEditTournamentDate(e.target.value)}
               className="bg-black/20"
-              data-testid="input-edit-tournament-date"
             />
             <Input 
               placeholder="Ubicación" 
               value={editTournamentLocation}
               onChange={(e) => setEditTournamentLocation(e.target.value)}
               className="bg-black/20"
-              data-testid="input-edit-tournament-location"
             />
             <Input 
               placeholder="Descripción" 
               value={editTournamentDescription}
               onChange={(e) => setEditTournamentDescription(e.target.value)}
               className="bg-black/20"
-              data-testid="input-edit-tournament-description"
             />
             <Input 
               type="number"
@@ -584,10 +682,9 @@ export default function AdminDashboard() {
               value={editTournamentMaxTeams}
               onChange={(e) => setEditTournamentMaxTeams(e.target.value)}
               className="bg-black/20"
-              data-testid="input-edit-tournament-max-teams"
             />
-            <Button onClick={handleSaveEditTournament} className="w-full cursor-pointer" data-testid="button-save-edit-tournament">
-              Guardar Cambios
+            <Button onClick={handleSaveEditTournament} className="w-full font-display cursor-pointer">
+              GUARDAR CAMBIOS
             </Button>
           </div>
         </DialogContent>
