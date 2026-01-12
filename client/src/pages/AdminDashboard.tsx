@@ -387,6 +387,7 @@ export default function AdminDashboard() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
         
         <section className="mb-12">
