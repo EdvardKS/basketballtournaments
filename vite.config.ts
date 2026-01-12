@@ -43,6 +43,12 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     allowedHosts: true,
+
+    watch: {
+      usePolling: true,
+      interval: 10, // puedes subir a 300 si consume CPU
+    },
+
     fs: {
       strict: true,
       deny: ["**/.*"],

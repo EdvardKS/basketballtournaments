@@ -38,7 +38,7 @@ RUN npm install
 
 EXPOSE 5000
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "dev:client"]
 ```
 ---
 ## Docker compose yml
@@ -67,6 +67,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/basketball
+      NODE_ENV: development
     depends_on:
       - postgres
     volumes:
@@ -74,10 +75,11 @@ services:
       - /app/node_modules
     ports:
       - "5000:5000"
-    command: npm run dev
+    command: npm run dev:client
 
 volumes:
   postgres_data:
+
 
 ```
 ---
