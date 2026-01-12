@@ -235,28 +235,6 @@ export default function AdminDashboard() {
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-display font-bold">PANEL DE ADMINISTRADOR</h1>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              className="font-display cursor-pointer"
-              onClick={async () => {
-                try {
-                  const res = await fetch('/api/admin/seed-sample-data', { method: 'POST', credentials: 'include' });
-                  const data = await res.json();
-                  if (data.success) {
-                    toast({ title: "Datos de ejemplo creados", description: "Se ha creado un torneo pasado con jugadores y equipos." });
-                    fetchTournaments();
-                    fetchPlayers();
-                  } else {
-                    toast({ variant: "destructive", title: "Error", description: data.error || data.message });
-                  }
-                } catch (e) {
-                  toast({ variant: "destructive", title: "Error al generar datos" });
-                }
-              }}
-              data-testid="button-seed-data"
-            >
-              Generar Demo
-            </Button>
             <Dialog open={isCreateTournamentOpen} onOpenChange={setIsCreateTournamentOpen}>
               <DialogTrigger asChild>
                 <Button className="font-display cursor-pointer" data-testid="button-new-tournament">
