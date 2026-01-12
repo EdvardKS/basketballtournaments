@@ -122,6 +122,12 @@ export const playersApi = {
     const res = await fetch(`/api/players/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to delete player');
   },
+
+  async getTournaments(playerId: string): Promise<{ tournaments: Tournament[] }> {
+    const res = await fetch(`/api/players/${playerId}/tournaments`);
+    if (!res.ok) throw new Error('Failed to fetch player tournaments');
+    return res.json();
+  },
 };
 
 // Tournaments API
@@ -301,5 +307,169 @@ export const draftApi = {
       const error = await res.json();
       throw new Error(error.error || 'Failed to end draft');
     }
+  },
+};
+
+// Tournament Registration with captain info
+export interface TournamentRegistration {
+  id: string;
+  playerId: string;
+  tournamentId: string;
+  isCaptain: boolean;
+  teamName: string | null;
+  registeredAt: string;
+  player: Player;
+}
+
+// Tournament Groups and Matches
+export interface TournamentGroup {
+  id: string;
+  tournamentId: string;
+  name: string;
+  members?: GroupMember[];
+}
+
+export interface GroupMember {
+  id: string;
+  groupId: string;
+  teamId: string;
+  points: number;
+  gamesPlayed: number;
+  gamesWon: number;
+  gamesLost: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  team: Team;
+}
+
+export interface Match {
+  id: string;
+  tournamentId: string;
+  groupId: string | null;
+  stage: 'group' | 'quarterfinal' | 'semifinal' | 'final' | 'third_place';
+  roundNumber: number | null;
+  homeTeamId: string | null;
+  awayTeamId: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  winnerId: string | null;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+export interface PlayerSkillSnapshot {
+  id: string;
+  playerId: string;
+  tournamentId: string;
+  pace: number;
+  shooting: number;
+  passing: number;
+  dribbling: number;
+  defense: number;
+  physical: number;
+  overall: number;
+  snapshotAt: string;
+}
+
+// Extended Tournaments API with new endpoints
+export const registrationsApi = {
+  async getForTournament(tournamentId: string): Promise<{ registrations: TournamentRegistration[] }> {
+    const res = await fetch(`/api/tournaments/${tournamentId}/registrations`);
+    if (!res.ok) throw new Error('Failed to fetch registrations');
+    return res.json();
+  },
+
+  async getCaptains(tournamentId: string): Promise<{ captains: TournamentRegistration[] }> {
+    const res = await fetch(`/api/tournaments/${tournamentId}/captains`);
+    if (!res.ok) throw new Error('Failed to fetch captains');
+    return res.json();
+  },
+
+  async setCaptain(tournamentId: string, playerId: string, isCaptain: boolean, teamName?: string): Promise<{ registration: TournamentRegistration }> {
+    const res = await fetch(`/api/tournaments/${tournamentId}/captains/${playerId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isCaptain, teamName }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to set captain');
+    }
+    return res.json();
+  },
+};
+
+// Groups API
+export const groupsApi = {
+  async getForTournament(tournamentId: string): Promise<{ groups: TournamentGroup[] }> {
+    const res = await fetch(`/api/tournaments/${tournamentId}/groups`);
+    if (!res.ok) throw new Error('Failed to fetch groups');
+    return res.json();
+  },
+
+  async generate(tournamentId: string): Promise<{ groups: TournamentGroup[] }> {
+    const res = await fetch(`/api/tournaments/${tournamentId}/groups/generate`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to generate groups');
+    }
+    return res.json();
+  },
+};
+
+// Matches API
+export const matchesApi = {
+  async getForTournament(tournamentId: string): Promise<{ matches: Match[] }> {
+    const res = await fetch(`/api/tournaments/${tournamentId}/matches`);
+    if (!res.ok) throw new Error('Failed to fetch matches');
+    return res.json();
+  },
+
+  async updateResult(matchId: string, homeScore: number, awayScore: number, homeTeamId: string, awayTeamId: string): Promise<{ match: Match }> {
+    const res = await fetch(`/api/matches/${matchId}/result`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ homeScore, awayScore, homeTeamId, awayTeamId }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to update match result');
+    }
+    return res.json();
+  },
+};
+
+// Admin Analytics API
+export interface PlayerStats {
+  player: Player;
+  tournamentsPlayed: number;
+  snapshots: PlayerSkillSnapshot[];
+  growth: number;
+}
+
+export const adminApi = {
+  async getPlayerHistory(filters?: { role?: string; tournamentId?: string }): Promise<{
+    playerStats: PlayerStats[];
+    totalPlayers: number;
+    totalTournaments: number;
+    activeTournaments: number;
+  }> {
+    const params = new URLSearchParams();
+    if (filters?.role) params.append('role', filters.role);
+    if (filters?.tournamentId) params.append('tournamentId', filters.tournamentId);
+    
+    const res = await fetch(`/api/admin/player-history?${params}`);
+    if (!res.ok) throw new Error('Failed to fetch player history');
+    return res.json();
+  },
+};
+
+// Player History API (for individual players)
+export const playerHistoryApi = {
+  async getSnapshots(playerId: string): Promise<{ snapshots: PlayerSkillSnapshot[] }> {
+    const res = await fetch(`/api/players/${playerId}/history`);
+    if (!res.ok) throw new Error('Failed to fetch player history');
+    return res.json();
   },
 };

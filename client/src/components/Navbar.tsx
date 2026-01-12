@@ -1,10 +1,21 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/lib/store";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator 
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, Trophy, Users, BarChart3, Home, History } from "lucide-react";
 
 export function Navbar() {
   const { currentUser, logout } = useStore();
+  const [location] = useLocation();
+
+  const isActive = (path: string) => location === path;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-background/80 backdrop-blur-md">
@@ -16,28 +27,139 @@ export function Navbar() {
             </span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-8">
-          <Link href="/tournaments" className="text-sm font-medium hover:text-primary transition-colors cursor-pointer">Torneos</Link>
-          <Link href="/players" className="text-sm font-medium hover:text-primary transition-colors cursor-pointer">Jugadores</Link>
-          {(currentUser?.role === 'captain' || currentUser?.role === 'admin') && (
-            <Link href="/draft" className="text-sm font-medium hover:text-primary transition-colors cursor-pointer text-accent">Sala Draft</Link>
+        <div className="hidden md:flex items-center gap-6">
+          {currentUser?.role === 'admin' ? (
+            <>
+              <Link 
+                href="/admin" 
+                className={cn(
+                  "flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer",
+                  isActive('/admin') ? "text-primary" : "hover:text-primary"
+                )}
+              >
+                <Home className="w-4 h-4" />
+                Principal
+              </Link>
+              <Link 
+                href="/admin/players" 
+                className={cn(
+                  "flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer",
+                  isActive('/admin/players') ? "text-primary" : "hover:text-primary"
+                )}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Histórico Jugadores
+              </Link>
+              <Link 
+                href="/tournaments" 
+                className={cn(
+                  "flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer",
+                  isActive('/tournaments') ? "text-primary" : "hover:text-primary"
+                )}
+              >
+                <Trophy className="w-4 h-4" />
+                Torneos
+              </Link>
+            </>
+          ) : currentUser?.role === 'captain' || currentUser?.role === 'player' ? (
+            <>
+              <Link 
+                href={currentUser.role === 'captain' ? "/captain" : "/player"} 
+                className={cn(
+                  "flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer",
+                  (isActive('/captain') || isActive('/player')) ? "text-primary" : "hover:text-primary"
+                )}
+              >
+                <Home className="w-4 h-4" />
+                Mis Torneos
+              </Link>
+              <Link 
+                href="/my-history" 
+                className={cn(
+                  "flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer",
+                  isActive('/my-history') ? "text-primary" : "hover:text-primary"
+                )}
+              >
+                <History className="w-4 h-4" />
+                Mi Historial
+              </Link>
+              {currentUser.role === 'captain' && (
+                <Link 
+                  href="/draft" 
+                  className={cn(
+                    "flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer text-accent",
+                    isActive('/draft') ? "text-accent" : "hover:text-accent"
+                  )}
+                >
+                  <Users className="w-4 h-4" />
+                  Sala Draft
+                </Link>
+              )}
+            </>
+          ) : (
+            <>
+              <Link 
+                href="/tournaments" 
+                className={cn(
+                  "text-sm font-medium transition-colors cursor-pointer",
+                  isActive('/tournaments') ? "text-primary" : "hover:text-primary"
+                )}
+              >
+                Torneos
+              </Link>
+              <Link 
+                href="/players" 
+                className={cn(
+                  "text-sm font-medium transition-colors cursor-pointer",
+                  isActive('/players') ? "text-primary" : "hover:text-primary"
+                )}
+              >
+                Jugadores
+              </Link>
+            </>
           )}
         </div>
 
         <div className="flex items-center gap-4">
           {currentUser ? (
             <div className="flex items-center gap-4">
-              <span className="text-sm hidden sm:inline-block">Hola, {currentUser.name}</span>
-              <Button onClick={() => logout()} variant="ghost" size="sm" className="hover:text-destructive cursor-pointer" data-testid="button-logout">
-                Salir
-              </Button>
-              {currentUser.role === 'admin' && (
-                <Link href="/admin">
-                  <Button variant="outline" size="sm" className="hidden sm:flex border-primary text-primary hover:bg-primary hover:text-black cursor-pointer" data-testid="button-admin-panel">
-                    Panel Admin
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="flex items-center gap-1 cursor-pointer" data-testid="button-user-menu">
+                    <span className="text-sm">{currentUser.name}</span>
+                    <ChevronDown className="w-4 h-4" />
                   </Button>
-                </Link>
-              )}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem className="text-muted-foreground text-xs">
+                    {currentUser.role === 'admin' ? 'Administrador' : 
+                     currentUser.role === 'captain' ? 'Capitán' : 'Jugador'}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {currentUser.role === 'admin' && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin" className="cursor-pointer w-full">
+                        Panel Admin
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {(currentUser.role === 'captain' || currentUser.role === 'player') && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/my-history" className="cursor-pointer w-full">
+                        Mi Historial
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => logout()} 
+                    className="text-destructive cursor-pointer"
+                    data-testid="button-logout"
+                  >
+                    Cerrar Sesión
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ) : (
              <div className="flex items-center gap-4">

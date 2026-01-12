@@ -6,7 +6,12 @@ import {
   type TeamPlayer, type InsertTeamPlayer,
   type DraftState, type InsertDraftState,
   type DraftHistory, type InsertDraftHistory,
-  players, tournaments, tournamentRegistrations, teams, teamPlayers, draftState, draftHistory
+  type TournamentGroup, type InsertTournamentGroup,
+  type GroupMember, type InsertGroupMember,
+  type Match, type InsertMatch,
+  type PlayerSkillSnapshot, type InsertPlayerSkillSnapshot,
+  players, tournaments, tournamentRegistrations, teams, teamPlayers, draftState, draftHistory,
+  tournamentGroups, groupMembers, matches, playerSkillSnapshots
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql, desc } from "drizzle-orm";
@@ -54,6 +59,30 @@ export interface IStorage {
   // Draft History
   addDraftHistory(history: InsertDraftHistory): Promise<DraftHistory>;
   getDraftHistory(tournamentId: string): Promise<DraftHistory[]>;
+  
+  // Per-Tournament Captain Management
+  setTournamentCaptain(playerId: string, tournamentId: string, isCaptain: boolean, teamName?: string): Promise<TournamentRegistration | undefined>;
+  getTournamentRegistration(playerId: string, tournamentId: string): Promise<TournamentRegistration | undefined>;
+  getCaptainsForTournament(tournamentId: string): Promise<(TournamentRegistration & { player: Player })[]>;
+  getRegistrationsForTournament(tournamentId: string): Promise<(TournamentRegistration & { player: Player })[]>;
+  
+  // Groups
+  createGroup(group: InsertTournamentGroup): Promise<TournamentGroup>;
+  getGroupsForTournament(tournamentId: string): Promise<TournamentGroup[]>;
+  addTeamToGroup(member: InsertGroupMember): Promise<GroupMember>;
+  getGroupMembers(groupId: string): Promise<(GroupMember & { team: Team })[]>;
+  updateGroupMemberStats(groupMemberId: string, stats: Partial<InsertGroupMember>): Promise<GroupMember | undefined>;
+  
+  // Matches
+  createMatch(match: InsertMatch): Promise<Match>;
+  getMatchesForTournament(tournamentId: string): Promise<Match[]>;
+  getMatchesForGroup(groupId: string): Promise<Match[]>;
+  updateMatchResult(matchId: string, homeScore: number, awayScore: number, winnerId: string): Promise<Match | undefined>;
+  
+  // Player Skill Snapshots
+  createSkillSnapshot(snapshot: InsertPlayerSkillSnapshot): Promise<PlayerSkillSnapshot>;
+  getSkillSnapshotsForPlayer(playerId: string): Promise<PlayerSkillSnapshot[]>;
+  getSkillSnapshotsForTournament(tournamentId: string): Promise<PlayerSkillSnapshot[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -281,6 +310,185 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(draftHistory)
       .where(eq(draftHistory.tournamentId, tournamentId))
       .orderBy(desc(draftHistory.pickedAt));
+  }
+
+  // Per-Tournament Captain Management
+  async setTournamentCaptain(playerId: string, tournamentId: string, isCaptain: boolean, teamName?: string): Promise<TournamentRegistration | undefined> {
+    const [registration] = await db.update(tournamentRegistrations)
+      .set({ isCaptain, teamName: teamName || null })
+      .where(and(
+        eq(tournamentRegistrations.playerId, playerId),
+        eq(tournamentRegistrations.tournamentId, tournamentId)
+      ))
+      .returning();
+    return registration;
+  }
+
+  async getTournamentRegistration(playerId: string, tournamentId: string): Promise<TournamentRegistration | undefined> {
+    const [registration] = await db.select().from(tournamentRegistrations)
+      .where(and(
+        eq(tournamentRegistrations.playerId, playerId),
+        eq(tournamentRegistrations.tournamentId, tournamentId)
+      ));
+    return registration;
+  }
+
+  async getCaptainsForTournament(tournamentId: string): Promise<(TournamentRegistration & { player: Player })[]> {
+    const result = await db
+      .select({
+        id: tournamentRegistrations.id,
+        playerId: tournamentRegistrations.playerId,
+        tournamentId: tournamentRegistrations.tournamentId,
+        isCaptain: tournamentRegistrations.isCaptain,
+        teamName: tournamentRegistrations.teamName,
+        registeredAt: tournamentRegistrations.registeredAt,
+        player: players
+      })
+      .from(tournamentRegistrations)
+      .innerJoin(players, eq(tournamentRegistrations.playerId, players.id))
+      .where(and(
+        eq(tournamentRegistrations.tournamentId, tournamentId),
+        eq(tournamentRegistrations.isCaptain, true)
+      ));
+    
+    return result.map(r => ({
+      id: r.id,
+      playerId: r.playerId,
+      tournamentId: r.tournamentId,
+      isCaptain: r.isCaptain,
+      teamName: r.teamName,
+      registeredAt: r.registeredAt,
+      player: r.player
+    }));
+  }
+
+  async getRegistrationsForTournament(tournamentId: string): Promise<(TournamentRegistration & { player: Player })[]> {
+    const result = await db
+      .select({
+        id: tournamentRegistrations.id,
+        playerId: tournamentRegistrations.playerId,
+        tournamentId: tournamentRegistrations.tournamentId,
+        isCaptain: tournamentRegistrations.isCaptain,
+        teamName: tournamentRegistrations.teamName,
+        registeredAt: tournamentRegistrations.registeredAt,
+        player: players
+      })
+      .from(tournamentRegistrations)
+      .innerJoin(players, eq(tournamentRegistrations.playerId, players.id))
+      .where(eq(tournamentRegistrations.tournamentId, tournamentId));
+    
+    return result.map(r => ({
+      id: r.id,
+      playerId: r.playerId,
+      tournamentId: r.tournamentId,
+      isCaptain: r.isCaptain,
+      teamName: r.teamName,
+      registeredAt: r.registeredAt,
+      player: r.player
+    }));
+  }
+
+  // Groups
+  async createGroup(group: InsertTournamentGroup): Promise<TournamentGroup> {
+    const [newGroup] = await db.insert(tournamentGroups).values(group).returning();
+    return newGroup!;
+  }
+
+  async getGroupsForTournament(tournamentId: string): Promise<TournamentGroup[]> {
+    return await db.select().from(tournamentGroups)
+      .where(eq(tournamentGroups.tournamentId, tournamentId));
+  }
+
+  async addTeamToGroup(member: InsertGroupMember): Promise<GroupMember> {
+    const [newMember] = await db.insert(groupMembers).values(member).returning();
+    return newMember!;
+  }
+
+  async getGroupMembers(groupId: string): Promise<(GroupMember & { team: Team })[]> {
+    const result = await db
+      .select({
+        id: groupMembers.id,
+        groupId: groupMembers.groupId,
+        teamId: groupMembers.teamId,
+        points: groupMembers.points,
+        gamesPlayed: groupMembers.gamesPlayed,
+        gamesWon: groupMembers.gamesWon,
+        gamesLost: groupMembers.gamesLost,
+        pointsFor: groupMembers.pointsFor,
+        pointsAgainst: groupMembers.pointsAgainst,
+        team: teams
+      })
+      .from(groupMembers)
+      .innerJoin(teams, eq(groupMembers.teamId, teams.id))
+      .where(eq(groupMembers.groupId, groupId));
+    
+    return result.map(r => ({
+      id: r.id,
+      groupId: r.groupId,
+      teamId: r.teamId,
+      points: r.points,
+      gamesPlayed: r.gamesPlayed,
+      gamesWon: r.gamesWon,
+      gamesLost: r.gamesLost,
+      pointsFor: r.pointsFor,
+      pointsAgainst: r.pointsAgainst,
+      team: r.team
+    }));
+  }
+
+  async updateGroupMemberStats(groupMemberId: string, stats: Partial<InsertGroupMember>): Promise<GroupMember | undefined> {
+    const [member] = await db.update(groupMembers)
+      .set(stats)
+      .where(eq(groupMembers.id, groupMemberId))
+      .returning();
+    return member;
+  }
+
+  // Matches
+  async createMatch(match: InsertMatch): Promise<Match> {
+    const [newMatch] = await db.insert(matches).values(match).returning();
+    return newMatch!;
+  }
+
+  async getMatchesForTournament(tournamentId: string): Promise<Match[]> {
+    return await db.select().from(matches)
+      .where(eq(matches.tournamentId, tournamentId));
+  }
+
+  async getMatchesForGroup(groupId: string): Promise<Match[]> {
+    return await db.select().from(matches)
+      .where(eq(matches.groupId, groupId));
+  }
+
+  async updateMatchResult(matchId: string, homeScore: number, awayScore: number, winnerId: string): Promise<Match | undefined> {
+    const [match] = await db.update(matches)
+      .set({ 
+        homeScore, 
+        awayScore, 
+        winnerId, 
+        status: 'completed',
+        completedAt: new Date()
+      })
+      .where(eq(matches.id, matchId))
+      .returning();
+    return match;
+  }
+
+  // Player Skill Snapshots
+  async createSkillSnapshot(snapshot: InsertPlayerSkillSnapshot): Promise<PlayerSkillSnapshot> {
+    const [newSnapshot] = await db.insert(playerSkillSnapshots).values(snapshot).returning();
+    return newSnapshot!;
+  }
+
+  async getSkillSnapshotsForPlayer(playerId: string): Promise<PlayerSkillSnapshot[]> {
+    return await db.select().from(playerSkillSnapshots)
+      .where(eq(playerSkillSnapshots.playerId, playerId))
+      .orderBy(desc(playerSkillSnapshots.snapshotAt));
+  }
+
+  async getSkillSnapshotsForTournament(tournamentId: string): Promise<PlayerSkillSnapshot[]> {
+    return await db.select().from(playerSkillSnapshots)
+      .where(eq(playerSkillSnapshots.tournamentId, tournamentId));
   }
 }
 

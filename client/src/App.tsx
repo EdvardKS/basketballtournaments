@@ -11,7 +11,10 @@ import Home from "@/pages/Home";
 import TournamentDetails from "@/pages/TournamentDetails";
 import Register from "@/pages/Register";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AdminPlayerHistory from "@/pages/AdminPlayerHistory";
 import CaptainDashboard from "@/pages/CaptainDashboard";
+import PlayerDashboard from "@/pages/PlayerDashboard";
+import MyHistory from "@/pages/MyHistory";
 import PlayersPage from "@/pages/PlayersPage";
 import Login from "@/pages/Login";
 
@@ -26,13 +29,30 @@ function Router() {
       <Route path="/register" component={Register} />
       <Route path="/login" component={Login} />
       
-      {/* Protected Routes */}
+      {/* Admin Routes */}
       <Route path="/admin">
         {currentUser?.role === 'admin' ? <AdminDashboard /> : <Redirect to="/login" />}
       </Route>
+      <Route path="/admin/players">
+        {currentUser?.role === 'admin' ? <AdminPlayerHistory /> : <Redirect to="/login" />}
+      </Route>
       
+      {/* Captain Routes */}
+      <Route path="/captain">
+        {currentUser?.role === 'captain' ? <CaptainDashboard /> : <Redirect to="/login" />}
+      </Route>
       <Route path="/draft">
         {currentUser?.role === 'captain' || currentUser?.role === 'admin' ? <CaptainDashboard /> : <Redirect to="/login" />}
+      </Route>
+      
+      {/* Player Routes */}
+      <Route path="/player">
+        {currentUser?.role === 'player' ? <PlayerDashboard /> : <Redirect to="/login" />}
+      </Route>
+      
+      {/* Shared Routes for logged-in users */}
+      <Route path="/my-history">
+        {currentUser ? <MyHistory /> : <Redirect to="/login" />}
       </Route>
       
       <Route path="/players" component={PlayersPage} />

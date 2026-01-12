@@ -3,6 +3,12 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPlayerSchema, insertTournamentSchema, type Player } from "@shared/schema";
 import { seedSampleData } from "./seedSampleData";
+import { z } from "zod";
+
+const setCaptainSchema = z.object({
+  isCaptain: z.boolean(),
+  teamName: z.string().min(1).max(50).optional(),
+});
 
 declare module 'express-session' {
   interface SessionData {
@@ -177,6 +183,17 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Promote error:", error);
       res.status(500).json({ error: "Error al promover jugador" });
+    }
+  });
+
+  // Get tournaments for a specific player
+  app.get("/api/players/:id/tournaments", async (req, res) => {
+    try {
+      const tournaments = await storage.getTournamentsForPlayer(req.params.id);
+      res.json({ tournaments });
+    } catch (error) {
+      console.error("Get player tournaments error:", error);
+      res.status(500).json({ error: "Error al obtener torneos del jugador" });
     }
   });
 
@@ -666,6 +683,330 @@ export async function registerRoutes(
     } catch (error) {
       console.error("End draft error:", error);
       res.status(500).json({ error: "Error al finalizar el draft" });
+    }
+  });
+
+  // ============ PER-TOURNAMENT CAPTAIN MANAGEMENT ============
+
+  // Get registrations with captain info for a tournament
+  app.get("/api/tournaments/:id/registrations", async (req, res) => {
+    try {
+      const registrations = await storage.getRegistrationsForTournament(req.params.id);
+      const isAuthenticated = !!req.session.playerId;
+      
+      const safeRegistrations = registrations.map(r => {
+        const { password, ...safePlayer } = r.player;
+        return {
+          ...r,
+          player: isAuthenticated ? safePlayer : { ...safePlayer, mobile: "***", avatar: undefined }
+        };
+      });
+      
+      res.json({ registrations: safeRegistrations });
+    } catch (error) {
+      console.error("Get registrations error:", error);
+      res.status(500).json({ error: "Error al obtener inscripciones" });
+    }
+  });
+
+  // Get captains for a tournament
+  app.get("/api/tournaments/:id/captains", async (req, res) => {
+    try {
+      const captains = await storage.getCaptainsForTournament(req.params.id);
+      const isAuthenticated = !!req.session.playerId;
+      
+      const safeCaptains = captains.map(c => {
+        const { password, ...safePlayer } = c.player;
+        return {
+          ...c,
+          player: isAuthenticated ? safePlayer : { ...safePlayer, mobile: "***", avatar: undefined }
+        };
+      });
+      
+      res.json({ captains: safeCaptains });
+    } catch (error) {
+      console.error("Get captains error:", error);
+      res.status(500).json({ error: "Error al obtener capitanes" });
+    }
+  });
+
+  // Set/unset captain for a tournament (Admin only)
+  app.post("/api/tournaments/:tournamentId/captains/:playerId", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden gestionar capitanes" });
+    }
+
+    try {
+      // Validate request body with Zod
+      const parseResult = setCaptainSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "Datos inválidos", details: parseResult.error.issues });
+      }
+      
+      const { isCaptain, teamName } = parseResult.data;
+      const { tournamentId, playerId } = req.params;
+      
+      // Check player is registered in the tournament
+      const registration = await storage.getTournamentRegistration(playerId, tournamentId);
+      if (!registration) {
+        return res.status(404).json({ error: "El jugador no está inscrito en este torneo" });
+      }
+      
+      // If setting as captain with a team name, check for duplicate team names
+      if (isCaptain && teamName) {
+        const existingCaptains = await storage.getCaptainsForTournament(tournamentId);
+        const duplicateTeam = existingCaptains.find(
+          c => c.teamName?.toLowerCase() === teamName.toLowerCase() && c.player.id !== playerId
+        );
+        if (duplicateTeam) {
+          return res.status(409).json({ error: `Ya existe un equipo con el nombre "${teamName}"` });
+        }
+      }
+      
+      // If removing captain status, explicitly clear the team name
+      const finalTeamName = isCaptain ? teamName : undefined;
+      
+      const updated = await storage.setTournamentCaptain(playerId, tournamentId, isCaptain, finalTeamName);
+      
+      // If setting as captain, also update player's global role to allow login
+      if (isCaptain) {
+        const player = await storage.getPlayer(playerId);
+        if (player && player.role === 'player') {
+          // Set a default password for captain login
+          await storage.promotePlayerToCaptain(playerId, teamName || 'captain123');
+        }
+      }
+      
+      res.json({ registration: updated });
+    } catch (error) {
+      console.error("Set captain error:", error);
+      res.status(500).json({ error: "Error al configurar capitán" });
+    }
+  });
+
+  // ============ GROUPS AND MATCHES ============
+
+  // Get groups for a tournament
+  app.get("/api/tournaments/:id/groups", async (req, res) => {
+    try {
+      const groups = await storage.getGroupsForTournament(req.params.id);
+      
+      // Get members for each group
+      const groupsWithMembers = await Promise.all(groups.map(async (group) => {
+        const members = await storage.getGroupMembers(group.id);
+        return { ...group, members };
+      }));
+      
+      res.json({ groups: groupsWithMembers });
+    } catch (error) {
+      console.error("Get groups error:", error);
+      res.status(500).json({ error: "Error al obtener grupos" });
+    }
+  });
+
+  // Auto-generate groups for a tournament (Admin only)
+  app.post("/api/tournaments/:id/groups/generate", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden generar grupos" });
+    }
+
+    try {
+      const tournamentId = req.params.id;
+      const teams = await storage.getTeamsForTournament(tournamentId);
+      
+      if (teams.length < 4) {
+        return res.status(400).json({ error: "Se necesitan al menos 4 equipos para generar grupos" });
+      }
+      
+      // Shuffle teams for random group assignment
+      const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
+      
+      // Calculate number of groups (2 groups for up to 8 teams, more for larger tournaments)
+      const numGroups = Math.ceil(teams.length / 4);
+      const groupNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+      
+      const createdGroups = [];
+      
+      for (let i = 0; i < numGroups; i++) {
+        const group = await storage.createGroup({
+          tournamentId,
+          name: `Grupo ${groupNames[i]}`
+        });
+        
+        // Add teams to this group
+        const teamsPerGroup = Math.ceil(shuffledTeams.length / numGroups);
+        const startIdx = i * teamsPerGroup;
+        const endIdx = Math.min(startIdx + teamsPerGroup, shuffledTeams.length);
+        
+        const groupTeams = shuffledTeams.slice(startIdx, endIdx);
+        const members = [];
+        
+        for (const team of groupTeams) {
+          const member = await storage.addTeamToGroup({
+            groupId: group.id,
+            teamId: team.id,
+            points: 0,
+            gamesPlayed: 0,
+            gamesWon: 0,
+            gamesLost: 0,
+            pointsFor: 0,
+            pointsAgainst: 0
+          });
+          members.push({ ...member, team });
+        }
+        
+        // Generate group stage matches
+        for (let j = 0; j < groupTeams.length; j++) {
+          for (let k = j + 1; k < groupTeams.length; k++) {
+            await storage.createMatch({
+              tournamentId,
+              groupId: group.id,
+              stage: 'group',
+              homeTeamId: groupTeams[j].id,
+              awayTeamId: groupTeams[k].id,
+              status: 'pending'
+            });
+          }
+        }
+        
+        createdGroups.push({ ...group, members });
+      }
+      
+      res.json({ groups: createdGroups });
+    } catch (error) {
+      console.error("Generate groups error:", error);
+      res.status(500).json({ error: "Error al generar grupos" });
+    }
+  });
+
+  // Get matches for a tournament
+  app.get("/api/tournaments/:id/matches", async (req, res) => {
+    try {
+      const matches = await storage.getMatchesForTournament(req.params.id);
+      res.json({ matches });
+    } catch (error) {
+      console.error("Get matches error:", error);
+      res.status(500).json({ error: "Error al obtener partidos" });
+    }
+  });
+
+  // Update match result (Admin only)
+  app.patch("/api/matches/:id/result", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden actualizar resultados" });
+    }
+
+    try {
+      const { homeScore, awayScore } = req.body;
+      
+      if (homeScore === undefined || awayScore === undefined) {
+        return res.status(400).json({ error: "Se requieren homeScore y awayScore" });
+      }
+      
+      // Determine winner
+      const winnerId = homeScore > awayScore ? req.body.homeTeamId : 
+                       awayScore > homeScore ? req.body.awayTeamId : null;
+      
+      const match = await storage.updateMatchResult(req.params.id, homeScore, awayScore, winnerId || '');
+      
+      if (!match) {
+        return res.status(404).json({ error: "Partido no encontrado" });
+      }
+      
+      // TODO: Update group standings based on match result
+      
+      res.json({ match });
+    } catch (error) {
+      console.error("Update match error:", error);
+      res.status(500).json({ error: "Error al actualizar resultado" });
+    }
+  });
+
+  // ============ PLAYER HISTORY / ANALYTICS ============
+
+  // Get player skill history
+  app.get("/api/players/:id/history", async (req, res) => {
+    try {
+      const snapshots = await storage.getSkillSnapshotsForPlayer(req.params.id);
+      res.json({ snapshots });
+    } catch (error) {
+      console.error("Get player history error:", error);
+      res.status(500).json({ error: "Error al obtener historial" });
+    }
+  });
+
+  // Get admin overview / analytics
+  app.get("/api/admin/player-history", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores" });
+    }
+
+    try {
+      const players = await storage.getAllPlayers();
+      const tournaments = await storage.getAllTournaments();
+      
+      // Get total registrations per player
+      const playerStats = await Promise.all(players.map(async (player) => {
+        const tournamentsList = await storage.getTournamentsForPlayer(player.id);
+        const snapshots = await storage.getSkillSnapshotsForPlayer(player.id);
+        
+        // Calculate growth if there are snapshots
+        let growth = 0;
+        if (snapshots.length >= 2) {
+          const oldest = snapshots[snapshots.length - 1];
+          const newest = snapshots[0];
+          growth = newest.overall - oldest.overall;
+        }
+        
+        const { password, ...safePlayer } = player;
+        return {
+          player: safePlayer,
+          tournamentsPlayed: tournamentsList.length,
+          snapshots,
+          growth
+        };
+      }));
+      
+      // Filter by query params
+      const { role, tournamentId } = req.query;
+      let filtered = playerStats;
+      
+      if (role) {
+        filtered = filtered.filter(ps => ps.player.role === role);
+      }
+      
+      // Sort by overall rating
+      filtered.sort((a, b) => b.player.overall - a.player.overall);
+      
+      res.json({ 
+        playerStats: filtered,
+        totalPlayers: players.length,
+        totalTournaments: tournaments.length,
+        activeTournaments: tournaments.filter(t => t.status !== 'completed').length
+      });
+    } catch (error) {
+      console.error("Get admin analytics error:", error);
+      res.status(500).json({ error: "Error al obtener estadísticas" });
     }
   });
 

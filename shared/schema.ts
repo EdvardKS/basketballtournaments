@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -54,10 +54,13 @@ export type InsertTournament = z.infer<typeof insertTournamentSchema>;
 export type Tournament = typeof tournaments.$inferSelect;
 
 // Tournament Registrations (Many-to-Many relationship between players and tournaments)
+// isCaptain is per-tournament (a player can be captain in one tournament but not another)
 export const tournamentRegistrations = pgTable("tournament_registrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   playerId: varchar("player_id").notNull().references(() => players.id, { onDelete: 'cascade' }),
   tournamentId: varchar("tournament_id").notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+  isCaptain: boolean("is_captain").notNull().default(false),
+  teamName: text("team_name"), // Name of the team if this player is captain
   registeredAt: timestamp("registered_at").notNull().defaultNow(),
 });
 
@@ -140,3 +143,88 @@ export const insertDraftHistorySchema = createInsertSchema(draftHistory).omit({
 
 export type InsertDraftHistory = z.infer<typeof insertDraftHistorySchema>;
 export type DraftHistory = typeof draftHistory.$inferSelect;
+
+// Tournament Groups (for group stage)
+export const tournamentGroups = pgTable("tournament_groups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tournamentId: varchar("tournament_id").notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(), // e.g., "Grupo A", "Grupo B"
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertTournamentGroupSchema = createInsertSchema(tournamentGroups).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTournamentGroup = z.infer<typeof insertTournamentGroupSchema>;
+export type TournamentGroup = typeof tournamentGroups.$inferSelect;
+
+// Group Members (teams in each group)
+export const groupMembers = pgTable("group_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull().references(() => tournamentGroups.id, { onDelete: 'cascade' }),
+  teamId: varchar("team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  points: integer("points").notNull().default(0),
+  gamesPlayed: integer("games_played").notNull().default(0),
+  gamesWon: integer("games_won").notNull().default(0),
+  gamesLost: integer("games_lost").notNull().default(0),
+  pointsFor: integer("points_for").notNull().default(0),
+  pointsAgainst: integer("points_against").notNull().default(0),
+});
+
+export const insertGroupMemberSchema = createInsertSchema(groupMembers).omit({
+  id: true,
+});
+
+export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
+export type GroupMember = typeof groupMembers.$inferSelect;
+
+// Matches (group stage and knockouts)
+export const matches = pgTable("matches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tournamentId: varchar("tournament_id").notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+  groupId: varchar("group_id").references(() => tournamentGroups.id, { onDelete: 'cascade' }), // null for knockout matches
+  stage: text("stage").notNull(), // 'group' | 'quarterfinal' | 'semifinal' | 'final' | 'third_place'
+  roundNumber: integer("round_number"), // For knockout bracket positioning
+  homeTeamId: varchar("home_team_id").references(() => teams.id),
+  awayTeamId: varchar("away_team_id").references(() => teams.id),
+  homeScore: integer("home_score"),
+  awayScore: integer("away_score"),
+  winnerId: varchar("winner_id").references(() => teams.id),
+  status: text("status").notNull().default('pending'), // 'pending' | 'in_progress' | 'completed'
+  scheduledAt: timestamp("scheduled_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertMatchSchema = createInsertSchema(matches).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertMatch = z.infer<typeof insertMatchSchema>;
+export type Match = typeof matches.$inferSelect;
+
+// Player Skill Snapshots (for historical tracking and growth analytics)
+export const playerSkillSnapshots = pgTable("player_skill_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  playerId: varchar("player_id").notNull().references(() => players.id, { onDelete: 'cascade' }),
+  tournamentId: varchar("tournament_id").notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+  pace: integer("pace").notNull(),
+  shooting: integer("shooting").notNull(),
+  passing: integer("passing").notNull(),
+  dribbling: integer("dribbling").notNull(),
+  defense: integer("defense").notNull(),
+  physical: integer("physical").notNull(),
+  overall: integer("overall").notNull(),
+  snapshotAt: timestamp("snapshot_at").notNull().defaultNow(),
+});
+
+export const insertPlayerSkillSnapshotSchema = createInsertSchema(playerSkillSnapshots).omit({
+  id: true,
+  snapshotAt: true,
+});
+
+export type InsertPlayerSkillSnapshot = z.infer<typeof insertPlayerSkillSnapshotSchema>;
+export type PlayerSkillSnapshot = typeof playerSkillSnapshots.$inferSelect;
