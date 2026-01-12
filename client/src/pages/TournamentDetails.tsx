@@ -7,13 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar, MapPin, Users, Trophy, Crown, AlertCircle, UserPlus, RefreshCw, User } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { tournamentsApi, teamsApi, draftApi, playersApi, type Player, type Tournament, type Team, type DraftStateResponse } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { SkillRadarChart } from "@/components/SkillRadarChart";
+import { TournamentGroupsView } from "@/components/TournamentGroupsView";
 
 export default function TournamentDetails() {
   const [match, params] = useRoute("/tournaments/:id");
@@ -411,72 +413,116 @@ export default function TournamentDetails() {
           </div>
         )}
 
+        {tournament.status === 'active' && (
+          <div className="mb-12">
+            <h2 className="text-3xl font-display font-bold mb-6">FASE DE TORNEO</h2>
+            <TournamentGroupsView tournamentId={tournament.id} isAdmin={isAdmin} />
+          </div>
+        )}
+
         <div>
           <h2 className="text-4xl font-display font-bold mb-8">
             {isDraftActive ? 'JUGADORES DISPONIBLES' : 'JUGADORES INSCRITOS'} ({registeredPlayers.filter(p => p.role === 'player').length})
           </h2>
           
-          {registeredPlayers.filter(p => p.role === 'player').length === 0 ? (
-            <div className="text-center py-20 border border-dashed border-white/10 rounded-lg">
-              <p className="text-muted-foreground text-xl">
-                {isDraftActive ? 'No quedan jugadores disponibles' : 'Aún no hay jugadores inscritos. ¡Sé el primero!'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {registeredPlayers.filter(p => p.role === 'player').map(player => {
-                const isDrafted = draftedPlayerIds.includes(player.id);
-                
-                return (
-                  <Card 
-                    key={player.id} 
-                    className={`bg-white/5 border-white/10 ${isDrafted ? 'opacity-60' : ''} ${!isDrafted && isDraftActive && (isMyTurn || isAdmin) ? 'hover:border-primary/50 cursor-pointer' : ''}`}
-                    data-testid={`player-row-${player.id}`}
-                  >
-                    <CardContent className="py-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                            <User className="w-5 h-5 text-primary" />
+          {(() => {
+            const playersList = registeredPlayers
+              .filter(p => p.role === 'player')
+              .sort((a, b) => (b.overall || 0) - (a.overall || 0));
+
+            if (playersList.length === 0) {
+              return (
+                <div className="text-center py-20 border border-dashed border-white/10 rounded-lg">
+                  <p className="text-muted-foreground text-xl">
+                    {isDraftActive ? 'No quedan jugadores disponibles' : 'Aún no hay jugadores inscritos. ¡Sé el primero!'}
+                  </p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {playersList.map((player, index) => {
+                  const isDrafted = draftedPlayerIds.includes(player.id);
+                  
+                  return (
+                    <Card 
+                      key={player.id} 
+                      className={`bg-white/5 border-white/10 ${isDrafted ? 'opacity-60' : ''} ${!isDrafted && isDraftActive && (isMyTurn || isAdmin) ? 'hover:border-primary/50 cursor-pointer' : ''}`}
+                      data-testid={`player-row-${player.id}`}
+                    >
+                      <CardContent className="py-4">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0">
+                            {isDraftActive ? (
+                              <SkillRadarChart
+                                pace={player.pace || 50}
+                                shooting={player.shooting || 50}
+                                passing={player.passing || 50}
+                                dribbling={player.dribbling || 50}
+                                defense={player.defense || 50}
+                                physical={player.physical || 50}
+                                size={80}
+                                showLabels={false}
+                              />
+                            ) : (
+                              <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">
+                                <User className="w-7 h-7 text-primary" />
+                              </div>
+                            )}
                           </div>
-                          <div>
-                            <p className="font-medium text-foreground">{player.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              OVR: <span className="text-primary font-bold">{player.overall}</span>
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          {isDrafted ? (
-                            <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30">
-                              Seleccionado
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30">
-                              Por seleccionar
-                            </Badge>
-                          )}
                           
-                          {isDraftActive && (isMyTurn || isAdmin) && !isDrafted && (
-                            <Button 
-                              size="sm"
-                              className="font-display bg-primary text-black hover:bg-white cursor-pointer"
-                              onClick={() => handleDraftPlayer(player.id)}
-                              disabled={isDrafting}
-                              data-testid={`button-draft-${player.id}`}
-                            >
-                              DRAFTEAR
-                            </Button>
-                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs text-muted-foreground font-mono">#{index + 1}</span>
+                              <p className="font-medium text-foreground truncate">{player.name}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-2xl font-display text-primary font-bold">{player.overall}</span>
+                              {isDrafted ? (
+                                <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30 text-xs">
+                                  Seleccionado
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs">
+                                  Disponible
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            {isDraftActive && (
+                              <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-muted-foreground">
+                                <span>VEL {player.pace}</span>
+                                <span>TIR {player.shooting}</span>
+                                <span>PAS {player.passing}</span>
+                                <span>REG {player.dribbling}</span>
+                                <span>DEF {player.defense}</span>
+                                <span>FIS {player.physical}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex-shrink-0">
+                            {isDraftActive && (isMyTurn || isAdmin) && !isDrafted && (
+                              <Button 
+                                size="sm"
+                                className="font-display bg-primary text-black hover:bg-white cursor-pointer"
+                                onClick={() => handleDraftPlayer(player.id)}
+                                disabled={isDrafting}
+                                data-testid={`button-draft-${player.id}`}
+                              >
+                                DRAFT
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
