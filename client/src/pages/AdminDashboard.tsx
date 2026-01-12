@@ -4,13 +4,12 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { teamsApi, playersApi, tournamentsApi, draftApi, type Team } from "@/lib/api";
+import { playersApi, tournamentsApi, draftApi } from "@/lib/api";
 import { Link } from "wouter";
 import { Calendar, MapPin, Users, Play, Eye, Settings, Trophy, Clock } from "lucide-react";
 
@@ -46,10 +45,6 @@ export default function AdminDashboard() {
   const [editTournamentMaxTeams, setEditTournamentMaxTeams] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  const [selectedTournamentForTeams, setSelectedTournamentForTeams] = useState<string>("");
-  const [teamsForTournament, setTeamsForTournament] = useState<Team[]>([]);
-  const [newTeamName, setNewTeamName] = useState("");
-  const [selectedCaptainId, setSelectedCaptainId] = useState("");
 
   const [isCreateTournamentOpen, setIsCreateTournamentOpen] = useState(false);
 
@@ -190,47 +185,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const loadTeams = async (tournamentId: string) => {
-    if (!tournamentId) return;
-    try {
-      const { teams } = await teamsApi.getForTournament(tournamentId);
-      setTeamsForTournament(teams);
-    } catch {
-      setTeamsForTournament([]);
-    }
-  };
-
-  const handleCreateTeam = async () => {
-    if (!selectedTournamentForTeams || !selectedCaptainId || !newTeamName) {
-      toast({ variant: "destructive", title: "Completa todos los campos" });
-      return;
-    }
-    try {
-      await teamsApi.create({
-        tournamentId: selectedTournamentForTeams,
-        captainId: selectedCaptainId,
-        name: newTeamName,
-      });
-      setNewTeamName("");
-      setSelectedCaptainId("");
-      await loadTeams(selectedTournamentForTeams);
-      toast({ title: "Equipo creado" });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error al crear equipo", description: error.message });
-    }
-  };
-
-  const handleDeleteTeam = async (teamId: string) => {
-    if (!confirm("¿Eliminar este equipo?")) return;
-    try {
-      await teamsApi.delete(teamId);
-      await loadTeams(selectedTournamentForTeams);
-      toast({ title: "Equipo eliminado" });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    }
-  };
-
   const handleDeletePlayer = async (playerId: string) => {
     if (!confirm("¿Eliminar este jugador?")) return;
     try {
@@ -261,8 +215,6 @@ export default function AdminDashboard() {
       </Badge>
     );
   };
-
-  const captains = players.filter(p => p.role === 'captain');
 
   if (isLoading) {
     return (
@@ -512,106 +464,8 @@ export default function AdminDashboard() {
           )}
         </section>
 
-        <Tabs defaultValue="teams" className="w-full">
-          <TabsList className="bg-white/5 border border-white/10 mb-8">
-            <TabsTrigger value="teams" className="cursor-pointer">Equipos</TabsTrigger>
-            <TabsTrigger value="players" className="cursor-pointer">Jugadores</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="teams">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <Card className="bg-white/5 border-white/10 h-fit">
-                <CardHeader>
-                  <CardTitle className="font-display">Crear Equipo</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Select onValueChange={(v) => { setSelectedTournamentForTeams(v); loadTeams(v); }}>
-                    <SelectTrigger className="bg-black/20">
-                      <SelectValue placeholder="Selecciona torneo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tournaments.filter(t => t.status === 'draft' || t.status === 'open').map(t => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  <Input 
-                    placeholder="Nombre del equipo" 
-                    value={newTeamName} 
-                    onChange={(e) => setNewTeamName(e.target.value)}
-                    className="bg-black/20"
-                    data-testid="input-team-name"
-                  />
-                  
-                  <Select onValueChange={setSelectedCaptainId} value={selectedCaptainId}>
-                    <SelectTrigger className="bg-black/20">
-                      <SelectValue placeholder="Selecciona capitán" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {captains.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  <Button 
-                    onClick={handleCreateTeam} 
-                    className="w-full font-display cursor-pointer"
-                    data-testid="button-create-team"
-                  >
-                    CREAR EQUIPO
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card className="md:col-span-2 bg-white/5 border-white/10">
-                <CardHeader>
-                  <CardTitle className="font-display">Equipos del Torneo</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {selectedTournamentForTeams ? (
-                    teamsForTournament.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-8">No hay equipos creados</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="border-white/10">
-                            <TableHead>Nombre</TableHead>
-                            <TableHead>Capitán</TableHead>
-                            <TableHead>Acciones</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {teamsForTournament.map(team => (
-                            <TableRow key={team.id} className="border-white/10 hover:bg-white/5">
-                              <TableCell className="font-medium">{team.name}</TableCell>
-                              <TableCell>{players.find(p => p.id === team.captainId)?.name || 'N/A'}</TableCell>
-                              <TableCell>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="text-red-500 cursor-pointer"
-                                  onClick={() => handleDeleteTeam(team.id)}
-                                  data-testid={`button-delete-team-${team.id}`}
-                                >
-                                  Eliminar
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    )
-                  ) : (
-                    <p className="text-muted-foreground text-center py-8">Selecciona un torneo para ver sus equipos</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="players">
+        <section className="mb-12">
+          <h2 className="text-2xl font-display font-bold mb-6">GESTIÓN DE JUGADORES</h2>
              <Card className="bg-white/5 border-white/10">
                 <CardHeader>
                   <CardTitle className="font-display">Gestión de Usuarios</CardTitle>
@@ -695,8 +549,7 @@ export default function AdminDashboard() {
                   </Table>
                 </CardContent>
               </Card>
-          </TabsContent>
-        </Tabs>
+        </section>
       </div>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

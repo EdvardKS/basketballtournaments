@@ -109,11 +109,11 @@ export async function registerRoutes(
       const players = await storage.getAllPlayers();
       const isAuthenticated = !!req.session.playerId;
       
-      // Don't send passwords to client, hide mobile for non-authenticated users
+      // Don't send passwords to client, hide mobile and avatar for non-authenticated users
       const safePlayers = players.map(p => {
         const { password, ...safe } = p;
         if (!isAuthenticated) {
-          return { ...safe, mobile: "***" };
+          return { ...safe, mobile: "***", avatar: undefined };
         }
         return safe;
       });
@@ -202,8 +202,12 @@ export async function registerRoutes(
       }
 
       const registeredPlayers = await storage.getPlayersForTournament(req.params.id);
+      const isAuthenticated = !!req.session.playerId;
       const safePlayers = registeredPlayers.map(p => {
         const { password, ...safe } = p;
+        if (!isAuthenticated) {
+          return { ...safe, mobile: "***", avatar: undefined };
+        }
         return safe;
       });
 
