@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Player } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,15 @@ function getStatColor(value: number) {
   return "text-gray-400";
 }
 
-export function PlayerCard({ player, className, size = "md", onClick, showSensitive = false }: PlayerCardProps) {
+export function PlayerCard({
+  player,
+  className,
+  size = "md",
+  onClick,
+  showSensitive = false,
+}: PlayerCardProps) {
+  const [imgError, setImgError] = useState(false);
+
   const sizeClasses = {
     sm: "w-44 h-72",
     md: "w-56 h-[22rem]",
@@ -43,88 +52,105 @@ export function PlayerCard({ player, className, size = "md", onClick, showSensit
   const overallGradient = getOverallColor(player.overall);
   const overallLabel = getOverallLabel(player.overall);
 
+  const isCaptain = player.role === "captain";
+  const roleLabel = isCaptain ? "CPT" : "JUG";
+
+  const showAvatar = !!player.avatar && !imgError;
+
   return (
     <motion.div
       whileHover={{ scale: 1.03, y: -5 }}
       whileTap={{ scale: 0.98 }}
-      className={cn(
-        "relative group cursor-pointer",
-        sizeClasses[size],
-        className
-      )}
+      className={cn("relative group cursor-pointer", sizeClasses[size], className)}
       onClick={onClick}
       data-testid={`card-player-${player.id}`}
     >
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-black shadow-2xl border border-white/10 overflow-hidden">
-        
+      {/* Marco + Fondo */}
+      <div className="absolute inset-0 rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-gradient-to-br from-slate-800 via-slate-900 to-black">
+        {/* Línea superior tipo carta */}
         <div className={cn("absolute top-0 left-0 right-0 h-1 bg-gradient-to-r", overallGradient)} />
-        
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/5 via-transparent to-transparent" />
-        
-        <div className="relative h-full flex flex-col p-4">
-          
-          <div className="flex justify-between items-start mb-2">
-            <div className="flex flex-col items-center">
+
+        {/* Shine (brillo al hover) */}
+        <div className="pointer-events-none absolute -inset-y-8 -left-1/2 w-1/2 rotate-12 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 group-hover:translate-x-[220%] transition-all duration-700" />
+
+        {/* Contenido */}
+        <div className="relative h-full flex flex-col">
+          {/* TOP: Foto cuadrada ocupando todo el top */}
+          <div className="relative w-full aspect-square overflow-hidden rounded-t-2xl">
+            {showAvatar ? (
+              <img
+                src={player.avatar}
+                alt={player.name}
+                className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-slate-800">
+                <div className="scale-125">
+                  <RoleIcon role={player.role} />
+                </div>
+              </div>
+            )}
+
+            {/* Degradado inferior para legibilidad (estilo UT) */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+
+            {/* HUD encima de la foto: Overall + Label */}
+            <div className="absolute top-3 left-3 z-20 flex flex-col items-start gap-1">
               <div className={cn("text-4xl font-black bg-gradient-to-br bg-clip-text text-transparent drop-shadow-lg", overallGradient)}>
                 {player.overall}
               </div>
-              <span className={cn("text-[10px] font-bold tracking-widest px-2 py-0.5 rounded-full bg-gradient-to-r", overallGradient)}>
+              <span className={cn("text-[10px] font-bold tracking-widest px-2 py-0.5 rounded-full bg-gradient-to-r text-black/90 shadow", overallGradient)}>
                 {overallLabel}
               </span>
             </div>
-            
-            <div className="flex flex-col items-center gap-1">
-              {player.role === 'captain' && (
-                <div className="bg-amber-500/20 p-1.5 rounded-full border border-amber-500/50">
+
+            {/* Rol arriba derecha */}
+            <div className="absolute top-3 right-3 z-20 flex flex-col items-center gap-1">
+              {isCaptain && (
+                <div className="bg-amber-500/20 p-1.5 rounded-full border border-amber-500/50 backdrop-blur">
                   <Crown className="w-4 h-4 text-amber-400" />
                 </div>
               )}
-              <div className="text-xs font-bold text-white/60 uppercase tracking-wider">
-                {player.role === 'captain' ? 'CPT' : 'JUG'}
+              <div className="text-xs font-bold text-white/70 uppercase tracking-wider">
+                {roleLabel}
               </div>
             </div>
-          </div>
 
-          <div className="flex-1 relative flex items-center justify-center -mt-2 mb-3">
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent z-10" />
-            <div className="relative w-28 h-28 rounded-lg overflow-hidden border-2 border-white/20 shadow-xl bg-slate-700 flex items-center justify-center">
-              {player.avatar ? (
-                <img 
-                  src={player.avatar} 
-                  alt={player.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <RoleIcon role={player.role} />
-              )}
-            </div>
+            {/* Estrella elite */}
             {player.overall >= 85 && (
-              <div className="absolute -top-1 -right-1 z-20">
+              <div className="absolute bottom-3 right-3 z-20">
                 <Star className="w-6 h-6 text-yellow-400 fill-yellow-400 drop-shadow-lg" />
               </div>
             )}
+
+            {/* Nombre dentro del top (como UT) */}
+            <div className="absolute bottom-3 left-3 right-3 z-20">
+              <h3 className="font-extrabold text-base text-white truncate leading-tight drop-shadow">
+                {player.name}
+              </h3>
+              {showSensitive && player.mobile && (
+                <p className="text-xs text-primary/80 font-mono mt-0.5">{player.mobile}</p>
+              )}
+            </div>
           </div>
 
-          <div className="text-center mb-3 z-20">
-            <h3 className="font-bold text-lg text-white truncate px-1 leading-tight">
-              {player.name}
-            </h3>
-            {showSensitive && player.mobile && (
-              <p className="text-xs text-primary/80 font-mono mt-0.5">{player.mobile}</p>
-            )}
-            <div className="h-px w-3/4 mx-auto bg-gradient-to-r from-transparent via-white/30 to-transparent mt-2" />
-          </div>
+          {/* BODY: Stats */}
+          <div className="flex-1 flex flex-col p-4">
+            <div className="h-px w-3/4 mx-auto bg-gradient-to-r from-transparent via-white/20 to-transparent mb-3" />
 
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <StatItem label="RIT" value={player.pace} />
-            <StatItem label="TIR" value={player.shooting} />
-            <StatItem label="PAS" value={player.passing} />
-            <StatItem label="REG" value={player.dribbling} />
-            <StatItem label="DEF" value={player.defense} />
-            <StatItem label="FIS" value={player.physical} />
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <StatItem label="RIT" value={player.pace} />
+              <StatItem label="TIR" value={player.shooting} />
+              <StatItem label="PAS" value={player.passing} />
+              <StatItem label="REG" value={player.dribbling} />
+              <StatItem label="DEF" value={player.defense} />
+              <StatItem label="FIS" value={player.physical} />
+            </div>
           </div>
         </div>
-        
+
+        {/* Brillo suave al hover */}
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-2xl" />
       </div>
     </motion.div>
@@ -145,11 +171,7 @@ function StatItem({ label, value }: { label: string; value: number }) {
 }
 
 function RoleIcon({ role }: { role: string }) {
-  if (role === 'admin') {
-    return <ShieldCheck className="w-16 h-16 text-red-400" />;
-  }
-  if (role === 'captain') {
-    return <Shield className="w-16 h-16 text-amber-400" />;
-  }
-  return <User className="w-16 h-16 text-slate-400" />;
+  if (role === "admin") return <ShieldCheck className="w-16 h-16 text-red-400" />;
+  if (role === "captain") return <Shield className="w-16 h-16 text-amber-400" />;
+  return <User className="w-16 h-16 text-slate-300" />;
 }
