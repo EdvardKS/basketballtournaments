@@ -64,3 +64,35 @@ Preferred communication style: Simple, everyday language.
 ### Required Environment Variables
 - `DATABASE_URL`: PostgreSQL connection string
 - `SESSION_SECRET`: Optional, defaults to hardcoded value (should be set in production)
+
+## Draft System
+
+### Turn-Based Draft Flow
+1. Admin creates tournament with status "open"
+2. Players register for the tournament
+3. Admin changes tournament status to "draft"
+4. Admin creates teams and assigns captains
+5. Admin starts the draft (POST `/api/draft/start/:tournamentId`)
+6. System shuffles team order randomly
+7. Each captain drafts one player per turn
+8. Turn advances automatically after each pick
+9. After maxRounds, draft completes
+10. Admin ends draft, tournament becomes "active"
+
+### Draft API Endpoints
+- `POST /api/draft/start/:tournamentId` - Start draft (Admin only)
+- `GET /api/draft/state/:tournamentId` - Get current draft state
+- `POST /api/draft` - Draft a player (Captain in turn or Admin)
+- `POST /api/draft/end/:tournamentId` - End draft (Admin only)
+
+### Draft Tables
+- **draftState**: Tracks current round, team order, active status
+- **draftHistory**: Records each pick with timestamp and round
+
+## Testing
+
+See `GUIA_TESTEO.md` for complete step-by-step testing instructions in Spanish.
+
+### Test Credentials
+- **Admin**: edvardks / SX515wifi
+- **Captains**: Mobile number + password (see usuarios_ejemplo.md)
