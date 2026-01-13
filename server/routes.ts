@@ -19,6 +19,14 @@ const updateScoreSchema = z.object({
   awayScore: z.coerce.number().int().min(0),
 });
 
+const DEFAULT_TOURNAMENT_RULES = [
+  "Formato 5v5 Cancha Completa",
+  "Eliminacion Doble",
+  "Dos partes de 20 minutos",
+  "Seleccion por Draft de Capitanes",
+  "Reglas FIBA",
+].join("\n");
+
 declare module 'express-session' {
   interface SessionData {
     playerId?: string;
@@ -658,7 +666,14 @@ export async function registerRoutes(
     }
 
     try {
-      const validatedData = insertTournamentSchema.parse(req.body);
+      const payload = { ...req.body };
+      if (!payload.rules || !String(payload.rules).trim()) {
+        payload.rules = DEFAULT_TOURNAMENT_RULES;
+      } else {
+        payload.rules = String(payload.rules).trim();
+      }
+
+      const validatedData = insertTournamentSchema.parse(payload);
       const tournament = await storage.createTournament(validatedData);
       res.json({ tournament });
     } catch (error) {
@@ -679,7 +694,13 @@ export async function registerRoutes(
     }
 
     try {
-      const tournament = await storage.updateTournament(req.params.id, req.body);
+      const payload = { ...req.body };
+      if (payload.rules !== undefined) {
+        const trimmedRules = String(payload.rules).trim();
+        payload.rules = trimmedRules || DEFAULT_TOURNAMENT_RULES;
+      }
+
+      const tournament = await storage.updateTournament(req.params.id, payload);
       if (!tournament) {
         return res.status(404).json({ error: "Torneo no encontrado" });
       }
@@ -941,7 +962,74 @@ export async function registerRoutes(
     }
 
     try {
-      const player = await storage.updatePlayer(req.params.id, req.body);
+      const payload = { ...req.body };
+
+      if (payload.username !== undefined) {
+        const trimmed = String(payload.username).trim();
+        if (!trimmed) {
+          payload.username = null;
+        } else {
+          const existing = await storage.getPlayerByUsername(trimmed);
+          if (existing && existing.id !== req.params.id) {
+            return res.status(409).json({ error: "El usuario ya esta en uso" });
+          }
+          payload.username = trimmed;
+        }
+      }
+
+      if (payload.email !== undefined) {
+        const trimmed = String(payload.email).trim();
+        if (!trimmed) {
+          payload.email = null;
+        } else {
+          const existing = await storage.getPlayerByEmail(trimmed);
+          if (existing && existing.id !== req.params.id) {
+            return res.status(409).json({ error: "El email ya esta en uso" });
+          }
+          payload.email = trimmed;
+        }
+      }
+
+      if (payload.mobile !== undefined) {
+        const trimmed = String(payload.mobile).trim();
+        if (!trimmed) {
+          return res.status(400).json({ error: "El movil no puede estar vacio" });
+        }
+        const existing = await storage.getPlayerByMobile(trimmed);
+        if (existing && existing.id !== req.params.id) {
+          return res.status(409).json({ error: "El movil ya esta en uso" });
+        }
+        payload.mobile = trimmed;
+      }
+
+      if (payload.password !== undefined) {
+        const trimmed = String(payload.password).trim();
+        if (!trimmed) {
+          delete payload.password;
+        } else {
+          payload.password = trimmed;
+        }
+      }
+
+      if (payload.role !== undefined) {
+        const validRoles = new Set(["player", "captain", "admin"]);
+        if (!validRoles.has(payload.role)) {
+          return res.status(400).json({ error: "Rol invalido" });
+        }
+      }
+
+      const numericFields = ["pace", "shooting", "passing", "dribbling", "defense", "physical", "overall"];
+      for (const field of numericFields) {
+        if (payload[field] !== undefined) {
+          const value = Number(payload[field]);
+          if (Number.isNaN(value)) {
+            return res.status(400).json({ error: "Valor invalido para estadisticas" });
+          }
+          payload[field] = value;
+        }
+      }
+
+      const player = await storage.updatePlayer(req.params.id, payload);
       if (!player) {
         return res.status(404).json({ error: "Jugador no encontrado" });
       }
@@ -1568,7 +1656,7 @@ export async function registerRoutes(
     }
 
     try {
-      const players = await storage.getAllPlayers();
+      const players = (await storage.getAllPlayers()).filter(player => player.role !== 'admin');
       const tournaments = await storage.getAllTournaments();
       
       // Get total registrations per player

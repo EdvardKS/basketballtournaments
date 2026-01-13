@@ -39,6 +39,7 @@ export interface Tournament {
   winnerId?: string;
   location: string;
   description: string;
+  rules?: string | null;
   maxTeams: number;
 }
 

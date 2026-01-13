@@ -4,7 +4,7 @@ import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, Users, Trophy, Crown, AlertCircle, UserPlus, RefreshCw, User } from "lucide-react";
+import { Calendar, MapPin, Users, Trophy, Crown, AlertCircle, UserPlus, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -18,8 +18,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { SkillRadarChart } from "@/components/SkillRadarChart";
 import { TournamentGroupsView } from "@/components/TournamentGroupsView";
+import { PlayerCard } from "@/components/PlayerCard";
 
 type PlayerWithRegistration = Player & { isCaptain: boolean };
+
+const DEFAULT_TOURNAMENT_RULES = [
+  "Formato 5v5 Cancha Completa",
+  "Eliminacion Doble",
+  "Dos partes de 20 minutos",
+  "Seleccion por Draft de Capitanes",
+  "Reglas FIBA",
+];
+const DEFAULT_TOURNAMENT_RULES_TEXT = DEFAULT_TOURNAMENT_RULES.join("\n");
 
 export default function TournamentDetails() {
   const [match, params] = useRoute("/tournaments/:id");
@@ -53,6 +63,30 @@ export default function TournamentDetails() {
   const [minOverall, setMinOverall] = useState(0);
   const [statFilter, setStatFilter] = useState<"overall" | "pace" | "shooting" | "passing" | "dribbling" | "defense" | "physical">("overall");
   const [minStat, setMinStat] = useState(0);
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
+  const [rulesDraft, setRulesDraft] = useState(DEFAULT_TOURNAMENT_RULES_TEXT);
+  const [isSavingRules, setIsSavingRules] = useState(false);
+
+  const [isPlayerEditOpen, setIsPlayerEditOpen] = useState(false);
+  const [playerToEdit, setPlayerToEdit] = useState<Player | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editMobile, setEditMobile] = useState("");
+  const [editRole, setEditRole] = useState<"player" | "captain" | "admin">("player");
+  const [editAvatar, setEditAvatar] = useState("");
+  const [editIsPublic, setEditIsPublic] = useState(false);
+  const [editStats, setEditStats] = useState({
+    pace: 50,
+    shooting: 50,
+    passing: 50,
+    dribbling: 50,
+    defense: 50,
+    physical: 50,
+  });
+  const [editPassword, setEditPassword] = useState("");
+  const [editPasswordConfirm, setEditPasswordConfirm] = useState("");
+  const [isSavingPlayer, setIsSavingPlayer] = useState(false);
   
   const loadTournament = useCallback(async (id: string) => {
     try {
@@ -179,7 +213,7 @@ export default function TournamentDetails() {
         tournamentId: params?.id,
       });
 
-      toast({ title: "Jugador inscrito", description: `${newPlayerName} ha sido añadido al torneo` });
+      toast({ title: "Jugador inscrito", description: `${newPlayerName} ha sido anadido al torneo` });
       setIsRegisterOpen(false);
       setNewPlayerName("");
       setNewPlayerUsername("");
@@ -245,6 +279,103 @@ export default function TournamentDetails() {
     }
   };
 
+  const handleOpenRules = () => {
+    const currentRules = tournament?.rules?.trim() || DEFAULT_TOURNAMENT_RULES_TEXT;
+    setRulesDraft(currentRules);
+    setIsRulesOpen(true);
+  };
+
+  const handleSaveRules = async () => {
+    if (!tournament) return;
+    const cleaned = rulesDraft
+      .split("\n")
+      .map((rule) => rule.trim())
+      .filter(Boolean)
+      .join("\n");
+
+    setIsSavingRules(true);
+    try {
+      await tournamentsApi.update(tournament.id, {
+        rules: cleaned || DEFAULT_TOURNAMENT_RULES_TEXT,
+      });
+      await loadTournament(tournament.id);
+      setIsRulesOpen(false);
+      toast({ title: "Reglas actualizadas" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsSavingRules(false);
+    }
+  };
+
+  const handleOpenPlayerEdit = (player: Player) => {
+    setPlayerToEdit(player);
+    setEditName(player.name || "");
+    setEditUsername(player.username || "");
+    setEditEmail(player.email || "");
+    setEditMobile(player.mobile || "");
+    setEditRole((player.role as "player" | "captain" | "admin") || "player");
+    setEditAvatar(player.avatar || "");
+    setEditIsPublic(!!player.isPublic);
+    setEditStats({
+      pace: player.pace ?? 50,
+      shooting: player.shooting ?? 50,
+      passing: player.passing ?? 50,
+      dribbling: player.dribbling ?? 50,
+      defense: player.defense ?? 50,
+      physical: player.physical ?? 50,
+    });
+    setEditPassword("");
+    setEditPasswordConfirm("");
+    setIsPlayerEditOpen(true);
+  };
+
+  const handleSavePlayerEdit = async () => {
+    if (!playerToEdit) return;
+    if (!editName.trim() || !editMobile.trim()) {
+      toast({ variant: "destructive", title: "Nombre y movil son requeridos" });
+      return;
+    }
+    if (editPassword && editPassword !== editPasswordConfirm) {
+      toast({ variant: "destructive", title: "Las contrasenas no coinciden" });
+      return;
+    }
+
+    const payload: any = {
+      name: editName.trim(),
+      username: editUsername.trim() || null,
+      email: editEmail.trim() || null,
+      mobile: editMobile.trim(),
+      role: editRole,
+      avatar: editAvatar.trim() || null,
+      isPublic: editIsPublic,
+      pace: editStats.pace,
+      shooting: editStats.shooting,
+      passing: editStats.passing,
+      dribbling: editStats.dribbling,
+      defense: editStats.defense,
+      physical: editStats.physical,
+    };
+
+    if (editPassword) {
+      payload.password = editPassword;
+    }
+
+    setIsSavingPlayer(true);
+    try {
+      await playersApi.update(playerToEdit.id, payload);
+      if (params?.id) {
+        await loadTournament(params.id);
+      }
+      setIsPlayerEditOpen(false);
+      toast({ title: "Jugador actualizado" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsSavingPlayer(false);
+    }
+  };
+
   const captainIds = useMemo(() => new Set(registrations.filter(r => r.isCaptain).map(r => r.playerId)), [registrations]);
 
   const playersWithRole = useMemo<PlayerWithRegistration[]>(() => {
@@ -275,6 +406,22 @@ export default function TournamentDetails() {
 
     return list.sort((a, b) => (b.overall || 0) - (a.overall || 0));
   }, [playersWithRole, roleFilter, minOverall, statFilter, minStat]);
+
+  const rulesList = useMemo(() => {
+    const source = tournament?.rules?.trim() || DEFAULT_TOURNAMENT_RULES_TEXT;
+    return source
+      .split("\n")
+      .map((rule) => rule.trim())
+      .filter(Boolean);
+  }, [tournament?.rules]);
+  const editOverall = Math.round(
+    (editStats.pace +
+      editStats.shooting +
+      editStats.passing +
+      editStats.dribbling +
+      editStats.defense +
+      editStats.physical) / 6
+  );
 
   if (!match || !params) return null;
   
@@ -322,7 +469,7 @@ export default function TournamentDetails() {
         <div className="mb-8">
           <Link href={isAdmin ? "/admin" : isCaptain ? "/captain" : "/"}>
             <Button variant="ghost" className="mb-4 pl-0 hover:bg-transparent hover:text-primary cursor-pointer">
-              ← Volver
+              {"<- Volver"}
             </Button>
           </Link>
           
@@ -432,14 +579,14 @@ export default function TournamentDetails() {
                     {draftState.currentTeam?.name || 'Cargando...'}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Capitán: {draftState.currentCaptain?.name || 'N/A'}
+                    Capitan: {draftState.currentCaptain?.name || 'N/A'}
                   </p>
                 </div>
 
                 {isMyTurn && (
                   <div className="p-4 bg-green-500/20 rounded-lg border border-green-500/30 flex items-center gap-3">
                     <AlertCircle className="w-6 h-6 text-green-400" />
-                    <p className="font-display text-green-400">¡ES TU TURNO! Selecciona un jugador</p>
+                    <p className="font-display text-green-400">ES TU TURNO! Selecciona un jugador</p>
                   </div>
                 )}
 
@@ -554,20 +701,28 @@ export default function TournamentDetails() {
             </Card>
           )}
 
-          {!isDraftActive && (
-            <Card className="lg:col-span-2 bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="font-display text-2xl">Reglas y Formato</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-muted-foreground">
-                <p>• Formato 5v5 Cancha Completa</p>
-                <p>• Eliminación Doble</p>
-                <p>• Dos partes de 20 minutos</p>
-                <p>• Selección por Draft de Capitanes</p>
-                <p>• Reglas FIBA</p>
-              </CardContent>
-            </Card>
-          )}
+          <Card className="lg:col-span-2 bg-white/5 border-white/10">
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <CardTitle className="font-display text-2xl">Reglas y Formato</CardTitle>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="cursor-pointer"
+                  onClick={handleOpenRules}
+                >
+                  Editar reglas
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="text-muted-foreground">
+              <ul className="list-disc space-y-2 pl-5">
+                {rulesList.map((rule, index) => (
+                  <li key={`${rule}-${index}`}>{rule}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </div>
 
         {isAdmin && registrations.length > 0 && (
@@ -651,7 +806,7 @@ export default function TournamentDetails() {
                         <h3 className="font-display text-lg">{team.name}</h3>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Capitán: {captain?.name || 'N/A'}
+                        Capitan: {captain?.name || 'N/A'}
                       </p>
                     {team.nameConfirmed ? (
                         <Badge variant="outline" className="mt-2 bg-green-500/10 text-green-400 border-green-500/30 text-xs">
@@ -743,113 +898,80 @@ export default function TournamentDetails() {
               return (
                 <div className="text-center py-20 border border-dashed border-white/10 rounded-lg">
                   <p className="text-muted-foreground text-xl">
-                    {isDraftActive ? 'No quedan jugadores disponibles' : 'Aún no hay jugadores inscritos. ¡Sé el primero!'}
+                    {isDraftActive ? 'No quedan jugadores disponibles' : 'Aun no hay jugadores inscritos. Se el primero!'}
                   </p>
                 </div>
               );
             }
 
             return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {playersList.map((player, index) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {playersList.map((player) => {
                   const isDrafted = draftedPlayerIds.includes(player.id);
                   const isCaptainRole = player.isCaptain;
                   const isSelectable = !isDrafted && !isCaptainRole;
-                  
+                  const cardPlayer = { ...player, role: isCaptainRole ? "captain" : player.role };
+
                   return (
-                    <Card 
-                      key={player.id} 
-                      className={`bg-white/5 border-white/10 ${isDrafted ? 'opacity-60' : ''} ${isSelectable && isDraftActive && (isMyTurn || isAdmin) ? 'hover:border-primary/50 cursor-pointer' : ''}`}
-                      data-testid={`player-row-${player.id}`}
-                    >
-                      <CardContent className="py-4">
-                        <div className="flex items-start gap-4">
-                          <div className="flex-shrink-0">
-                            {isDraftActive ? (
-                              <div className="relative">
-                                <SkillRadarChart
-                                  pace={player.pace || 50}
-                                  shooting={player.shooting || 50}
-                                  passing={player.passing || 50}
-                                  dribbling={player.dribbling || 50}
-                                  defense={player.defense || 50}
-                                  physical={player.physical || 50}
-                                  size={80}
-                                  showLabels={false}
-                                />
-                                {player.avatar ? (
-                                  <img
-                                    src={player.avatar}
-                                    alt={player.name}
-                                    className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full border border-white/20 object-cover"
-                                  />
-                                ) : (
-                                  <div className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center border border-white/20">
-                                    <User className="w-4 h-4 text-primary" />
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
-                                {player.avatar ? (
-                                  <img src={player.avatar} alt={player.name} className="h-full w-full object-cover" />
-                                ) : (
-                                  <User className="w-7 h-7 text-primary" />
-                                )}
-                              </div>
-                            )}
+                    <div key={player.id} className="space-y-3" data-testid={`player-card-${player.id}`}>
+                      <div className="relative">
+                        <PlayerCard
+                          player={cardPlayer}
+                          onClick={isAdmin ? () => handleOpenPlayerEdit(player) : undefined}
+                          showSensitive={isAdmin}
+                        />
+                        {isDrafted && (
+                          <div className="absolute inset-0 rounded-2xl bg-black/60 flex items-center justify-center text-xs font-display tracking-widest text-white">
+                            SELECCIONADO
                           </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs text-muted-foreground font-mono">#{index + 1}</span>
-                              <p className="font-medium text-foreground truncate">{player.name}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-2xl font-display text-primary font-bold">{player.overall}</span>
-                              {isCaptainRole ? (
-                                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-xs">
-                                  Capitan
-                                </Badge>
-                              ) : isDrafted ? (
-                                <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30 text-xs">
-                                  Seleccionado
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs">
-                                  Disponible
-                                </Badge>
-                              )}
-                            </div>
-                            
-                            {isDraftActive && (
-                              <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-muted-foreground">
-                                <span>VEL {player.pace}</span>
-                                <span>TIR {player.shooting}</span>
-                                <span>PAS {player.passing}</span>
-                                <span>REG {player.dribbling}</span>
-                                <span>DEF {player.defense}</span>
-                                <span>FIS {player.physical}</span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="flex-shrink-0">
-                            {isDraftActive && (isMyTurn || isAdmin) && isSelectable && (
-                              <Button 
-                                size="sm"
-                                className="font-display bg-primary text-black hover:bg-white cursor-pointer"
-                                onClick={() => handleDraftPlayer(player.id)}
-                                disabled={isDrafting}
-                                data-testid={`button-draft-${player.id}`}
-                              >
-                                DRAFT
-                              </Button>
-                            )}
-                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+                        {isCaptainRole ? (
+                          <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs">
+                            Capitan
+                          </Badge>
+                        ) : isDrafted ? (
+                          <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30 text-xs">
+                            Seleccionado
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-xs">
+                            Disponible
+                          </Badge>
+                        )}
+                        {isAdmin && (
+                          <Badge variant="outline" className="bg-white/10 text-white/70 border-white/20 text-xs">
+                            Click para editar
+                          </Badge>
+                        )}
+                      </div>
+                      {isDraftActive && (
+                        <div className="rounded-xl border border-white/10 bg-black/20 p-3 flex items-center justify-center">
+                          <SkillRadarChart
+                            pace={player.pace || 50}
+                            shooting={player.shooting || 50}
+                            passing={player.passing || 50}
+                            dribbling={player.dribbling || 50}
+                            defense={player.defense || 50}
+                            physical={player.physical || 50}
+                            size={120}
+                            showLabels={false}
+                          />
                         </div>
-                      </CardContent>
-                    </Card>
+                      )}
+                      {isDraftActive && (isMyTurn || isAdmin) && isSelectable && (
+                        <Button
+                          size="sm"
+                          className="w-full font-display bg-primary text-black hover:bg-white cursor-pointer"
+                          onClick={() => handleDraftPlayer(player.id)}
+                          disabled={isDrafting}
+                          data-testid={`button-draft-${player.id}`}
+                        >
+                          DRAFT
+                        </Button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -857,6 +979,188 @@ export default function TournamentDetails() {
           })()}
         </div>
       </div>
+
+      <Dialog open={isRulesOpen} onOpenChange={setIsRulesOpen}>
+        <DialogContent className="bg-card border-white/10 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl">Editar reglas y formato</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Escribe una regla por linea. Se mostraran en el apartado publico del torneo.
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <textarea
+              value={rulesDraft}
+              onChange={(e) => setRulesDraft(e.target.value)}
+              className="w-full bg-black/20 border border-input rounded-md px-3 py-2 min-h-[140px] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <Button
+              onClick={handleSaveRules}
+              className="w-full font-display cursor-pointer"
+              disabled={isSavingRules}
+            >
+              {isSavingRules ? "Guardando..." : "Guardar reglas"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPlayerEditOpen} onOpenChange={setIsPlayerEditOpen}>
+        <DialogContent className="bg-card border-white/10 max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl">Editar jugador</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Actualiza los datos del jugador y guarda los cambios.
+            </p>
+          </DialogHeader>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-2">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Nombre completo</Label>
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="bg-black/20" />
+              </div>
+              <div className="space-y-2">
+                <Label>Usuario</Label>
+                <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} className="bg-black/20" />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="bg-black/20" />
+              </div>
+              <div className="space-y-2">
+                <Label>Movil</Label>
+                <Input value={editMobile} onChange={(e) => setEditMobile(e.target.value)} className="bg-black/20" />
+              </div>
+              <div className="space-y-2">
+                <Label>Avatar (URL o base64)</Label>
+                <Input value={editAvatar} onChange={(e) => setEditAvatar(e.target.value)} className="bg-black/20" />
+              </div>
+              <div className="space-y-2">
+                <Label>Rol</Label>
+                <Select value={editRole} onValueChange={(value) => setEditRole(value as "player" | "captain" | "admin")}>
+                  <SelectTrigger className="bg-black/20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="player">Jugador</SelectItem>
+                    <SelectItem value="captain">Capitan</SelectItem>
+                    <SelectItem value="admin">Administrador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">Perfil publico</p>
+                  <p className="text-xs text-muted-foreground">Visible para usuarios no registrados.</p>
+                </div>
+                <Switch checked={editIsPublic} onCheckedChange={setEditIsPublic} />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+                <p className="text-sm text-muted-foreground mb-1">Overall calculado</p>
+                <p className="text-3xl font-display text-primary font-bold">{editOverall}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Ritmo</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={99}
+                    value={editStats.pace}
+                    onChange={(e) => setEditStats((prev) => ({ ...prev, pace: Number(e.target.value) || 0 }))}
+                    className="bg-black/20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Tiro</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={99}
+                    value={editStats.shooting}
+                    onChange={(e) => setEditStats((prev) => ({ ...prev, shooting: Number(e.target.value) || 0 }))}
+                    className="bg-black/20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Pase</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={99}
+                    value={editStats.passing}
+                    onChange={(e) => setEditStats((prev) => ({ ...prev, passing: Number(e.target.value) || 0 }))}
+                    className="bg-black/20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Regate</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={99}
+                    value={editStats.dribbling}
+                    onChange={(e) => setEditStats((prev) => ({ ...prev, dribbling: Number(e.target.value) || 0 }))}
+                    className="bg-black/20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Defensa</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={99}
+                    value={editStats.defense}
+                    onChange={(e) => setEditStats((prev) => ({ ...prev, defense: Number(e.target.value) || 0 }))}
+                    className="bg-black/20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Fisico</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={99}
+                    value={editStats.physical}
+                    onChange={(e) => setEditStats((prev) => ({ ...prev, physical: Number(e.target.value) || 0 }))}
+                    className="bg-black/20"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-1">
+                  <Label>Nueva contrasena</Label>
+                  <Input
+                    type="password"
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    className="bg-black/20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Confirmar contrasena</Label>
+                  <Input
+                    type="password"
+                    value={editPasswordConfirm}
+                    onChange={(e) => setEditPasswordConfirm(e.target.value)}
+                    className="bg-black/20"
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={handleSavePlayerEdit}
+                className="w-full font-display cursor-pointer"
+                disabled={isSavingPlayer}
+              >
+                {isSavingPlayer ? "Guardando..." : "Guardar cambios"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

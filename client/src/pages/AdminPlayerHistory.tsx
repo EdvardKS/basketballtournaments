@@ -1,14 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { adminApi, tournamentsApi, type PlayerStats, type Tournament } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Trophy, TrendingUp, TrendingDown, Search, Filter } from "lucide-react";
+import { PlayerCard } from "@/components/PlayerCard";
 
 export default function AdminPlayerHistory() {
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
@@ -50,9 +49,30 @@ export default function AdminPlayerHistory() {
     }
   };
 
-  const filteredStats = playerStats.filter(ps => 
-    ps.player.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredStats = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return playerStats;
+    return playerStats.filter((ps) =>
+      ps.player.name.toLowerCase().includes(term)
+    );
+  }, [playerStats, searchTerm]);
+
+  const averageGrowth = useMemo(() => {
+    if (playerStats.length === 0) return 0;
+    return playerStats.reduce((acc, ps) => acc + ps.growth, 0) / playerStats.length;
+  }, [playerStats]);
+
+  const topOverall = useMemo(() => {
+    return [...playerStats].sort((a, b) => b.player.overall - a.player.overall)[0];
+  }, [playerStats]);
+
+  const topGrowth = useMemo(() => {
+    return [...playerStats].sort((a, b) => b.growth - a.growth)[0];
+  }, [playerStats]);
+
+  const mostTournaments = useMemo(() => {
+    return [...playerStats].sort((a, b) => b.tournamentsPlayed - a.tournamentsPlayed)[0];
+  }, [playerStats]);
 
   const getGrowthBadge = (growth: number) => {
     if (growth > 0) {
@@ -81,7 +101,7 @@ export default function AdminPlayerHistory() {
     };
     const labels: Record<string, string> = {
       admin: "Admin",
-      captain: "Capitán",
+      captain: "Capitan",
       player: "Jugador",
     };
     return (
@@ -96,7 +116,7 @@ export default function AdminPlayerHistory() {
       <Navbar />
       
       <div className="container mx-auto px-4 py-20">
-        <h1 className="text-4xl font-display font-bold mb-8">HISTÓRICO DE JUGADORES</h1>
+        <h1 className="text-4xl font-display font-bold mb-8">HISTORICO DE JUGADORES</h1>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <Card>
@@ -144,13 +164,69 @@ export default function AdminPlayerHistory() {
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-display font-bold text-primary">
-                {playerStats.length > 0 
-                  ? (playerStats.reduce((acc, ps) => acc + ps.growth, 0) / playerStats.length).toFixed(1)
-                  : 0
-                }
+                {averageGrowth.toFixed(1)}
               </p>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {topOverall && (
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">Top Overall</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <PlayerCard player={topOverall.player} size="sm" />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Overall</span>
+                  <span className="font-display text-primary text-xl">{topOverall.player.overall}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Torneos</span>
+                  <span className="font-display">{topOverall.tournamentsPlayed}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {topGrowth && (
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">Mayor crecimiento</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <PlayerCard player={topGrowth.player} size="sm" />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Crecimiento</span>
+                  <span>{getGrowthBadge(topGrowth.growth)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Overall actual</span>
+                  <span className="font-display">{topGrowth.player.overall}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {mostTournaments && (
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground">Mas torneos jugados</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <PlayerCard player={mostTournaments.player} size="sm" />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Torneos</span>
+                  <span className="font-display text-primary text-xl">{mostTournaments.tournamentsPlayed}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Overall</span>
+                  <span className="font-display">{mostTournaments.player.overall}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <Card className="mb-6">
@@ -176,7 +252,6 @@ export default function AdminPlayerHistory() {
                     <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="player">Jugadores</SelectItem>
                     <SelectItem value="captain">Capitanes</SelectItem>
-                    <SelectItem value="admin">Admins</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={tournamentFilter} onValueChange={setTournamentFilter}>
@@ -197,67 +272,38 @@ export default function AdminPlayerHistory() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-display">Estadísticas de Jugadores</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Cargando...</div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Jugador</TableHead>
-                    <TableHead>Rol</TableHead>
-                    <TableHead className="text-center">Overall</TableHead>
-                    <TableHead className="text-center">Torneos</TableHead>
-                    <TableHead className="text-center">Crecimiento</TableHead>
-                    <TableHead>Habilidades</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredStats.map((ps) => (
-                    <TableRow key={ps.player.id} data-testid={`row-player-${ps.player.id}`}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          {ps.player.avatar ? (
-                            <img 
-                              src={ps.player.avatar} 
-                              alt={ps.player.name} 
-                              className="w-10 h-10 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                              <span className="font-bold text-primary">{ps.player.name.charAt(0)}</span>
-                            </div>
-                          )}
-                          <span className="font-medium">{ps.player.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getRoleBadge(ps.player.role)}</TableCell>
-                      <TableCell className="text-center">
-                        <span className="font-display text-lg font-bold text-primary">{ps.player.overall}</span>
-                      </TableCell>
-                      <TableCell className="text-center">{ps.tournamentsPlayed}</TableCell>
-                      <TableCell className="text-center">{getGrowthBadge(ps.growth)}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 text-xs">
-                          <span className="px-1.5 py-0.5 bg-green-500/20 rounded">PAC {ps.player.pace}</span>
-                          <span className="px-1.5 py-0.5 bg-blue-500/20 rounded">SHO {ps.player.shooting}</span>
-                          <span className="px-1.5 py-0.5 bg-purple-500/20 rounded">PAS {ps.player.passing}</span>
-                          <span className="px-1.5 py-0.5 bg-amber-500/20 rounded">DRI {ps.player.dribbling}</span>
-                          <span className="px-1.5 py-0.5 bg-red-500/20 rounded">DEF {ps.player.defense}</span>
-                          <span className="px-1.5 py-0.5 bg-orange-500/20 rounded">PHY {ps.player.physical}</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        {isLoading ? (
+          <div className="text-center py-10 text-muted-foreground">Cargando...</div>
+        ) : filteredStats.length === 0 ? (
+          <Card className="bg-white/5 border-white/10">
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">No hay jugadores para mostrar.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {filteredStats.map((ps) => (
+              <div key={ps.player.id} className="space-y-3">
+                <PlayerCard player={ps.player} size="sm" />
+                <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+                  {getRoleBadge(ps.player.role)}
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                    OVR {ps.player.overall}
+                  </Badge>
+                  {getGrowthBadge(ps.growth)}
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <div className="rounded-md border border-white/10 bg-black/20 p-2 text-center">
+                    Torneos {ps.tournamentsPlayed}
+                  </div>
+                  <div className="rounded-md border border-white/10 bg-black/20 p-2 text-center">
+                    {ps.snapshots.length > 0 ? `Ultimo ${ps.snapshots[0].overall}` : "Sin historial"}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

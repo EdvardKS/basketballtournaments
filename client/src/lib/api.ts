@@ -25,6 +25,7 @@ export interface Tournament {
   status: 'open' | 'draft' | 'active' | 'completed';
   location: string;
   description: string;
+  rules?: string | null;
   maxTeams: number;
   winnerId?: string;
 }
@@ -51,6 +52,7 @@ export interface CreateTournamentData {
   date: string;
   location: string;
   description: string;
+  rules?: string | null;
   maxTeams: number;
   status?: string;
 }
@@ -125,7 +127,15 @@ export const playersApi = {
     return res.json();
   },
 
-  async update(id: string, data: Partial<RegisterPlayerData>): Promise<{ player: Player }> {
+  async update(
+    id: string,
+    data: Partial<RegisterPlayerData> & {
+      role?: 'player' | 'captain' | 'admin';
+      avatar?: string | null;
+      isPublic?: boolean;
+      overall?: number;
+    }
+  ): Promise<{ player: Player }> {
     const res = await fetch(`/api/players/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

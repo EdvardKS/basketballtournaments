@@ -43,6 +43,7 @@ export const tournaments = pgTable("tournaments", {
   status: text("status").notNull().default('open'), // 'open' | 'draft' | 'active' | 'completed'
   location: text("location").notNull(),
   description: text("description").notNull(),
+  rules: text("rules"),
   maxTeams: integer("max_teams").notNull().default(8),
   winnerId: varchar("winner_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
