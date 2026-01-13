@@ -15,13 +15,17 @@ export function TournamentCard({ tournament }: TournamentCardProps) {
   const statusColors = {
     open: "bg-green-500/20 text-green-500 hover:bg-green-500/30",
     draft: "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30",
+    setup: "bg-orange-500/20 text-orange-400 hover:bg-orange-500/30",
+    scheduled: "bg-purple-500/20 text-purple-400 hover:bg-purple-500/30",
     active: "bg-primary/20 text-primary hover:bg-primary/30",
     completed: "bg-white/10 text-white/60 hover:bg-white/20",
   };
 
   const statusText = {
-    open: "INSCRIPCIÓN ABIERTA",
+    open: "INSCRIPCION ABIERTA",
     draft: "EN DRAFT",
+    setup: "WHATSAPP",
+    scheduled: "EN ESPERA",
     active: "EN JUEGO",
     completed: "FINALIZADO"
   };

@@ -9,7 +9,9 @@ import { Link } from "wouter";
 
 export default function Home() {
   const { tournaments, fetchTournaments } = useStore();
-  const activeTournaments = tournaments.filter(t => t.status === 'open' || t.status === 'active');
+  const activeTournaments = tournaments.filter(t =>
+    t.status === 'open' || t.status === 'draft' || t.status === 'setup' || t.status === 'scheduled' || t.status === 'active'
+  );
   const pastTournaments = tournaments.filter(t => t.status === 'completed');
 
   useEffect(() => {

@@ -89,7 +89,9 @@ export default function AdminDashboard() {
 
   const openTournaments = tournaments.filter(t => t.status === 'open');
   const draftTournaments = tournaments.filter(t => t.status === 'draft');
-  const activeTournaments = tournaments.filter(t => t.status === 'active' || t.status === 'draft' || t.status === 'open');
+  const activeTournaments = tournaments.filter(t =>
+    t.status === 'active' || t.status === 'draft' || t.status === 'open' || t.status === 'setup' || t.status === 'scheduled'
+  );
   const pastTournaments = tournaments.filter(t => t.status === 'completed');
   const totalPlayers = players.length;
   const totalCaptains = players.filter(p => p.role === 'captain').length;
@@ -216,8 +218,15 @@ export default function AdminDashboard() {
     } catch {}
     
     try {
-      await draftApi.start(tournamentId, 5);
+      const result = await draftApi.start(tournamentId, 0);
       await fetchTournaments();
+      if (!result.draftState) {
+        toast({
+          title: "Draft no iniciado",
+          description: result.message || "No hay jugadores para draftear.",
+        });
+        return;
+      }
       toast({ title: "Draft iniciado", description: "Los capitanes pueden empezar a elegir jugadores." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error al iniciar draft", description: error.message });
@@ -305,12 +314,16 @@ export default function AdminDashboard() {
     const styles: Record<string, string> = {
       open: "bg-green-500/20 text-green-400 border-green-500/50",
       draft: "bg-amber-500/20 text-amber-400 border-amber-500/50",
+      setup: "bg-orange-500/20 text-orange-400 border-orange-500/50",
+      scheduled: "bg-purple-500/20 text-purple-400 border-purple-500/50",
       active: "bg-blue-500/20 text-blue-400 border-blue-500/50",
       completed: "bg-gray-500/20 text-gray-400 border-gray-500/50",
     };
     const labels: Record<string, string> = {
       open: "Inscripciones Abiertas",
       draft: "En Draft",
+      setup: "Config. WhatsApp",
+      scheduled: "En Espera",
       active: "En Curso",
       completed: "Finalizado",
     };
@@ -535,6 +548,8 @@ export default function AdminDashboard() {
                         <SelectContent>
                           <SelectItem value="open">Abierto</SelectItem>
                           <SelectItem value="draft">En Draft</SelectItem>
+                          <SelectItem value="setup">Config. WhatsApp</SelectItem>
+                          <SelectItem value="scheduled">En Espera</SelectItem>
                           <SelectItem value="active">Activo</SelectItem>
                           <SelectItem value="completed">Finalizado</SelectItem>
                         </SelectContent>

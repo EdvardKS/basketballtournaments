@@ -32,7 +32,7 @@ export default function Login() {
         if (user?.role === 'admin') {
           setLocation("/admin");
         } else if (user?.role === 'captain') {
-          setLocation("/draft");
+          setLocation("/captain");
         } else {
           setLocation("/player");
         }

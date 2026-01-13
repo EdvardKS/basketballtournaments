@@ -35,7 +35,7 @@ export interface Tournament {
   id: string;
   name: string;
   date: string;
-  status: 'open' | 'draft' | 'active' | 'completed';
+  status: 'open' | 'draft' | 'setup' | 'scheduled' | 'active' | 'completed';
   winnerId?: string;
   location: string;
   description: string;

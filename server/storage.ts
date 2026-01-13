@@ -48,7 +48,7 @@ export interface IStorage {
   getTeamsForTournament(tournamentId: string): Promise<Team[]>;
   getTeamByCaptain(captainId: string): Promise<Team | undefined>;
   getTeamByCaptainForTournament(captainId: string, tournamentId: string): Promise<Team | undefined>;
-  updateTeamName(teamId: string, name: string, nameConfirmed: boolean): Promise<Team | undefined>;
+  updateTeamInfo(teamId: string, update: Partial<InsertTeam>): Promise<Team | undefined>;
   
   // Draft
   draftPlayer(teamId: string, playerId: string): Promise<TeamPlayer>;
@@ -285,9 +285,9 @@ export class DatabaseStorage implements IStorage {
     return team;
   }
 
-  async updateTeamName(teamId: string, name: string, nameConfirmed: boolean): Promise<Team | undefined> {
+  async updateTeamInfo(teamId: string, update: Partial<InsertTeam>): Promise<Team | undefined> {
     const [team] = await db.update(teams)
-      .set({ name, nameConfirmed })
+      .set(update)
       .where(eq(teams.id, teamId))
       .returning();
     return team;

@@ -77,8 +77,8 @@ export default function CaptainDashboard() {
     }
   }
 
-  const activeTournaments = myTournaments.filter(t => 
-    t.status === 'active' || t.status === 'draft' || t.status === 'open'
+  const activeTournaments = myTournaments.filter(t =>
+    t.status === 'active' || t.status === 'draft' || t.status === 'open' || t.status === 'setup' || t.status === 'scheduled'
   );
   const pastTournaments = myTournaments.filter(t => t.status === 'completed');
 
@@ -86,12 +86,16 @@ export default function CaptainDashboard() {
     const styles: Record<string, string> = {
       open: "bg-green-500/20 text-green-400 border-green-500/50",
       draft: "bg-amber-500/20 text-amber-400 border-amber-500/50",
+      setup: "bg-orange-500/20 text-orange-400 border-orange-500/50",
+      scheduled: "bg-purple-500/20 text-purple-400 border-purple-500/50",
       active: "bg-blue-500/20 text-blue-400 border-blue-500/50",
       completed: "bg-gray-500/20 text-gray-400 border-gray-500/50",
     };
     const labels: Record<string, string> = {
       open: "Inscripciones Abiertas",
       draft: "En Draft",
+      setup: "Config. WhatsApp",
+      scheduled: "En Espera",
       active: "En Curso",
       completed: "Finalizado",
     };
@@ -175,7 +179,7 @@ export default function CaptainDashboard() {
                       <Link href={`/tournaments/${t.id}`}>
                         <Button size="sm" className="cursor-pointer font-display">
                           <Eye className="w-4 h-4 mr-1" /> 
-                          {t.status === 'draft' ? 'IR AL DRAFT' : 'VER TORNEO'}
+                          {t.status === 'draft' ? 'IR AL DRAFT' : t.status === 'setup' ? 'CONFIGURAR WHATSAPP' : 'VER TORNEO'}
                         </Button>
                       </Link>
                     </div>

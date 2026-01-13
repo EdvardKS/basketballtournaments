@@ -1,15 +1,17 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPlayerSchema, insertTournamentSchema, type Player, type Team } from "@shared/schema";
+import { insertPlayerSchema, insertTournamentSchema, type Player, type Team, type Tournament } from "@shared/schema";
 import { z } from "zod";
 
 const setCaptainSchema = z.object({
   isCaptain: z.boolean(),
   teamName: z.string().min(1).max(50).optional(),
 });
-const updateTeamNameSchema = z.object({
+const updateTeamInfoSchema = z.object({
   name: z.string().min(1).max(50),
+  whatsappGroupName: z.string().min(1).max(120).optional(),
+  whatsappGroupLink: z.string().min(1).max(300).optional(),
 });
 const startMatchSchema = z.object({
   durationMinutes: z.coerce.number().int().min(1).max(240),
@@ -58,6 +60,40 @@ export async function registerRoutes(
         overall: player.overall,
       })
     )));
+  };
+
+  const shuffleList = <T,>(items: T[]) => {
+    const list = [...items];
+    for (let i = list.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    return list;
+  };
+
+  const normalizeWhatsappLink = (value?: string | null) => {
+    const trimmed = value ? value.trim() : "";
+    if (!trimmed) return null;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `https://${trimmed}`;
+  };
+
+  const getTournamentStartDate = (dateValue: string) => {
+    if (!dateValue) return null;
+    const startDate = new Date(`${dateValue}T00:00:00`);
+    if (Number.isNaN(startDate.getTime())) return null;
+    return startDate;
+  };
+
+  const maybeActivateTournament = async (tournament: Tournament) => {
+    if (tournament.status !== 'scheduled') return tournament;
+    const startDate = getTournamentStartDate(tournament.date);
+    if (!startDate) return tournament;
+    if (Date.now() >= startDate.getTime()) {
+      const updated = await storage.updateTournament(tournament.id, { status: 'active' });
+      return updated || tournament;
+    }
+    return tournament;
   };
 
   type GroupMemberSortable = {
@@ -607,7 +643,8 @@ export async function registerRoutes(
   app.get("/api/players/:id/tournaments", async (req, res) => {
     try {
       const tournaments = await storage.getTournamentsForPlayer(req.params.id);
-      res.json({ tournaments });
+      const refreshed = await Promise.all(tournaments.map(maybeActivateTournament));
+      res.json({ tournaments: refreshed });
     } catch (error) {
       console.error("Get player tournaments error:", error);
       res.status(500).json({ error: "Error al obtener torneos del jugador" });
@@ -620,7 +657,8 @@ export async function registerRoutes(
   app.get("/api/tournaments", async (req, res) => {
     try {
       const tournaments = await storage.getAllTournaments();
-      res.json({ tournaments });
+      const refreshed = await Promise.all(tournaments.map(maybeActivateTournament));
+      res.json({ tournaments: refreshed });
     } catch (error) {
       console.error("Get tournaments error:", error);
       res.status(500).json({ error: "Error al obtener torneos" });
@@ -630,10 +668,11 @@ export async function registerRoutes(
   // Get tournament by ID with registered players
   app.get("/api/tournaments/:id", async (req, res) => {
     try {
-      const tournament = await storage.getTournament(req.params.id);
-      if (!tournament) {
+      const existing = await storage.getTournament(req.params.id);
+      if (!existing) {
         return res.status(404).json({ error: "Torneo no encontrado" });
       }
+      const tournament = await maybeActivateTournament(existing);
 
       const registeredPlayers = await storage.getPlayersForTournament(req.params.id);
       const isAuthenticated = !!req.session.playerId;
@@ -835,15 +874,15 @@ export async function registerRoutes(
   });
 
 
-  // Update team name (Captain/Admin)
+  // Update team info (Captain/Admin)
   app.patch("/api/teams/:id/name", async (req, res) => {
     if (!req.session.playerId) {
       return res.status(401).json({ error: "No autenticado" });
     }
 
-    const parseResult = updateTeamNameSchema.safeParse(req.body);
+    const parseResult = updateTeamInfoSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ error: "Nombre invalido" });
+      return res.status(400).json({ error: "Datos invalidos" });
     }
 
     const team = await storage.getTeam(req.params.id);
@@ -867,32 +906,54 @@ export async function registerRoutes(
     }
 
     if (tournament.status === 'draft') {
-      const draftState = await storage.getDraftState(tournament.id);
-      if (draftState && draftState.isActive === 'true') {
-        return res.status(400).json({ error: "El draft sigue activo" });
-      }
-    } else if (tournament.status !== 'active') {
-      return res.status(400).json({ error: "No se puede confirmar el nombre en este estado" });
+      return res.status(400).json({ error: "El draft sigue activo" });
+    }
+    if (tournament.status === 'open') {
+      return res.status(400).json({ error: "No se puede configurar equipos en este estado" });
+    }
+    if (tournament.status === 'completed') {
+      return res.status(400).json({ error: "El torneo ya esta finalizado" });
     }
 
-    const normalized = parseResult.data.name.trim();
+    const normalizedName = parseResult.data.name.trim();
+    const hasWhatsappName = Object.prototype.hasOwnProperty.call(parseResult.data, "whatsappGroupName");
+    const hasWhatsappLink = Object.prototype.hasOwnProperty.call(parseResult.data, "whatsappGroupLink");
+    const normalizedWhatsappName = hasWhatsappName
+      ? (parseResult.data.whatsappGroupName?.trim() || null)
+      : team.whatsappGroupName;
+    const normalizedWhatsappLink = hasWhatsappLink
+      ? normalizeWhatsappLink(parseResult.data.whatsappGroupLink)
+      : team.whatsappGroupLink;
+
     const teams = await storage.getTeamsForTournament(team.tournamentId);
-    const duplicate = teams.find(t => t.id !== team.id && t.name.toLowerCase() === normalized.toLowerCase());
+    const duplicate = teams.find(t => t.id !== team.id && t.name.toLowerCase() === normalizedName.toLowerCase());
     if (duplicate) {
       return res.status(409).json({ error: "Ya existe un equipo con ese nombre" });
     }
 
-    const updated = await storage.updateTeamName(team.id, normalized, true);
+    const isWhatsappReady = Boolean(normalizedWhatsappName && normalizedWhatsappLink);
+    const updatePayload = {
+      name: normalizedName,
+      nameConfirmed: isWhatsappReady,
+      ...(hasWhatsappName ? { whatsappGroupName: normalizedWhatsappName } : {}),
+      ...(hasWhatsappLink ? { whatsappGroupLink: normalizedWhatsappLink } : {}),
+    };
+    const updated = await storage.updateTeamInfo(team.id, updatePayload);
 
     let groupsGenerated = false;
     const refreshedTeams = await storage.getTeamsForTournament(team.tournamentId);
-    const allConfirmed = refreshedTeams.length > 0 && refreshedTeams.every(t => t.nameConfirmed);
-    if (allConfirmed) {
+    const allReady = refreshedTeams.length > 0 && refreshedTeams.every(t => t.whatsappGroupName && t.whatsappGroupLink);
+    let tournamentStatus = tournament.status;
+    if (allReady) {
+      if (tournament.status === 'setup' || tournament.status === 'draft') {
+        const updatedTournament = await storage.updateTournament(team.tournamentId, { status: 'scheduled' });
+        tournamentStatus = updatedTournament?.status || tournament.status;
+      }
       await generateGroupsForTournament(team.tournamentId);
       groupsGenerated = true;
     }
 
-    res.json({ team: updated, groupsGenerated });
+    res.json({ team: updated, groupsGenerated, allReady, tournamentStatus });
   });
 
   // Get team by captain
@@ -1116,19 +1177,19 @@ export async function registerRoutes(
       const captainIds = new Set(captains.map((captain) => captain.playerId));
       const draftableCount = registrations.length - captainIds.size;
       if (draftableCount <= 0) {
-        await storage.updateTournament(tournamentId, { status: 'active' });
-        return res.json({ draftState: null, teams, message: "No hay jugadores para draftear. Torneo activo." });
+        await storage.updateTournament(tournamentId, { status: 'setup' });
+        return res.json({ draftState: null, teams, message: "No hay jugadores para draftear. Configura WhatsApp de equipos." });
       }
 
       const computedRounds = Math.ceil(draftableCount / teams.length) || 1;
-      const finalMaxRounds = Number(maxRounds) > 0 ? Number(maxRounds) : computedRounds;
+      const finalMaxRounds = Math.max(computedRounds, Number(maxRounds) || 0);
 
       const existingDraft = await storage.getDraftState(tournamentId);
       if (existingDraft && existingDraft.isActive === 'true') {
         return res.status(400).json({ error: "Ya hay un draft activo para este torneo" });
       }
 
-      const shuffledTeamIds = teams.map(t => t.id).sort(() => Math.random() - 0.5);
+      const shuffledTeamIds = shuffleList(teams.map(t => t.id));
 
       if (existingDraft) {
         await storage.updateDraftState(tournamentId, {
@@ -1279,28 +1340,31 @@ export async function registerRoutes(
       const draftedCount = updatedDraftedIds.filter(id => !captainIds.has(id)).length;
       if (draftedCount >= draftableCount) {
         await storage.updateDraftState(team.tournamentId, { isActive: 'false' });
-        await storage.updateTournament(team.tournamentId, { status: 'active' });
+        await storage.updateTournament(team.tournamentId, { status: 'setup' });
         return res.json({ teamPlayer, draftComplete: true, message: "Draft completado" });
       }
 
       let newTeamIndex = draftState.currentTeamIndex + 1;
       let newRound = draftState.currentRound;
-
-      const teamOrder = JSON.parse(draftState.teamOrder);
-      if (newTeamIndex >= teamOrder.length) {
+      let nextTeamOrder = JSON.parse(draftState.teamOrder);
+      if (newTeamIndex >= nextTeamOrder.length) {
         newTeamIndex = 0;
         newRound = draftState.currentRound + 1;
 
         if (newRound > draftState.maxRounds) {
           await storage.updateDraftState(team.tournamentId, { isActive: 'false' });
-          await storage.updateTournament(team.tournamentId, { status: 'active' });
+          await storage.updateTournament(team.tournamentId, { status: 'setup' });
           return res.json({ teamPlayer, draftComplete: true, message: "Draft completado" });
         }
+
+        const allTeams = await storage.getTeamsForTournament(team.tournamentId);
+        nextTeamOrder = shuffleList(allTeams.map(t => t.id));
       }
 
       await storage.updateDraftState(team.tournamentId, {
         currentTeamIndex: newTeamIndex,
         currentRound: newRound,
+        teamOrder: JSON.stringify(nextTeamOrder),
       });
 
       const updatedState = await storage.getDraftState(team.tournamentId);
@@ -1329,9 +1393,9 @@ export async function registerRoutes(
       await storage.updateDraftState(req.params.tournamentId, { isActive: 'false' });
       
       // Update tournament status to active
-      await storage.updateTournament(req.params.tournamentId, { status: 'active' });
+      await storage.updateTournament(req.params.tournamentId, { status: 'setup' });
       
-      res.json({ success: true, message: "Draft finalizado. Torneo ahora activo." });
+      res.json({ success: true, message: "Draft finalizado. Configura WhatsApp de equipos." });
     } catch (error) {
       console.error("End draft error:", error);
       res.status(500).json({ error: "Error al finalizar el draft" });

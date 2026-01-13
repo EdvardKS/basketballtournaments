@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator 
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Trophy, Users, BarChart3, Home, History, ScrollText } from "lucide-react";
+import { ChevronDown, Trophy, BarChart3, Home, History, ScrollText } from "lucide-react";
 
 export function Navbar() {
   const { currentUser, logout } = useStore();
@@ -83,18 +83,6 @@ export function Navbar() {
                 <History className="w-4 h-4" />
                 Mi Historial
               </Link>
-              {currentUser.role === 'captain' && (
-                <Link 
-                  href="/draft" 
-                  className={cn(
-                    "flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer text-accent",
-                    isActive('/draft') ? "text-accent" : "hover:text-accent"
-                  )}
-                >
-                  <Users className="w-4 h-4" />
-                  Sala Draft
-                </Link>
-              )}
             </>
           ) : (
             <>

@@ -39,6 +39,8 @@ CREATE TABLE public.teams (
   captain_id varchar NOT NULL,
   name text NOT NULL,
   name_confirmed boolean NOT NULL DEFAULT false,
+  whatsapp_group_name text,
+  whatsapp_group_link text,
   created_at timestamp NOT NULL DEFAULT now()
 );
 

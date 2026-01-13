@@ -43,9 +43,6 @@ function Router() {
       <Route path="/captain">
         {currentUser?.role === 'captain' ? <CaptainDashboard /> : <Redirect to="/login" />}
       </Route>
-      <Route path="/draft">
-        {currentUser?.role === 'captain' || currentUser?.role === 'admin' ? <CaptainDashboard /> : <Redirect to="/login" />}
-      </Route>
       
       {/* Player Routes */}
       <Route path="/player">

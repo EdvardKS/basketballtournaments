@@ -1,5 +1,8 @@
 // API Client for Basketball Tournament App
 
+const apiFetch = (input: RequestInfo | URL, init: RequestInit = {}) =>
+  fetch(input, { ...init, credentials: "include" });
+
 export interface Player {
   id: string;
   name: string;
@@ -22,7 +25,7 @@ export interface Tournament {
   id: string;
   name: string;
   date: string;
-  status: 'open' | 'draft' | 'active' | 'completed';
+  status: 'open' | 'draft' | 'setup' | 'scheduled' | 'active' | 'completed';
   location: string;
   description: string;
   rules?: string | null;
@@ -60,7 +63,7 @@ export interface CreateTournamentData {
 // Auth API
 export const authApi = {
   async login(identifier: string, password: string): Promise<{ player: Player }> {
-    const res = await fetch('/api/auth/login', {
+    const res = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identifier, password }),
@@ -73,11 +76,11 @@ export const authApi = {
   },
 
   async logout(): Promise<void> {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await apiFetch('/api/auth/logout', { method: 'POST' });
   },
 
   async me(): Promise<{ player: Player } | null> {
-    const res = await fetch('/api/auth/me');
+    const res = await apiFetch('/api/auth/me');
     if (!res.ok) return null;
     return res.json();
   },
@@ -86,14 +89,14 @@ export const authApi = {
 // Players API
 export const playersApi = {
   async getAll(): Promise<{ players: Player[] }> {
-    const res = await fetch('/api/players');
+    const res = await apiFetch('/api/players');
     if (!res.ok) throw new Error('Failed to fetch players');
     return res.json();
   },
 
   async checkUsernameAvailability(username: string): Promise<{ available: boolean }> {
     const params = new URLSearchParams({ username });
-    const res = await fetch(`/api/players/availability?${params}`);
+    const res = await apiFetch(`/api/players/availability?${params}`);
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.error || 'Availability check failed');
@@ -102,7 +105,7 @@ export const playersApi = {
   },
 
   async register(data: RegisterPlayerData): Promise<{ player: Player }> {
-    const res = await fetch('/api/players/register', {
+    const res = await apiFetch('/api/players/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -115,7 +118,7 @@ export const playersApi = {
   },
 
   async promote(playerId: string, password: string): Promise<{ player: Player }> {
-    const res = await fetch(`/api/players/${playerId}/promote`, {
+    const res = await apiFetch(`/api/players/${playerId}/promote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
@@ -136,7 +139,7 @@ export const playersApi = {
       overall?: number;
     }
   ): Promise<{ player: Player }> {
-    const res = await fetch(`/api/players/${id}`, {
+    const res = await apiFetch(`/api/players/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -146,7 +149,7 @@ export const playersApi = {
   },
 
   async updatePublic(id: string, isPublic: boolean): Promise<{ player: Player }> {
-    const res = await fetch(`/api/players/${id}/public`, {
+    const res = await apiFetch(`/api/players/${id}/public`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isPublic }),
@@ -159,12 +162,12 @@ export const playersApi = {
   },
 
   async delete(id: string): Promise<void> {
-    const res = await fetch(`/api/players/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/players/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to delete player');
   },
 
   async getTournaments(playerId: string): Promise<{ tournaments: Tournament[] }> {
-    const res = await fetch(`/api/players/${playerId}/tournaments`);
+    const res = await apiFetch(`/api/players/${playerId}/tournaments`);
     if (!res.ok) throw new Error('Failed to fetch player tournaments');
     return res.json();
   },
@@ -173,19 +176,19 @@ export const playersApi = {
 // Tournaments API
 export const tournamentsApi = {
   async getAll(): Promise<{ tournaments: Tournament[] }> {
-    const res = await fetch('/api/tournaments');
+    const res = await apiFetch('/api/tournaments');
     if (!res.ok) throw new Error('Failed to fetch tournaments');
     return res.json();
   },
 
   async getById(id: string): Promise<{ tournament: Tournament; registeredPlayers: Player[] }> {
-    const res = await fetch(`/api/tournaments/${id}`);
+    const res = await apiFetch(`/api/tournaments/${id}`);
     if (!res.ok) throw new Error('Failed to fetch tournament');
     return res.json();
   },
 
   async create(data: CreateTournamentData): Promise<{ tournament: Tournament }> {
-    const res = await fetch('/api/tournaments', {
+    const res = await apiFetch('/api/tournaments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -198,7 +201,7 @@ export const tournamentsApi = {
   },
 
   async update(id: string, data: Partial<CreateTournamentData>): Promise<{ tournament: Tournament }> {
-    const res = await fetch(`/api/tournaments/${id}`, {
+    const res = await apiFetch(`/api/tournaments/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -211,7 +214,7 @@ export const tournamentsApi = {
   },
 
   async delete(id: string): Promise<void> {
-    const res = await fetch(`/api/tournaments/${id}`, {
+    const res = await apiFetch(`/api/tournaments/${id}`, {
       method: 'DELETE',
     });
     if (!res.ok) {
@@ -221,7 +224,7 @@ export const tournamentsApi = {
   },
 
   async register(tournamentId: string, playerId: string): Promise<void> {
-    const res = await fetch(`/api/tournaments/${tournamentId}/register`, {
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId }),
@@ -240,17 +243,19 @@ export interface Team {
   captainId: string;
   name: string;
   nameConfirmed?: boolean;
+  whatsappGroupName?: string | null;
+  whatsappGroupLink?: string | null;
 }
 
 export const teamsApi = {
   async getForTournament(tournamentId: string): Promise<{ teams: Team[] }> {
-    const res = await fetch(`/api/tournaments/${tournamentId}/teams`);
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/teams`);
     if (!res.ok) throw new Error('Failed to fetch teams');
     return res.json();
   },
 
   async create(data: { tournamentId: string; captainId: string; name: string }): Promise<{ team: Team }> {
-    const res = await fetch('/api/teams', {
+    const res = await apiFetch('/api/teams', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -263,22 +268,25 @@ export const teamsApi = {
   },
 
   async delete(id: string): Promise<void> {
-    const res = await fetch(`/api/teams/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/teams/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to delete team');
   },
 
   async getByCaptain(captainId: string, tournamentId?: string): Promise<{ team: Team; players: Player[] }> {
     const params = tournamentId ? `?tournamentId=${encodeURIComponent(tournamentId)}` : "";
-    const res = await fetch(`/api/teams/captain/${captainId}${params}`);
+    const res = await apiFetch(`/api/teams/captain/${captainId}${params}`);
     if (!res.ok) throw new Error('No team found');
     return res.json();
   },
 
-  async updateName(teamId: string, name: string): Promise<{ team: Team; groupsGenerated?: boolean }> {
-    const res = await fetch(`/api/teams/${teamId}/name`, {
+  async updateName(
+    teamId: string,
+    data: { name: string; whatsappGroupName?: string; whatsappGroupLink?: string }
+  ): Promise<{ team: Team; groupsGenerated?: boolean; allReady?: boolean; tournamentStatus?: string }> {
+    const res = await apiFetch(`/api/teams/${teamId}/name`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(data),
     });
     if (!res.ok) {
       const error = await res.json();
@@ -319,8 +327,11 @@ export interface DraftStateResponse {
 }
 
 export const draftApi = {
-  async start(tournamentId: string, maxRounds: number = 5): Promise<{ draftState: DraftState; teams: Team[] }> {
-    const res = await fetch(`/api/draft/start/${tournamentId}`, {
+  async start(
+    tournamentId: string,
+    maxRounds: number = 0
+  ): Promise<{ draftState: DraftState | null; teams: Team[]; message?: string }> {
+    const res = await apiFetch(`/api/draft/start/${tournamentId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ maxRounds }),
@@ -333,7 +344,7 @@ export const draftApi = {
   },
 
   async getState(tournamentId: string): Promise<DraftStateResponse> {
-    const res = await fetch(`/api/draft/state/${tournamentId}`);
+    const res = await apiFetch(`/api/draft/state/${tournamentId}`);
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.error || 'Failed to get draft state');
@@ -342,7 +353,7 @@ export const draftApi = {
   },
 
   async draftPlayer(teamId: string, playerId: string): Promise<{ draftComplete?: boolean; message?: string }> {
-    const res = await fetch('/api/draft', {
+    const res = await apiFetch('/api/draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ teamId, playerId }),
@@ -355,7 +366,7 @@ export const draftApi = {
   },
 
   async end(tournamentId: string): Promise<void> {
-    const res = await fetch(`/api/draft/end/${tournamentId}`, {
+    const res = await apiFetch(`/api/draft/end/${tournamentId}`, {
       method: 'POST',
     });
     if (!res.ok) {
@@ -432,19 +443,19 @@ export interface PlayerSkillSnapshot {
 // Extended Tournaments API with new endpoints
 export const registrationsApi = {
   async getForTournament(tournamentId: string): Promise<{ registrations: TournamentRegistration[] }> {
-    const res = await fetch(`/api/tournaments/${tournamentId}/registrations`);
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/registrations`);
     if (!res.ok) throw new Error('Failed to fetch registrations');
     return res.json();
   },
 
   async getCaptains(tournamentId: string): Promise<{ captains: TournamentRegistration[] }> {
-    const res = await fetch(`/api/tournaments/${tournamentId}/captains`);
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/captains`);
     if (!res.ok) throw new Error('Failed to fetch captains');
     return res.json();
   },
 
   async setCaptain(tournamentId: string, playerId: string, isCaptain: boolean, teamName?: string): Promise<{ registration: TournamentRegistration }> {
-    const res = await fetch(`/api/tournaments/${tournamentId}/captains/${playerId}`, {
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/captains/${playerId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isCaptain, teamName }),
@@ -460,13 +471,13 @@ export const registrationsApi = {
 // Groups API
 export const groupsApi = {
   async getForTournament(tournamentId: string): Promise<{ groups: TournamentGroup[] }> {
-    const res = await fetch(`/api/tournaments/${tournamentId}/groups`);
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/groups`);
     if (!res.ok) throw new Error('Failed to fetch groups');
     return res.json();
   },
 
   async generate(tournamentId: string): Promise<{ groups: TournamentGroup[] }> {
-    const res = await fetch(`/api/tournaments/${tournamentId}/groups/generate`, {
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/groups/generate`, {
       method: 'POST',
     });
     if (!res.ok) {
@@ -480,13 +491,13 @@ export const groupsApi = {
 // Matches API
 export const matchesApi = {
   async getForTournament(tournamentId: string): Promise<{ matches: Match[] }> {
-    const res = await fetch(`/api/tournaments/${tournamentId}/matches`);
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/matches`);
     if (!res.ok) throw new Error('Failed to fetch matches');
     return res.json();
   },
 
   async start(matchId: string, durationMinutes: number): Promise<{ match: Match }> {
-    const res = await fetch(`/api/matches/${matchId}/start`, {
+    const res = await apiFetch(`/api/matches/${matchId}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ durationMinutes }),
@@ -499,7 +510,7 @@ export const matchesApi = {
   },
 
   async updateScore(matchId: string, homeScore: number, awayScore: number): Promise<{ match: Match }> {
-    const res = await fetch(`/api/matches/${matchId}/score`, {
+    const res = await apiFetch(`/api/matches/${matchId}/score`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ homeScore, awayScore }),
@@ -512,7 +523,7 @@ export const matchesApi = {
   },
 
   async updateResult(matchId: string, homeScore: number, awayScore: number): Promise<{ match: Match }> {
-    const res = await fetch(`/api/matches/${matchId}/result`, {
+    const res = await apiFetch(`/api/matches/${matchId}/result`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ homeScore, awayScore }),
@@ -544,7 +555,7 @@ export const adminApi = {
     if (filters?.role) params.append('role', filters.role);
     if (filters?.tournamentId) params.append('tournamentId', filters.tournamentId);
     
-    const res = await fetch(`/api/admin/player-history?${params}`);
+    const res = await apiFetch(`/api/admin/player-history?${params}`);
     if (!res.ok) throw new Error('Failed to fetch player history');
     return res.json();
   },
@@ -553,7 +564,7 @@ export const adminApi = {
 // Player History API (for individual players)
 export const playerHistoryApi = {
   async getSnapshots(playerId: string): Promise<{ snapshots: PlayerSkillSnapshot[] }> {
-    const res = await fetch(`/api/players/${playerId}/history`);
+    const res = await apiFetch(`/api/players/${playerId}/history`);
     if (!res.ok) throw new Error('Failed to fetch player history');
     return res.json();
   },

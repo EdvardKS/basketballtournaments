@@ -40,7 +40,7 @@ export const tournaments = pgTable("tournaments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   date: text("date").notNull(),
-  status: text("status").notNull().default('open'), // 'open' | 'draft' | 'active' | 'completed'
+  status: text("status").notNull().default('open'), // 'open' | 'draft' | 'setup' | 'scheduled' | 'active' | 'completed'
   location: text("location").notNull(),
   description: text("description").notNull(),
   rules: text("rules"),
@@ -83,6 +83,8 @@ export const teams = pgTable("teams", {
   captainId: varchar("captain_id").notNull().references(() => players.id),
   name: text("name").notNull(),
   nameConfirmed: boolean("name_confirmed").notNull().default(false),
+  whatsappGroupName: text("whatsapp_group_name"),
+  whatsappGroupLink: text("whatsapp_group_link"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

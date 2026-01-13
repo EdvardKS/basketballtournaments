@@ -42,6 +42,7 @@ export function PlayerCard({
   showSensitive = false,
 }: PlayerCardProps) {
   const [imgError, setImgError] = useState(false);
+  const isClickable = Boolean(onClick);
 
   const sizeClasses = {
     sm: "w-44 h-72",
@@ -61,7 +62,7 @@ export function PlayerCard({
     <motion.div
       whileHover={{ scale: 1.03, y: -5 }}
       whileTap={{ scale: 0.98 }}
-      className={cn("relative group cursor-pointer", sizeClasses[size], className)}
+      className={cn("relative group", isClickable ? "cursor-pointer" : "cursor-default", sizeClasses[size], className)}
       onClick={onClick}
       data-testid={`card-player-${player.id}`}
     >
