@@ -1,12 +1,22 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertPlayerSchema, insertTournamentSchema, type Player } from "@shared/schema";
+import { insertPlayerSchema, insertTournamentSchema, type Player, type Team } from "@shared/schema";
 import { z } from "zod";
 
 const setCaptainSchema = z.object({
   isCaptain: z.boolean(),
   teamName: z.string().min(1).max(50).optional(),
+});
+const updateTeamNameSchema = z.object({
+  name: z.string().min(1).max(50),
+});
+const startMatchSchema = z.object({
+  durationMinutes: z.coerce.number().int().min(1).max(240),
+});
+const updateScoreSchema = z.object({
+  homeScore: z.coerce.number().int().min(0),
+  awayScore: z.coerce.number().int().min(0),
 });
 
 declare module 'express-session' {
@@ -19,6 +29,359 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  const ensureTournamentSnapshots = async (tournamentId: string) => {
+    const existing = await storage.getSkillSnapshotsForTournament(tournamentId);
+    if (existing.length > 0) return;
+
+    const players = await storage.getPlayersForTournament(tournamentId);
+    if (players.length === 0) return;
+
+    await Promise.all(players.map((player) => (
+      storage.createSkillSnapshot({
+        playerId: player.id,
+        tournamentId,
+        pace: player.pace,
+        shooting: player.shooting,
+        passing: player.passing,
+        dribbling: player.dribbling,
+        defense: player.defense,
+        physical: player.physical,
+        overall: player.overall,
+      })
+    )));
+  };
+
+  type GroupMemberSortable = {
+    teamId: string;
+    points: number;
+    pointsFor: number;
+    pointsAgainst: number;
+  };
+
+  const getSortedMembers = <T extends GroupMemberSortable>(members: T[]) => {
+    return [...members].sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      const diffA = a.pointsFor - a.pointsAgainst;
+      const diffB = b.pointsFor - b.pointsAgainst;
+      if (diffB !== diffA) return diffB - diffA;
+      return b.pointsFor - a.pointsFor;
+    });
+  };
+
+  const recalculateGroupStandings = async (groupId: string) => {
+    const members = await storage.getGroupMembers(groupId);
+    if (members.length === 0) return;
+
+    const statsByTeam = new Map<string, {
+      points: number;
+      gamesPlayed: number;
+      gamesWon: number;
+      gamesLost: number;
+      pointsFor: number;
+      pointsAgainst: number;
+    }>();
+
+    members.forEach((member) => {
+      statsByTeam.set(member.teamId, {
+        points: 0,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+      });
+    });
+
+    const matches = await storage.getMatchesForGroup(groupId);
+    matches.filter(match => match.status === 'completed').forEach((match) => {
+      if (!match.homeTeamId || !match.awayTeamId) return;
+      const home = statsByTeam.get(match.homeTeamId);
+      const away = statsByTeam.get(match.awayTeamId);
+      if (!home || !away) return;
+
+      const homeScore = match.homeScore ?? 0;
+      const awayScore = match.awayScore ?? 0;
+
+      home.gamesPlayed += 1;
+      away.gamesPlayed += 1;
+      home.pointsFor += homeScore;
+      home.pointsAgainst += awayScore;
+      away.pointsFor += awayScore;
+      away.pointsAgainst += homeScore;
+
+      if (homeScore > awayScore) {
+        home.gamesWon += 1;
+        home.points += 2;
+        away.gamesLost += 1;
+      } else if (awayScore > homeScore) {
+        away.gamesWon += 1;
+        away.points += 2;
+        home.gamesLost += 1;
+      } else {
+        home.points += 1;
+        away.points += 1;
+      }
+    });
+
+    await Promise.all(members.map((member) => {
+      const stats = statsByTeam.get(member.teamId);
+      if (!stats) return Promise.resolve(undefined);
+      return storage.updateGroupMemberStats(member.id, stats);
+    }));
+  };
+
+  const generateGroupsForTournament = async (tournamentId: string) => {
+    const existingGroups = await storage.getGroupsForTournament(tournamentId);
+    if (existingGroups.length > 0) {
+      return existingGroups;
+    }
+
+    const teams = await storage.getTeamsForTournament(tournamentId);
+    if (teams.length < 2) {
+      throw new Error("No hay suficientes equipos para crear grupos");
+    }
+
+    const teamCount = teams.length;
+    const groupCount = teamCount <= 4 ? 1 : teamCount <= 8 ? 2 : 4;
+    const groupNames = ["Grupo A", "Grupo B", "Grupo C", "Grupo D"];
+    const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
+    const buckets: Team[][] = Array.from({ length: groupCount }, () => []);
+
+    shuffledTeams.forEach((team, index) => {
+      buckets[index % groupCount].push(team);
+    });
+
+    const createdGroups = [];
+    for (let i = 0; i < groupCount; i += 1) {
+      const group = await storage.createGroup({
+        tournamentId,
+        name: groupNames[i],
+      });
+      createdGroups.push(group);
+
+      for (const team of buckets[i]) {
+        await storage.addTeamToGroup({
+          groupId: group.id,
+          teamId: team.id,
+          points: 0,
+          gamesPlayed: 0,
+          gamesWon: 0,
+          gamesLost: 0,
+          pointsFor: 0,
+          pointsAgainst: 0,
+        });
+      }
+
+      const groupTeamIds = buckets[i].map(team => team.id);
+      for (let homeIndex = 0; homeIndex < groupTeamIds.length; homeIndex += 1) {
+        for (let awayIndex = homeIndex + 1; awayIndex < groupTeamIds.length; awayIndex += 1) {
+          await storage.createMatch({
+            tournamentId,
+            groupId: group.id,
+            stage: 'group',
+            roundNumber: null,
+            homeTeamId: groupTeamIds[homeIndex],
+            awayTeamId: groupTeamIds[awayIndex],
+            status: 'pending',
+          });
+        }
+      }
+    }
+
+    return createdGroups;
+  };
+
+  const maybeGenerateKnockout = async (tournamentId: string) => {
+    const groups = await storage.getGroupsForTournament(tournamentId);
+    if (groups.length === 0) return;
+
+    const matches = await storage.getMatchesForTournament(tournamentId);
+    const groupMatches = matches.filter(match => match.stage === 'group');
+    if (groupMatches.length === 0) return;
+
+    if (!groupMatches.every(match => match.status === 'completed')) return;
+    if (matches.some(match => match.stage !== 'group')) return;
+
+    await Promise.all(groups.map(group => recalculateGroupStandings(group.id)));
+
+    const groupsWithMembers = await Promise.all(groups.map(async (group) => ({
+      group,
+      members: await storage.getGroupMembers(group.id),
+    })));
+
+    groupsWithMembers.sort((a, b) => a.group.name.localeCompare(b.group.name));
+    const qualifiers = groupsWithMembers.map((entry) => {
+      const sorted = getSortedMembers(entry.members);
+      return {
+        group: entry.group,
+        first: sorted[0],
+        second: sorted[1],
+      };
+    });
+
+    if (qualifiers.length === 1) {
+      const first = qualifiers[0].first?.teamId;
+      const second = qualifiers[0].second?.teamId;
+      if (first && second) {
+        await storage.createMatch({
+          tournamentId,
+          groupId: null,
+          stage: 'final',
+          roundNumber: 1,
+          homeTeamId: first,
+          awayTeamId: second,
+          status: 'pending',
+        });
+      }
+      return;
+    }
+
+    if (qualifiers.length === 2) {
+      const [groupA, groupB] = qualifiers;
+      if (!groupA.first || !groupA.second || !groupB.first || !groupB.second) return;
+      await storage.createMatch({
+        tournamentId,
+        groupId: null,
+        stage: 'semifinal',
+        roundNumber: 1,
+        homeTeamId: groupA.first.teamId,
+        awayTeamId: groupB.second.teamId,
+        status: 'pending',
+      });
+      await storage.createMatch({
+        tournamentId,
+        groupId: null,
+        stage: 'semifinal',
+        roundNumber: 2,
+        homeTeamId: groupB.first.teamId,
+        awayTeamId: groupA.second.teamId,
+        status: 'pending',
+      });
+      return;
+    }
+
+    if (qualifiers.length >= 4) {
+      const [groupA, groupB, groupC, groupD] = qualifiers;
+      if (!groupA.first || !groupA.second || !groupB.first || !groupB.second ||
+          !groupC.first || !groupC.second || !groupD.first || !groupD.second) {
+        return;
+      }
+
+      await storage.createMatch({
+        tournamentId,
+        groupId: null,
+        stage: 'quarterfinal',
+        roundNumber: 1,
+        homeTeamId: groupA.first.teamId,
+        awayTeamId: groupB.second.teamId,
+        status: 'pending',
+      });
+      await storage.createMatch({
+        tournamentId,
+        groupId: null,
+        stage: 'quarterfinal',
+        roundNumber: 2,
+        homeTeamId: groupB.first.teamId,
+        awayTeamId: groupA.second.teamId,
+        status: 'pending',
+      });
+      await storage.createMatch({
+        tournamentId,
+        groupId: null,
+        stage: 'quarterfinal',
+        roundNumber: 3,
+        homeTeamId: groupC.first.teamId,
+        awayTeamId: groupD.second.teamId,
+        status: 'pending',
+      });
+      await storage.createMatch({
+        tournamentId,
+        groupId: null,
+        stage: 'quarterfinal',
+        roundNumber: 4,
+        homeTeamId: groupD.first.teamId,
+        awayTeamId: groupC.second.teamId,
+        status: 'pending',
+      });
+    }
+  };
+
+  const advanceKnockoutIfReady = async (tournamentId: string) => {
+    const matches = await storage.getMatchesForTournament(tournamentId);
+    const quarterfinals = matches.filter(match => match.stage === 'quarterfinal');
+    const semifinals = matches.filter(match => match.stage === 'semifinal');
+    const finals = matches.filter(match => match.stage === 'final');
+    const thirdPlace = matches.filter(match => match.stage === 'third_place');
+
+    const byRound = (list: typeof matches) => [...list].sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0));
+
+    if (quarterfinals.length > 0 && quarterfinals.every(match => match.status === 'completed' && match.winnerId)) {
+      if (semifinals.length === 0) {
+        const ordered = byRound(quarterfinals);
+        const winners = ordered.map(match => match.winnerId!).filter(Boolean);
+        if (winners.length >= 4) {
+          await storage.createMatch({
+            tournamentId,
+            groupId: null,
+            stage: 'semifinal',
+            roundNumber: 1,
+            homeTeamId: winners[0],
+            awayTeamId: winners[1],
+            status: 'pending',
+          });
+          await storage.createMatch({
+            tournamentId,
+            groupId: null,
+            stage: 'semifinal',
+            roundNumber: 2,
+            homeTeamId: winners[2],
+            awayTeamId: winners[3],
+            status: 'pending',
+          });
+        }
+      }
+    }
+
+    if (semifinals.length > 0 && semifinals.every(match => match.status === 'completed' && match.winnerId)) {
+      if (finals.length === 0) {
+        const ordered = byRound(semifinals);
+        const semi1Winner = ordered[0].winnerId!;
+        const semi2Winner = ordered[1]?.winnerId!;
+        const semi1Loser = ordered[0].homeTeamId === semi1Winner ? ordered[0].awayTeamId : ordered[0].homeTeamId;
+        const semi2Loser = ordered[1]?.homeTeamId === semi2Winner ? ordered[1].awayTeamId : ordered[1].homeTeamId;
+
+        if (semi1Winner && semi2Winner) {
+          await storage.createMatch({
+            tournamentId,
+            groupId: null,
+            stage: 'final',
+            roundNumber: 1,
+            homeTeamId: semi1Winner,
+            awayTeamId: semi2Winner,
+            status: 'pending',
+          });
+        }
+
+        if (!thirdPlace.length && semi1Loser && semi2Loser) {
+          await storage.createMatch({
+            tournamentId,
+            groupId: null,
+            stage: 'third_place',
+            roundNumber: 1,
+            homeTeamId: semi1Loser,
+            awayTeamId: semi2Loser,
+            status: 'pending',
+          });
+        }
+      }
+    }
+
+    const completedFinal = finals.find(match => match.status === 'completed' && match.winnerId);
+    if (completedFinal?.winnerId) {
+      await storage.updateTournament(tournamentId, { winnerId: completedFinal.winnerId });
+    }
+  };
   
   // ============ AUTH ROUTES ============
   
@@ -28,7 +391,7 @@ export async function registerRoutes(
       const { identifier, password } = req.body;
 
       if (!identifier || !password) {
-        return res.status(400).json({ error: "Se requiere identificador y contraseña" });
+        return res.status(400).json({ error: "Se requiere identificador y contrasena" });
       }
 
       // Check if it's admin login
@@ -41,22 +404,21 @@ export async function registerRoutes(
       }
 
       // Check captain/user login
-      const player = await storage.getPlayerByMobile(identifier);
+      const player = await storage.getPlayerByIdentifier(identifier);
       if (!player) {
-        return res.status(401).json({ error: "Credenciales inválidas" });
+        return res.status(401).json({ error: "Credenciales invalidas" });
       }
 
-      // If captain, check password
-      if (player.role === "captain" || player.role === "admin") {
-        if (player.password === password) {
-          req.session.playerId = player.id;
-          return res.json({ player });
-        } else {
-          return res.status(401).json({ error: "Credenciales inválidas" });
-        }
+      if (!player.password) {
+        return res.status(401).json({ error: "Credenciales invalidas" });
       }
 
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      if (player.password === password) {
+        req.session.playerId = player.id;
+        return res.json({ player });
+      }
+
+      return res.status(401).json({ error: "Credenciales invalidas" });
     } catch (error) {
       console.error("Login error:", error);
       return res.status(500).json({ error: "Error en el servidor" });
@@ -94,12 +456,13 @@ export async function registerRoutes(
     try {
       const players = await storage.getAllPlayers();
       const isAuthenticated = !!req.session.playerId;
-      
-      // Don't send passwords to client, hide mobile and avatar for non-authenticated users
-      const safePlayers = players.map(p => {
+
+      const visiblePlayers = isAuthenticated ? players : players.filter(p => p.isPublic);
+      // Don't send passwords to client, hide mobile/email for non-authenticated users
+      const safePlayers = visiblePlayers.map(p => {
         const { password, ...safe } = p;
         if (!isAuthenticated) {
-          return { ...safe, mobile: "***", avatar: undefined };
+          return { ...safe, mobile: "***", email: undefined };
         }
         return safe;
       });
@@ -110,11 +473,73 @@ export async function registerRoutes(
     }
   });
 
+  // Check username availability
+  app.get("/api/players/availability", async (req, res) => {
+    try {
+      const username = String(req.query.username || "").trim();
+      if (!username) {
+        return res.status(400).json({ error: "Usuario requerido" });
+      }
+
+      const existing = await storage.getPlayerByUsername(username);
+      res.json({ available: !existing });
+    } catch (error) {
+      console.error("Username availability error:", error);
+      res.status(500).json({ error: "Error al comprobar usuario" });
+    }
+  });
+
   // Register player
   app.post("/api/players/register", async (req, res) => {
     try {
       if (!req.body.avatar) {
         return res.status(400).json({ error: "La foto es obligatoria" });
+      }
+
+      const { username, email, password } = req.body;
+      if (!username || !email || !password) {
+        return res.status(400).json({ error: "Usuario, email y contrasena son requeridos" });
+      }
+
+      const trimmedUsername = String(username).trim();
+      const trimmedEmail = String(email).trim();
+      if (!trimmedUsername || !trimmedEmail) {
+        return res.status(400).json({ error: "Usuario y email son requeridos" });
+      }
+
+      const existingUsername = await storage.getPlayerByUsername(trimmedUsername);
+      if (existingUsername) {
+        return res.status(409).json({ error: "El usuario ya esta en uso" });
+      }
+
+      const existingEmail = await storage.getPlayerByEmail(trimmedEmail);
+      if (existingEmail) {
+        return res.status(409).json({ error: "El email ya esta en uso" });
+      }
+
+      req.body.username = trimmedUsername;
+      req.body.email = trimmedEmail;
+      req.body.password = String(password);
+      req.body.role = 'player';
+      if (req.body.isPublic === undefined) {
+        req.body.isPublic = false;
+      }
+
+      const tournamentId = req.body.tournamentId;
+      if (tournamentId) {
+        const tournament = await storage.getTournament(tournamentId);
+        if (!tournament) {
+          return res.status(404).json({ error: "Torneo no encontrado" });
+        }
+        if (tournament.status !== 'open') {
+          if (!req.session.playerId) {
+            return res.status(401).json({ error: "No autenticado" });
+          }
+          const currentPlayer = await storage.getPlayer(req.session.playerId);
+          if (!currentPlayer || currentPlayer.role !== 'admin') {
+            return res.status(403).json({ error: "Solo administradores pueden inscribir jugadores en draft o torneo activo" });
+          }
+        }
       }
       
       const validatedData = insertPlayerSchema.parse(req.body);
@@ -125,12 +550,16 @@ export async function registerRoutes(
         await storage.registerPlayerToTournament(newPlayer.id, req.body.tournamentId);
       }
 
-      const { password, ...safePlayer } = newPlayer;
+      if (!req.session.playerId) {
+        req.session.playerId = newPlayer.id;
+      }
+
+      const { password: _, ...safePlayer } = newPlayer;
       res.json({ player: safePlayer });
     } catch (error: any) {
       console.error("Register error:", error);
       if (error.code === '23505') { // Unique constraint violation
-        return res.status(409).json({ error: "Este móvil ya está registrado" });
+        return res.status(409).json({ error: "Este movil ya esta registrado" });
       }
       res.status(400).json({ error: "Error al registrar jugador" });
     }
@@ -200,10 +629,12 @@ export async function registerRoutes(
 
       const registeredPlayers = await storage.getPlayersForTournament(req.params.id);
       const isAuthenticated = !!req.session.playerId;
-      const safePlayers = registeredPlayers.map(p => {
+
+      const visiblePlayers = isAuthenticated ? registeredPlayers : registeredPlayers.filter(p => p.isPublic);
+      const safePlayers = visiblePlayers.map(p => {
         const { password, ...safe } = p;
         if (!isAuthenticated) {
-          return { ...safe, mobile: "***", avatar: undefined };
+          return { ...safe, mobile: "***", email: undefined };
         }
         return safe;
       });
@@ -252,6 +683,9 @@ export async function registerRoutes(
       if (!tournament) {
         return res.status(404).json({ error: "Torneo no encontrado" });
       }
+      if (req.body.status === 'completed') {
+        await ensureTournamentSnapshots(tournament.id);
+      }
       res.json({ tournament });
     } catch (error) {
       console.error("Update tournament error:", error);
@@ -281,10 +715,33 @@ export async function registerRoutes(
 
   // Register player to tournament
   app.post("/api/tournaments/:id/register", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
     try {
       const { playerId } = req.body;
       if (!playerId) {
         return res.status(400).json({ error: "Se requiere ID de jugador" });
+      }
+
+      const tournament = await storage.getTournament(req.params.id);
+      if (!tournament) {
+        return res.status(404).json({ error: "Torneo no encontrado" });
+      }
+
+      const currentPlayer = await storage.getPlayer(req.session.playerId);
+      if (!currentPlayer) {
+        return res.status(401).json({ error: "No autenticado" });
+      }
+
+      const isAdmin = currentPlayer.role === 'admin';
+      if (!isAdmin && req.session.playerId !== playerId) {
+        return res.status(403).json({ error: "No autorizado" });
+      }
+
+      if (tournament.status !== 'open' && !isAdmin) {
+        return res.status(403).json({ error: "Inscripciones cerradas" });
       }
 
       await storage.registerPlayerToTournament(playerId, req.params.id);
@@ -292,7 +749,7 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Register to tournament error:", error);
       if (error.code === '23505') {
-        return res.status(409).json({ error: "Ya estás inscrito en este torneo" });
+        return res.status(409).json({ error: "Ya estas inscrito en este torneo" });
       }
       res.status(500).json({ error: "Error al inscribirse al torneo" });
     }
@@ -356,10 +813,74 @@ export async function registerRoutes(
     }
   });
 
+
+  // Update team name (Captain/Admin)
+  app.patch("/api/teams/:id/name", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const parseResult = updateTeamNameSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Nombre invalido" });
+    }
+
+    const team = await storage.getTeam(req.params.id);
+    if (!team) {
+      return res.status(404).json({ error: "Equipo no encontrado" });
+    }
+
+    const tournament = await storage.getTournament(team.tournamentId);
+    if (!tournament) {
+      return res.status(404).json({ error: "Torneo no encontrado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const isAdmin = currentPlayer.role === 'admin';
+    if (!isAdmin && team.captainId !== currentPlayer.id) {
+      return res.status(403).json({ error: "No autorizado" });
+    }
+
+    if (tournament.status === 'draft') {
+      const draftState = await storage.getDraftState(tournament.id);
+      if (draftState && draftState.isActive === 'true') {
+        return res.status(400).json({ error: "El draft sigue activo" });
+      }
+    } else if (tournament.status !== 'active') {
+      return res.status(400).json({ error: "No se puede confirmar el nombre en este estado" });
+    }
+
+    const normalized = parseResult.data.name.trim();
+    const teams = await storage.getTeamsForTournament(team.tournamentId);
+    const duplicate = teams.find(t => t.id !== team.id && t.name.toLowerCase() === normalized.toLowerCase());
+    if (duplicate) {
+      return res.status(409).json({ error: "Ya existe un equipo con ese nombre" });
+    }
+
+    const updated = await storage.updateTeamName(team.id, normalized, true);
+
+    let groupsGenerated = false;
+    const refreshedTeams = await storage.getTeamsForTournament(team.tournamentId);
+    const allConfirmed = refreshedTeams.length > 0 && refreshedTeams.every(t => t.nameConfirmed);
+    if (allConfirmed) {
+      await generateGroupsForTournament(team.tournamentId);
+      groupsGenerated = true;
+    }
+
+    res.json({ team: updated, groupsGenerated });
+  });
+
   // Get team by captain
   app.get("/api/teams/captain/:captainId", async (req, res) => {
     try {
-      const team = await storage.getTeamByCaptain(req.params.captainId);
+      const tournamentId = req.query.tournamentId ? String(req.query.tournamentId) : undefined;
+      const team = tournamentId
+        ? await storage.getTeamByCaptainForTournament(req.params.captainId, tournamentId)
+        : await storage.getTeamByCaptain(req.params.captainId);
       if (!team) {
         return res.status(404).json({ error: "Equipo no encontrado" });
       }
@@ -372,6 +893,41 @@ export async function registerRoutes(
   });
 
   // ============ PLAYER MANAGEMENT ROUTES (Admin) ============
+
+  // Update player public profile (Self/Admin)
+  app.patch("/api/players/:id/public", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const isAdmin = currentPlayer.role === 'admin';
+    if (!isAdmin && req.session.playerId !== req.params.id) {
+      return res.status(403).json({ error: "No autorizado" });
+    }
+
+    const { isPublic } = req.body;
+    if (typeof isPublic !== 'boolean') {
+      return res.status(400).json({ error: "Valor invalido" });
+    }
+
+    try {
+      const player = await storage.updatePlayer(req.params.id, { isPublic });
+      if (!player) {
+        return res.status(404).json({ error: "Jugador no encontrado" });
+      }
+      const { password, ...safePlayer } = player;
+      res.json({ player: safePlayer });
+    } catch (error) {
+      console.error("Update public profile error:", error);
+      res.status(500).json({ error: "Error al actualizar perfil" });
+    }
+  });
+
 
   // Update player (Admin only)
   app.patch("/api/players/:id", async (req, res) => {
@@ -433,39 +989,65 @@ export async function registerRoutes(
     try {
       const tournamentId = req.params.tournamentId;
       const { maxRounds } = req.body;
-      
-      // Check tournament exists and is in draft status
+
       const tournament = await storage.getTournament(tournamentId);
       if (!tournament) {
         return res.status(404).json({ error: "Torneo no encontrado" });
       }
-      
+
       if (tournament.status !== 'draft') {
         return res.status(400).json({ error: "El torneo debe estar en estado 'draft' para iniciar" });
       }
-      
-      // Get teams for this tournament
-      const teams = await storage.getTeamsForTournament(tournamentId);
-      if (teams.length < 2) {
-        return res.status(400).json({ error: "Se necesitan al menos 2 equipos para iniciar el draft" });
+
+      const captains = await storage.getCaptainsForTournament(tournamentId);
+      if (captains.length < 2) {
+        return res.status(400).json({ error: "Se necesitan al menos 2 capitanes para iniciar el draft" });
       }
-      
-      // Check if draft already exists
+
+      const teams = [];
+      for (const captain of captains) {
+        let team = await storage.getTeamByCaptainForTournament(captain.playerId, tournamentId);
+        if (!team) {
+          const teamName = captain.teamName || `Equipo de ${captain.player.name}`;
+          team = await storage.createTeam({
+            tournamentId,
+            captainId: captain.playerId,
+            name: teamName,
+          });
+        }
+
+        const teamPlayers = await storage.getPlayersForTeam(team.id);
+        if (!teamPlayers.some((player) => player.id === team.captainId)) {
+          await storage.draftPlayer(team.id, team.captainId);
+        }
+
+        teams.push(team);
+      }
+
+      const registrations = await storage.getRegistrationsForTournament(tournamentId);
+      const captainIds = new Set(captains.map((captain) => captain.playerId));
+      const draftableCount = registrations.length - captainIds.size;
+      if (draftableCount <= 0) {
+        await storage.updateTournament(tournamentId, { status: 'active' });
+        return res.json({ draftState: null, teams, message: "No hay jugadores para draftear. Torneo activo." });
+      }
+
+      const computedRounds = Math.ceil(draftableCount / teams.length) || 1;
+      const finalMaxRounds = Number(maxRounds) > 0 ? Number(maxRounds) : computedRounds;
+
       const existingDraft = await storage.getDraftState(tournamentId);
       if (existingDraft && existingDraft.isActive === 'true') {
         return res.status(400).json({ error: "Ya hay un draft activo para este torneo" });
       }
-      
-      // Shuffle team order randomly
+
       const shuffledTeamIds = teams.map(t => t.id).sort(() => Math.random() - 0.5);
-      
-      // Create or update draft state
+
       if (existingDraft) {
         await storage.updateDraftState(tournamentId, {
           teamOrder: JSON.stringify(shuffledTeamIds),
           currentTeamIndex: 0,
           currentRound: 1,
-          maxRounds: maxRounds || 5,
+          maxRounds: finalMaxRounds,
           isActive: 'true',
         });
       } else {
@@ -474,11 +1056,11 @@ export async function registerRoutes(
           teamOrder: JSON.stringify(shuffledTeamIds),
           currentTeamIndex: 0,
           currentRound: 1,
-          maxRounds: maxRounds || 5,
+          maxRounds: finalMaxRounds,
           isActive: 'true',
         });
       }
-      
+
       const draftState = await storage.getDraftState(tournamentId);
       res.json({ draftState, teams });
     } catch (error) {
@@ -536,9 +1118,11 @@ export async function registerRoutes(
     }
 
     const currentPlayer = await storage.getPlayer(req.session.playerId);
-    if (!currentPlayer || (currentPlayer.role !== 'captain' && currentPlayer.role !== 'admin')) {
-      return res.status(403).json({ error: "Solo capitanes pueden draftear jugadores" });
+    if (!currentPlayer) {
+      return res.status(401).json({ error: "No autenticado" });
     }
+
+    const isAdmin = currentPlayer.role === 'admin';
 
     try {
       const { teamId, playerId } = req.body;
@@ -546,58 +1130,53 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Se requiere teamId y playerId" });
       }
 
-      // Get the team
       const team = await storage.getTeam(teamId);
       if (!team) {
         return res.status(404).json({ error: "Equipo no encontrado" });
       }
 
-      // Get draft state
       const draftState = await storage.getDraftState(team.tournamentId);
       if (!draftState || draftState.isActive !== 'true') {
         return res.status(400).json({ error: "No hay draft activo para este torneo" });
       }
 
-      // Validate it's this team's turn (unless admin overrides)
-      const teamOrder = JSON.parse(draftState.teamOrder);
-      const currentTeamId = teamOrder[draftState.currentTeamIndex];
-      
-      if (currentPlayer.role !== 'admin') {
-        // Validate captain owns this team
+      if (!isAdmin) {
+        const registration = await storage.getTournamentRegistration(currentPlayer.id, team.tournamentId);
+        if (!registration || !registration.isCaptain) {
+          return res.status(403).json({ error: "Solo capitanes pueden draftear jugadores" });
+        }
+
         if (team.captainId !== currentPlayer.id) {
           return res.status(403).json({ error: "No puedes draftear para un equipo que no es tuyo" });
         }
-        
-        // Validate it's their turn
+
+        const teamOrder = JSON.parse(draftState.teamOrder);
+        const currentTeamId = teamOrder[draftState.currentTeamIndex];
         if (teamId !== currentTeamId) {
           const currentTeam = await storage.getTeam(currentTeamId);
           const captain = currentTeam ? await storage.getPlayer(currentTeam.captainId) : null;
-          return res.status(403).json({ 
-            error: `No es tu turno. Es el turno de ${captain?.name || 'otro capitán'}` 
-          });
+          return res.status(403).json({ error: `No es tu turno. Es el turno de ${captain?.name || 'otro capitan'}` });
         }
       }
 
-      // Check player is not already drafted
       const draftedIds = await storage.getDraftedPlayerIds(team.tournamentId);
       if (draftedIds.includes(playerId)) {
         return res.status(400).json({ error: "Este jugador ya ha sido drafteado" });
       }
 
-      // Check player is registered in the tournament
-      const registeredPlayers = await storage.getPlayersForTournament(team.tournamentId);
-      if (!registeredPlayers.some(p => p.id === playerId)) {
-        return res.status(400).json({ error: "Este jugador no está inscrito en el torneo" });
+      const registrations = await storage.getRegistrationsForTournament(team.tournamentId);
+      const targetRegistration = registrations.find(r => r.playerId === playerId);
+      if (!targetRegistration) {
+        return res.status(400).json({ error: "Este jugador no esta inscrito en el torneo" });
+      }
+      if (targetRegistration.isCaptain) {
+        return res.status(400).json({ error: "No se puede draftear un capitan" });
       }
 
-      // Draft the player
       const teamPlayer = await storage.draftPlayer(teamId, playerId);
-      
-      // Calculate pick order for history
+
       const history = await storage.getDraftHistory(team.tournamentId);
       const pickOrder = history.length + 1;
-      
-      // Add to draft history
       await storage.addDraftHistory({
         tournamentId: team.tournamentId,
         teamId,
@@ -606,26 +1185,31 @@ export async function registerRoutes(
         pickOrder,
       });
 
-      // Advance to next turn
+      const captainIds = new Set(registrations.filter(r => r.isCaptain).map(r => r.playerId));
+      const draftableCount = registrations.filter(r => !r.isCaptain).length;
+      const updatedDraftedIds = await storage.getDraftedPlayerIds(team.tournamentId);
+      const draftedCount = updatedDraftedIds.filter(id => !captainIds.has(id)).length;
+      if (draftedCount >= draftableCount) {
+        await storage.updateDraftState(team.tournamentId, { isActive: 'false' });
+        await storage.updateTournament(team.tournamentId, { status: 'active' });
+        return res.json({ teamPlayer, draftComplete: true, message: "Draft completado" });
+      }
+
       let newTeamIndex = draftState.currentTeamIndex + 1;
       let newRound = draftState.currentRound;
-      
+
+      const teamOrder = JSON.parse(draftState.teamOrder);
       if (newTeamIndex >= teamOrder.length) {
-        // End of round - next round starts
         newTeamIndex = 0;
         newRound = draftState.currentRound + 1;
-        
-        // Check if draft is complete
+
         if (newRound > draftState.maxRounds) {
           await storage.updateDraftState(team.tournamentId, { isActive: 'false' });
-          return res.json({ 
-            teamPlayer, 
-            draftComplete: true,
-            message: "¡Draft completado!" 
-          });
+          await storage.updateTournament(team.tournamentId, { status: 'active' });
+          return res.json({ teamPlayer, draftComplete: true, message: "Draft completado" });
         }
       }
-      
+
       await storage.updateDraftState(team.tournamentId, {
         currentTeamIndex: newTeamIndex,
         currentRound: newRound,
@@ -636,7 +1220,7 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Draft error:", error);
       if (error.code === '23505') {
-        return res.status(400).json({ error: "Este jugador ya está en un equipo" });
+        return res.status(400).json({ error: "Este jugador ya esta en un equipo" });
       }
       res.status(500).json({ error: "Error al draftear jugador" });
     }
@@ -673,13 +1257,17 @@ export async function registerRoutes(
     try {
       const registrations = await storage.getRegistrationsForTournament(req.params.id);
       const isAuthenticated = !!req.session.playerId;
-      
-      const safeRegistrations = registrations.map(r => {
+
+      const visibleRegistrations = isAuthenticated ? registrations : registrations.filter(r => r.player.isPublic);
+      const safeRegistrations = visibleRegistrations.map(r => {
         const { password, ...safePlayer } = r.player;
-        return {
-          ...r,
-          player: isAuthenticated ? safePlayer : { ...safePlayer, mobile: "***", avatar: undefined }
-        };
+        if (!isAuthenticated) {
+          return {
+            ...r,
+            player: { ...safePlayer, mobile: "***", email: undefined }
+          };
+        }
+        return { ...r, player: safePlayer };
       });
       
       res.json({ registrations: safeRegistrations });
@@ -694,13 +1282,17 @@ export async function registerRoutes(
     try {
       const captains = await storage.getCaptainsForTournament(req.params.id);
       const isAuthenticated = !!req.session.playerId;
-      
-      const safeCaptains = captains.map(c => {
+
+      const visibleCaptains = isAuthenticated ? captains : captains.filter(c => c.player.isPublic);
+      const safeCaptains = visibleCaptains.map(c => {
         const { password, ...safePlayer } = c.player;
-        return {
-          ...c,
-          player: isAuthenticated ? safePlayer : { ...safePlayer, mobile: "***", avatar: undefined }
-        };
+        if (!isAuthenticated) {
+          return {
+            ...c,
+            player: { ...safePlayer, mobile: "***", email: undefined }
+          };
+        }
+        return { ...c, player: safePlayer };
       });
       
       res.json({ captains: safeCaptains });
@@ -752,16 +1344,20 @@ export async function registerRoutes(
       const finalTeamName = isCaptain ? teamName : undefined;
       
       const updated = await storage.setTournamentCaptain(playerId, tournamentId, isCaptain, finalTeamName);
-      
-      // If setting as captain, also update player's global role to allow login
-      if (isCaptain) {
-        const player = await storage.getPlayer(playerId);
-        if (player && player.role === 'player') {
-          // Set a default password for captain login
-          await storage.promotePlayerToCaptain(playerId, teamName || 'captain123');
+
+      const player = await storage.getPlayer(playerId);
+      if (player && player.role !== 'admin') {
+        if (isCaptain) {
+          const nextPassword = player.password || player.mobile;
+          await storage.updatePlayer(playerId, { role: 'captain', password: nextPassword });
+        } else {
+          const stillCaptain = await storage.isPlayerCaptainInAnyTournament(playerId);
+          if (!stillCaptain) {
+            await storage.updatePlayer(playerId, { role: 'player' });
+          }
         }
       }
-      
+
       res.json({ registration: updated });
     } catch (error) {
       console.error("Set captain error:", error);
@@ -802,67 +1398,18 @@ export async function registerRoutes(
 
     try {
       const tournamentId = req.params.id;
-      const teams = await storage.getTeamsForTournament(tournamentId);
-      
-      if (teams.length < 4) {
-        return res.status(400).json({ error: "Se necesitan al menos 4 equipos para generar grupos" });
+      const existingGroups = await storage.getGroupsForTournament(tournamentId);
+      if (existingGroups.length > 0) {
+        return res.status(409).json({ error: "Los grupos ya fueron generados" });
       }
-      
-      // Shuffle teams for random group assignment
-      const shuffledTeams = [...teams].sort(() => Math.random() - 0.5);
-      
-      // Calculate number of groups (2 groups for up to 8 teams, more for larger tournaments)
-      const numGroups = Math.ceil(teams.length / 4);
-      const groupNames = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-      
-      const createdGroups = [];
-      
-      for (let i = 0; i < numGroups; i++) {
-        const group = await storage.createGroup({
-          tournamentId,
-          name: `Grupo ${groupNames[i]}`
-        });
-        
-        // Add teams to this group
-        const teamsPerGroup = Math.ceil(shuffledTeams.length / numGroups);
-        const startIdx = i * teamsPerGroup;
-        const endIdx = Math.min(startIdx + teamsPerGroup, shuffledTeams.length);
-        
-        const groupTeams = shuffledTeams.slice(startIdx, endIdx);
-        const members = [];
-        
-        for (const team of groupTeams) {
-          const member = await storage.addTeamToGroup({
-            groupId: group.id,
-            teamId: team.id,
-            points: 0,
-            gamesPlayed: 0,
-            gamesWon: 0,
-            gamesLost: 0,
-            pointsFor: 0,
-            pointsAgainst: 0
-          });
-          members.push({ ...member, team });
-        }
-        
-        // Generate group stage matches
-        for (let j = 0; j < groupTeams.length; j++) {
-          for (let k = j + 1; k < groupTeams.length; k++) {
-            await storage.createMatch({
-              tournamentId,
-              groupId: group.id,
-              stage: 'group',
-              homeTeamId: groupTeams[j].id,
-              awayTeamId: groupTeams[k].id,
-              status: 'pending'
-            });
-          }
-        }
-        
-        createdGroups.push({ ...group, members });
-      }
-      
-      res.json({ groups: createdGroups });
+
+      const createdGroups = await generateGroupsForTournament(tournamentId);
+      const groupsWithMembers = await Promise.all(createdGroups.map(async (group) => {
+        const members = await storage.getGroupMembers(group.id);
+        return { ...group, members };
+      }));
+
+      res.json({ groups: groupsWithMembers });
     } catch (error) {
       console.error("Generate groups error:", error);
       res.status(500).json({ error: "Error al generar grupos" });
@@ -880,6 +1427,78 @@ export async function registerRoutes(
     }
   });
 
+  // Start match (Admin only)
+  app.post("/api/matches/:id/start", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden iniciar partidos" });
+    }
+
+    const parseResult = startMatchSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Datos invalidos" });
+    }
+
+    try {
+      const match = await storage.getMatch(req.params.id);
+      if (!match) {
+        return res.status(404).json({ error: "Partido no encontrado" });
+      }
+
+      if (match.status === 'completed') {
+        return res.status(400).json({ error: "El partido ya esta finalizado" });
+      }
+
+      if (match.status === 'in_progress') {
+        return res.status(400).json({ error: "El partido ya esta en curso" });
+      }
+
+      const updated = await storage.startMatch(match.id, parseResult.data.durationMinutes);
+      res.json({ match: updated });
+    } catch (error) {
+      console.error("Start match error:", error);
+      res.status(500).json({ error: "Error al iniciar partido" });
+    }
+  });
+
+  // Update live score (Admin only)
+  app.patch("/api/matches/:id/score", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden actualizar puntuaciones" });
+    }
+
+    const parseResult = updateScoreSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Datos invalidos" });
+    }
+
+    try {
+      const match = await storage.getMatch(req.params.id);
+      if (!match) {
+        return res.status(404).json({ error: "Partido no encontrado" });
+      }
+
+      if (match.status === 'completed') {
+        return res.status(400).json({ error: "El partido ya esta finalizado" });
+      }
+
+      const updated = await storage.updateMatchScore(match.id, parseResult.data.homeScore, parseResult.data.awayScore);
+      res.json({ match: updated });
+    } catch (error) {
+      console.error("Update score error:", error);
+      res.status(500).json({ error: "Error al actualizar puntuacion" });
+    }
+  });
+
   // Update match result (Admin only)
   app.patch("/api/matches/:id/result", async (req, res) => {
     if (!req.session.playerId) {
@@ -891,26 +1510,33 @@ export async function registerRoutes(
       return res.status(403).json({ error: "Solo administradores pueden actualizar resultados" });
     }
 
+    const parseResult = updateScoreSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Datos invalidos" });
+    }
+
     try {
-      const { homeScore, awayScore } = req.body;
-      
-      if (homeScore === undefined || awayScore === undefined) {
-        return res.status(400).json({ error: "Se requieren homeScore y awayScore" });
-      }
-      
-      // Determine winner
-      const winnerId = homeScore > awayScore ? req.body.homeTeamId : 
-                       awayScore > homeScore ? req.body.awayTeamId : null;
-      
-      const match = await storage.updateMatchResult(req.params.id, homeScore, awayScore, winnerId || '');
-      
+      const match = await storage.getMatch(req.params.id);
       if (!match) {
         return res.status(404).json({ error: "Partido no encontrado" });
       }
-      
-      // TODO: Update group standings based on match result
-      
-      res.json({ match });
+
+      const { homeScore, awayScore } = parseResult.data;
+      if (match.stage !== 'group' && homeScore === awayScore) {
+        return res.status(400).json({ error: "No se permiten empates en eliminatorias" });
+      }
+      const winnerId = homeScore > awayScore ? match.homeTeamId : awayScore > homeScore ? match.awayTeamId : null;
+
+      const updated = await storage.finalizeMatch(match.id, homeScore, awayScore, winnerId || null);
+
+      if (match.groupId) {
+        await recalculateGroupStandings(match.groupId);
+        await maybeGenerateKnockout(match.tournamentId);
+      } else {
+        await advanceKnockoutIfReady(match.tournamentId);
+      }
+
+      res.json({ match: updated });
     } catch (error) {
       console.error("Update match error:", error);
       res.status(500).json({ error: "Error al actualizar resultado" });
@@ -962,6 +1588,7 @@ export async function registerRoutes(
         return {
           player: safePlayer,
           tournamentsPlayed: tournamentsList.length,
+          tournamentIds: tournamentsList.map(t => t.id),
           snapshots,
           growth
         };
@@ -973,6 +1600,10 @@ export async function registerRoutes(
       
       if (role) {
         filtered = filtered.filter(ps => ps.player.role === role);
+      }
+
+      if (tournamentId) {
+        filtered = filtered.filter(ps => ps.tournamentIds?.includes(tournamentId as string));
       }
       
       // Sort by overall rating

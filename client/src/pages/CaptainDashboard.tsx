@@ -41,13 +41,6 @@ export default function CaptainDashboard() {
       const { tournaments } = await tournamentsApi.getAll();
       const myTournamentsList: TournamentWithDetails[] = [];
 
-      let captainTeamData: { team: Team; players: Player[] } | null = null;
-      if (currentUser.role === 'captain') {
-        try {
-          captainTeamData = await teamsApi.getByCaptain(currentUser.id);
-        } catch {}
-      }
-
       for (const tournament of tournaments) {
         try {
           const { registeredPlayers } = await tournamentsApi.getById(tournament.id);
@@ -56,9 +49,12 @@ export default function CaptainDashboard() {
           let myTeam: Team | undefined;
           let myTeamPlayers: Player[] | undefined;
 
-          if (captainTeamData && captainTeamData.team.tournamentId === tournament.id) {
-            myTeam = captainTeamData.team;
-            myTeamPlayers = captainTeamData.players;
+          if (currentUser.role === 'captain') {
+            try {
+              const teamData = await teamsApi.getByCaptain(currentUser.id, tournament.id);
+              myTeam = teamData.team;
+              myTeamPlayers = teamData.players;
+            } catch {}
           }
 
           if (isRegistered || myTeam) {

@@ -4,7 +4,10 @@ export interface Player {
   id: string;
   name: string;
   mobile: string;
+  username?: string | null;
+  email?: string | null;
   role: 'player' | 'captain' | 'admin';
+  isPublic?: boolean;
   pace: number;
   shooting: number;
   passing: number;
@@ -29,6 +32,10 @@ export interface Tournament {
 export interface RegisterPlayerData {
   name: string;
   mobile: string;
+  username: string;
+  email: string;
+  password: string;
+  isPublic?: boolean;
   pace: number;
   shooting: number;
   passing: number;
@@ -82,6 +89,16 @@ export const playersApi = {
     return res.json();
   },
 
+  async checkUsernameAvailability(username: string): Promise<{ available: boolean }> {
+    const params = new URLSearchParams({ username });
+    const res = await fetch(`/api/players/availability?${params}`);
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Availability check failed');
+    }
+    return res.json();
+  },
+
   async register(data: RegisterPlayerData): Promise<{ player: Player }> {
     const res = await fetch('/api/players/register', {
       method: 'POST',
@@ -115,6 +132,19 @@ export const playersApi = {
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to update player');
+    return res.json();
+  },
+
+  async updatePublic(id: string, isPublic: boolean): Promise<{ player: Player }> {
+    const res = await fetch(`/api/players/${id}/public`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPublic }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to update profile visibility');
+    }
     return res.json();
   },
 
@@ -199,6 +229,7 @@ export interface Team {
   tournamentId: string;
   captainId: string;
   name: string;
+  nameConfirmed?: boolean;
 }
 
 export const teamsApi = {
@@ -226,9 +257,23 @@ export const teamsApi = {
     if (!res.ok) throw new Error('Failed to delete team');
   },
 
-  async getByCaptain(captainId: string): Promise<{ team: Team; players: Player[] }> {
-    const res = await fetch(`/api/teams/captain/${captainId}`);
+  async getByCaptain(captainId: string, tournamentId?: string): Promise<{ team: Team; players: Player[] }> {
+    const params = tournamentId ? `?tournamentId=${encodeURIComponent(tournamentId)}` : "";
+    const res = await fetch(`/api/teams/captain/${captainId}${params}`);
     if (!res.ok) throw new Error('No team found');
+    return res.json();
+  },
+
+  async updateName(teamId: string, name: string): Promise<{ team: Team; groupsGenerated?: boolean }> {
+    const res = await fetch(`/api/teams/${teamId}/name`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to update team name');
+    }
     return res.json();
   },
 };
@@ -354,6 +399,10 @@ export interface Match {
   awayScore: number | null;
   winnerId: string | null;
   status: 'pending' | 'in_progress' | 'completed';
+  durationMinutes?: number | null;
+  startedAt?: string | null;
+  scheduledAt?: string | null;
+  completedAt?: string | null;
 }
 
 export interface PlayerSkillSnapshot {
@@ -426,11 +475,37 @@ export const matchesApi = {
     return res.json();
   },
 
-  async updateResult(matchId: string, homeScore: number, awayScore: number, homeTeamId: string, awayTeamId: string): Promise<{ match: Match }> {
+  async start(matchId: string, durationMinutes: number): Promise<{ match: Match }> {
+    const res = await fetch(`/api/matches/${matchId}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ durationMinutes }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to start match');
+    }
+    return res.json();
+  },
+
+  async updateScore(matchId: string, homeScore: number, awayScore: number): Promise<{ match: Match }> {
+    const res = await fetch(`/api/matches/${matchId}/score`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ homeScore, awayScore }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to update match score');
+    }
+    return res.json();
+  },
+
+  async updateResult(matchId: string, homeScore: number, awayScore: number): Promise<{ match: Match }> {
     const res = await fetch(`/api/matches/${matchId}/result`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ homeScore, awayScore, homeTeamId, awayTeamId }),
+      body: JSON.stringify({ homeScore, awayScore }),
     });
     if (!res.ok) {
       const error = await res.json();

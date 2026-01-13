@@ -3,16 +3,19 @@ import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useStore } from "@/lib/store";
-import { playerHistoryApi, tournamentsApi, type PlayerSkillSnapshot, type Tournament } from "@/lib/api";
+import { playerHistoryApi, tournamentsApi, playersApi, type PlayerSkillSnapshot, type Tournament } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Trophy, TrendingUp, Calendar, Target } from "lucide-react";
 import { Redirect } from "wouter";
+import { Switch } from "@/components/ui/switch";
 
 export default function MyHistory() {
-  const { currentUser } = useStore();
+  const { currentUser, setCurrentUser } = useStore();
   const [snapshots, setSnapshots] = useState<PlayerSkillSnapshot[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPublic, setIsPublic] = useState(false);
+  const [isUpdatingPublic, setIsUpdatingPublic] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -20,6 +23,28 @@ export default function MyHistory() {
       loadData();
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      setIsPublic(!!currentUser.isPublic);
+    }
+  }, [currentUser]);
+
+  const handlePublicToggle = async (value: boolean) => {
+    if (!currentUser) return;
+    setIsUpdatingPublic(true);
+    try {
+      const { player } = await playersApi.updatePublic(currentUser.id, value);
+      setCurrentUser(player);
+      setIsPublic(!!player.isPublic);
+      toast({ title: "Perfil actualizado" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+      setIsPublic(!!currentUser.isPublic);
+    } finally {
+      setIsUpdatingPublic(false);
+    }
+  };
 
   const loadData = async () => {
     if (!currentUser) return;
@@ -96,6 +121,18 @@ export default function MyHistory() {
                   {currentUser.overall}
                 </div>
                 <p className="text-muted-foreground text-sm">Overall</p>
+              </div>
+
+              <div className="mt-6 flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
+                <div className="text-left">
+                  <p className="text-sm font-medium">Perfil publico</p>
+                  <p className="text-xs text-muted-foreground">Visible para usuarios no registrados.</p>
+                </div>
+                <Switch
+                  checked={isPublic}
+                  onCheckedChange={handlePublicToggle}
+                  disabled={isUpdatingPublic}
+                />
               </div>
             </CardContent>
           </Card>

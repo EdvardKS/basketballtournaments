@@ -17,7 +17,10 @@ export interface Player {
   id: string;
   name: string;
   mobile: string;
+  username?: string | null;
+  email?: string | null;
   role: PlayerRole;
+  isPublic?: boolean;
   pace: number;
   shooting: number;
   passing: number;
@@ -106,7 +109,10 @@ export const useStore = create<AppState>()(
 
       registerPlayer: async (data) => {
         const { player } = await playersApi.register(data);
-        set((state) => ({ players: [...state.players, player] }));
+        set((state) => ({
+          players: [...state.players, player],
+          currentUser: player,
+        }));
         return player;
       },
 

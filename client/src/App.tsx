@@ -17,6 +17,7 @@ import PlayerDashboard from "@/pages/PlayerDashboard";
 import MyHistory from "@/pages/MyHistory";
 import PlayersPage from "@/pages/PlayersPage";
 import Login from "@/pages/Login";
+import Legal from "@/pages/Legal";
 
 function Router() {
   const currentUser = useStore((state) => state.currentUser);
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/tournaments/:id" component={TournamentDetails} />
       <Route path="/register" component={Register} />
       <Route path="/login" component={Login} />
+      <Route path="/legal" component={Legal} />
       
       {/* Admin Routes */}
       <Route path="/admin">

@@ -34,7 +34,7 @@ export default function Login() {
         } else if (user?.role === 'captain') {
           setLocation("/draft");
         } else {
-          setLocation("/");
+          setLocation("/player");
         }
       } else {
         toast({
@@ -62,16 +62,16 @@ export default function Login() {
           <CardHeader>
             <CardTitle className="font-display text-3xl text-center">ACCESO PRIVADO</CardTitle>
             <CardDescription className="text-center">
-              Administradores y Capitanes de Villena League
+              Administradores, capitanes y jugadores de Villena League
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="identifier">Usuario / Móvil</Label>
+                <Label htmlFor="identifier">Usuario / Email / Movil</Label>
                 <Input 
                   id="identifier" 
-                  placeholder="Usuario o Nº Teléfono" 
+                  placeholder="Usuario, email o movil" 
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="bg-black/20 border-white/10"
@@ -80,18 +80,18 @@ export default function Login() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Contraseña</Label>
+                <Label htmlFor="password">Contrasena</Label>
                 <Input 
                   id="password" 
                   type="password" 
-                  placeholder="••••••••" 
+                  placeholder="********" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="bg-black/20 border-white/10"
                   data-testid="input-password"
                   disabled={isLoading}
                 />
-              </div>
+                </div>
               <Button 
                 type="submit" 
                 className="w-full font-display text-lg bg-primary text-black hover:bg-white transition-colors cursor-pointer"

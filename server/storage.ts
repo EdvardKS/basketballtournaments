@@ -14,12 +14,15 @@ import {
   tournamentGroups, groupMembers, matches, playerSkillSnapshots
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, or, sql, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Players
   getPlayer(id: string): Promise<Player | undefined>;
   getPlayerByMobile(mobile: string): Promise<Player | undefined>;
+  getPlayerByUsername(username: string): Promise<Player | undefined>;
+  getPlayerByEmail(email: string): Promise<Player | undefined>;
+  getPlayerByIdentifier(identifier: string): Promise<Player | undefined>;
   getAllPlayers(): Promise<Player[]>;
   createPlayer(player: InsertPlayer): Promise<Player>;
   updatePlayer(id: string, player: Partial<InsertPlayer>): Promise<Player | undefined>;
@@ -44,6 +47,8 @@ export interface IStorage {
   deleteTeam(id: string): Promise<boolean>;
   getTeamsForTournament(tournamentId: string): Promise<Team[]>;
   getTeamByCaptain(captainId: string): Promise<Team | undefined>;
+  getTeamByCaptainForTournament(captainId: string, tournamentId: string): Promise<Team | undefined>;
+  updateTeamName(teamId: string, name: string, nameConfirmed: boolean): Promise<Team | undefined>;
   
   // Draft
   draftPlayer(teamId: string, playerId: string): Promise<TeamPlayer>;
@@ -65,6 +70,7 @@ export interface IStorage {
   getTournamentRegistration(playerId: string, tournamentId: string): Promise<TournamentRegistration | undefined>;
   getCaptainsForTournament(tournamentId: string): Promise<(TournamentRegistration & { player: Player })[]>;
   getRegistrationsForTournament(tournamentId: string): Promise<(TournamentRegistration & { player: Player })[]>;
+  isPlayerCaptainInAnyTournament(playerId: string): Promise<boolean>;
   
   // Groups
   createGroup(group: InsertTournamentGroup): Promise<TournamentGroup>;
@@ -75,9 +81,12 @@ export interface IStorage {
   
   // Matches
   createMatch(match: InsertMatch): Promise<Match>;
+  getMatch(id: string): Promise<Match | undefined>;
   getMatchesForTournament(tournamentId: string): Promise<Match[]>;
   getMatchesForGroup(groupId: string): Promise<Match[]>;
-  updateMatchResult(matchId: string, homeScore: number, awayScore: number, winnerId: string): Promise<Match | undefined>;
+  startMatch(matchId: string, durationMinutes: number): Promise<Match | undefined>;
+  updateMatchScore(matchId: string, homeScore: number, awayScore: number): Promise<Match | undefined>;
+  finalizeMatch(matchId: string, homeScore: number, awayScore: number, winnerId: string | null): Promise<Match | undefined>;
   
   // Player Skill Snapshots
   createSkillSnapshot(snapshot: InsertPlayerSkillSnapshot): Promise<PlayerSkillSnapshot>;
@@ -94,6 +103,26 @@ export class DatabaseStorage implements IStorage {
 
   async getPlayerByMobile(mobile: string): Promise<Player | undefined> {
     const [player] = await db.select().from(players).where(eq(players.mobile, mobile));
+    return player;
+  }
+
+  async getPlayerByUsername(username: string): Promise<Player | undefined> {
+    const [player] = await db.select().from(players).where(eq(players.username, username));
+    return player;
+  }
+
+  async getPlayerByEmail(email: string): Promise<Player | undefined> {
+    const [player] = await db.select().from(players).where(eq(players.email, email));
+    return player;
+  }
+
+  async getPlayerByIdentifier(identifier: string): Promise<Player | undefined> {
+    const [player] = await db.select().from(players)
+      .where(or(
+        eq(players.mobile, identifier),
+        eq(players.username, identifier),
+        eq(players.email, identifier)
+      ));
     return player;
   }
 
@@ -226,7 +255,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTeam(team: InsertTeam): Promise<Team> {
-    const [newTeam] = await db.insert(teams).values(team).returning();
+    const [newTeam] = await db.insert(teams).values({
+      ...team,
+      nameConfirmed: team.nameConfirmed ?? false,
+    }).returning();
     return newTeam!;
   }
 
@@ -241,6 +273,23 @@ export class DatabaseStorage implements IStorage {
 
   async getTeamByCaptain(captainId: string): Promise<Team | undefined> {
     const [team] = await db.select().from(teams).where(eq(teams.captainId, captainId));
+    return team;
+  }
+
+  async getTeamByCaptainForTournament(captainId: string, tournamentId: string): Promise<Team | undefined> {
+    const [team] = await db.select().from(teams)
+      .where(and(
+        eq(teams.captainId, captainId),
+        eq(teams.tournamentId, tournamentId)
+      ));
+    return team;
+  }
+
+  async updateTeamName(teamId: string, name: string, nameConfirmed: boolean): Promise<Team | undefined> {
+    const [team] = await db.update(teams)
+      .set({ name, nameConfirmed })
+      .where(eq(teams.id, teamId))
+      .returning();
     return team;
   }
 
@@ -388,6 +437,17 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async isPlayerCaptainInAnyTournament(playerId: string): Promise<boolean> {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(tournamentRegistrations)
+      .where(and(
+        eq(tournamentRegistrations.playerId, playerId),
+        eq(tournamentRegistrations.isCaptain, true)
+      ));
+    return Number(result?.count ?? 0) > 0;
+  }
+
   // Groups
   async createGroup(group: InsertTournamentGroup): Promise<TournamentGroup> {
     const [newGroup] = await db.insert(tournamentGroups).values(group).returning();
@@ -450,6 +510,12 @@ export class DatabaseStorage implements IStorage {
     return newMatch!;
   }
 
+  async getMatch(id: string): Promise<Match | undefined> {
+    const [match] = await db.select().from(matches)
+      .where(eq(matches.id, id));
+    return match;
+  }
+
   async getMatchesForTournament(tournamentId: string): Promise<Match[]> {
     return await db.select().from(matches)
       .where(eq(matches.tournamentId, tournamentId));
@@ -460,7 +526,33 @@ export class DatabaseStorage implements IStorage {
       .where(eq(matches.groupId, groupId));
   }
 
-  async updateMatchResult(matchId: string, homeScore: number, awayScore: number, winnerId: string): Promise<Match | undefined> {
+  async startMatch(matchId: string, durationMinutes: number): Promise<Match | undefined> {
+    const [match] = await db.update(matches)
+      .set({ 
+        status: 'in_progress',
+        startedAt: new Date(),
+        durationMinutes,
+        homeScore: 0,
+        awayScore: 0,
+      })
+      .where(eq(matches.id, matchId))
+      .returning();
+    return match;
+  }
+
+  async updateMatchScore(matchId: string, homeScore: number, awayScore: number): Promise<Match | undefined> {
+    const [match] = await db.update(matches)
+      .set({ 
+        homeScore, 
+        awayScore,
+        status: 'in_progress'
+      })
+      .where(eq(matches.id, matchId))
+      .returning();
+    return match;
+  }
+
+  async finalizeMatch(matchId: string, homeScore: number, awayScore: number, winnerId: string | null): Promise<Match | undefined> {
     const [match] = await db.update(matches)
       .set({ 
         homeScore, 

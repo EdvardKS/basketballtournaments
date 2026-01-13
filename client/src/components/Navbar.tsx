@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator 
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Trophy, Users, BarChart3, Home, History } from "lucide-react";
+import { ChevronDown, Trophy, Users, BarChart3, Home, History, ScrollText } from "lucide-react";
 
 export function Navbar() {
   const { currentUser, logout } = useStore();
@@ -118,6 +118,16 @@ export function Navbar() {
               </Link>
             </>
           )}
+          <Link
+            href="/legal"
+            className={cn(
+              "flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer",
+              isActive('/legal') ? "text-primary" : "hover:text-primary"
+            )}
+          >
+            <ScrollText className="w-4 h-4" />
+            Legal
+          </Link>
         </div>
 
         <div className="flex items-center gap-4">

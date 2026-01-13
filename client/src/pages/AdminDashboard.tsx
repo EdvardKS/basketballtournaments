@@ -19,8 +19,7 @@ export default function AdminDashboard() {
     players, 
     createTournament, 
     updateTournament, 
-    deleteTournament, 
-    assignCaptain,
+    deleteTournament,
     fetchPlayers,
     fetchTournaments
   } = useStore();
@@ -30,19 +29,13 @@ export default function AdminDashboard() {
   const [newTournamentDate, setNewTournamentDate] = useState("");
   const [newTournamentLocation, setNewTournamentLocation] = useState("Pistas Municipales Villena");
   const [newTournamentDescription, setNewTournamentDescription] = useState("");
-  const [newTournamentMaxTeams, setNewTournamentMaxTeams] = useState("8");
   const { toast } = useToast();
-
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-  const [captainPassword, setCaptainPassword] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const [editingTournamentId, setEditingTournamentId] = useState<string | null>(null);
   const [editTournamentName, setEditTournamentName] = useState("");
   const [editTournamentDate, setEditTournamentDate] = useState("");
   const [editTournamentLocation, setEditTournamentLocation] = useState("");
   const [editTournamentDescription, setEditTournamentDescription] = useState("");
-  const [editTournamentMaxTeams, setEditTournamentMaxTeams] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
 
@@ -73,13 +66,12 @@ export default function AdminDashboard() {
         date: newTournamentDate,
         location: newTournamentLocation || "Pistas Municipales Villena",
         description: newTournamentDescription || "Nuevo torneo de la liga",
-        maxTeams: parseInt(newTournamentMaxTeams) || 8,
+        maxTeams: 8,
       });
       setNewTournamentName("");
       setNewTournamentDate("");
       setNewTournamentLocation("Pistas Municipales Villena");
       setNewTournamentDescription("");
-      setNewTournamentMaxTeams("8");
       setIsCreateTournamentOpen(false);
       toast({ title: "Torneo Creado", description: "El torneo ha sido añadido al calendario." });
     } catch (error: any) {
@@ -97,7 +89,6 @@ export default function AdminDashboard() {
     setEditTournamentDate(tournament.date);
     setEditTournamentLocation(tournament.location);
     setEditTournamentDescription(tournament.description);
-    setEditTournamentMaxTeams(tournament.maxTeams.toString());
     setIsEditDialogOpen(true);
   };
 
@@ -110,7 +101,6 @@ export default function AdminDashboard() {
         date: editTournamentDate,
         location: editTournamentLocation,
         description: editTournamentDescription,
-        maxTeams: parseInt(editTournamentMaxTeams) || 8,
       });
       setIsEditDialogOpen(false);
       setEditingTournamentId(null);
@@ -136,24 +126,6 @@ export default function AdminDashboard() {
         title: "Error",
         description: error.message || "Error al eliminar torneo",
       });
-    }
-  };
-
-  const handlePromoteCaptain = async () => {
-    if (selectedPlayerId && captainPassword) {
-      try {
-        await assignCaptain(selectedPlayerId, captainPassword);
-        setIsDialogOpen(false);
-        setCaptainPassword("");
-        setSelectedPlayerId(null);
-        toast({ title: "Capitán Asignado", description: "El jugador ahora tiene rol de capitán." });
-      } catch (error: any) {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: error.message || "Error al asignar capitán",
-        });
-      }
     }
   };
 
@@ -241,25 +213,24 @@ export default function AdminDashboard() {
                   + NUEVO TORNEO
                 </Button>
               </DialogTrigger>
-            <DialogContent className="bg-card border-white/10 max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="font-display text-2xl">Crear Nuevo Torneo</DialogTitle>
-                <p className="text-sm text-muted-foreground">Completa la información del torneo. Todos los campos son importantes para que los jugadores conozcan los detalles.</p>
-              </DialogHeader>
-              <div className="space-y-5 py-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Nombre del Torneo *</label>
-                  <Input 
-                    placeholder="Ej: Torneo Verano 2026" 
-                    value={newTournamentName}
-                    onChange={(e) => setNewTournamentName(e.target.value)}
-                    className="bg-black/20 h-12"
-                    data-testid="input-tournament-name"
-                  />
-                  <p className="text-xs text-muted-foreground">Nombre descriptivo que identifique el torneo</p>
-                </div>
+              <DialogContent className="bg-card border-white/10 max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="font-display text-2xl">Crear Nuevo Torneo</DialogTitle>
+                  <p className="text-sm text-muted-foreground">Completa la informacion del torneo. Todos los campos son importantes para que los jugadores conozcan los detalles.</p>
+                </DialogHeader>
+                <div className="space-y-5 py-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Nombre del Torneo *</label>
+                    <Input 
+                      placeholder="Ej: Torneo Verano 2026" 
+                      value={newTournamentName}
+                      onChange={(e) => setNewTournamentName(e.target.value)}
+                      className="bg-black/20 h-12"
+                      data-testid="input-tournament-name"
+                    />
+                    <p className="text-xs text-muted-foreground">Nombre descriptivo que identifique el torneo</p>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">Fecha del Torneo *</label>
                     <Input 
@@ -269,54 +240,41 @@ export default function AdminDashboard() {
                       className="bg-black/20 h-12"
                       data-testid="input-tournament-date"
                     />
+                    <p className="text-xs text-muted-foreground">Selecciona la fecha oficial del torneo</p>
                   </div>
+
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">Nº Máximo de Equipos</label>
+                    <label className="text-sm font-medium text-foreground">Ubicacion</label>
                     <Input 
-                      type="number"
-                      min="2"
-                      max="16"
-                      placeholder="8" 
-                      value={newTournamentMaxTeams}
-                      onChange={(e) => setNewTournamentMaxTeams(e.target.value)}
+                      placeholder="Ej: Pistas Municipales Villena" 
+                      value={newTournamentLocation}
+                      onChange={(e) => setNewTournamentLocation(e.target.value)}
                       className="bg-black/20 h-12"
-                      data-testid="input-tournament-max-teams"
+                      data-testid="input-tournament-location"
+                    />
+                    <p className="text-xs text-muted-foreground">Direccion o nombre del lugar donde se jugara</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Descripcion</label>
+                    <textarea 
+                      placeholder="Describe el formato del torneo, premios, horarios estimados, etc."
+                      value={newTournamentDescription}
+                      onChange={(e) => setNewTournamentDescription(e.target.value)}
+                      className="w-full bg-black/20 border border-input rounded-md px-3 py-2 min-h-[100px] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                      data-testid="input-tournament-description"
                     />
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Ubicación</label>
-                  <Input 
-                    placeholder="Ej: Pistas Municipales Villena" 
-                    value={newTournamentLocation}
-                    onChange={(e) => setNewTournamentLocation(e.target.value)}
-                    className="bg-black/20 h-12"
-                    data-testid="input-tournament-location"
-                  />
-                  <p className="text-xs text-muted-foreground">Dirección o nombre del lugar donde se jugará</p>
+                  <div className="pt-2 border-t border-white/10">
+                    <Button onClick={handleCreateTournament} className="w-full h-12 font-display text-lg tracking-wider cursor-pointer" data-testid="button-create-tournament">
+                      CREAR TORNEO
+                    </Button>
+                    <p className="text-xs text-center text-muted-foreground mt-2">Una vez creado, podras editar estos datos en cualquier momento</p>
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Descripción</label>
-                  <textarea 
-                    placeholder="Describe el formato del torneo, premios, horarios estimados, etc."
-                    value={newTournamentDescription}
-                    onChange={(e) => setNewTournamentDescription(e.target.value)}
-                    className="w-full bg-black/20 border border-input rounded-md px-3 py-2 min-h-[100px] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-                    data-testid="input-tournament-description"
-                  />
-                </div>
-
-                <div className="pt-2 border-t border-white/10">
-                  <Button onClick={handleCreateTournament} className="w-full h-12 font-display text-lg tracking-wider cursor-pointer" data-testid="button-create-tournament">
-                    CREAR TORNEO
-                  </Button>
-                  <p className="text-xs text-center text-muted-foreground mt-2">Una vez creado, podrás editar estos datos en cualquier momento</p>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
         
@@ -444,6 +402,7 @@ export default function AdminDashboard() {
 
         <section className="mb-12">
           <h2 className="text-2xl font-display font-bold mb-6">GESTIÓN DE JUGADORES</h2>
+          <p className="text-sm text-muted-foreground mb-4">Los capitanes se gestionan dentro de cada torneo.</p>
              <Card className="bg-white/5 border-white/10">
                 <CardHeader>
                   <CardTitle className="font-display">Gestión de Usuarios</CardTitle>
@@ -473,44 +432,6 @@ export default function AdminDashboard() {
                           </TableCell>
                           <TableCell className="font-bold text-primary">{p.overall}</TableCell>
                           <TableCell className="space-x-2">
-                             {p.role === 'player' && (
-                               <Dialog open={isDialogOpen && selectedPlayerId === p.id} onOpenChange={(open) => {
-                                 setIsDialogOpen(open);
-                                 if (!open) {
-                                   setSelectedPlayerId(null);
-                                   setCaptainPassword("");
-                                 }
-                               }}>
-                                 <DialogTrigger asChild>
-                                   <Button 
-                                     size="sm" 
-                                     variant="outline" 
-                                     className="h-7 text-xs cursor-pointer"
-                                     onClick={() => setSelectedPlayerId(p.id)}
-                                     data-testid={`button-promote-captain-${p.id}`}
-                                   >
-                                     Hacer Capitán
-                                   </Button>
-                                 </DialogTrigger>
-                                 <DialogContent className="bg-card border-white/10">
-                                   <DialogHeader>
-                                     <DialogTitle>Asignar Capitán</DialogTitle>
-                                   </DialogHeader>
-                                   <div className="space-y-4 py-4">
-                                     <p>Estás ascendiendo a <strong>{p.name}</strong> a Capitán.</p>
-                                     <p className="text-sm text-muted-foreground">Establece una contraseña para que pueda acceder al panel de draft.</p>
-                                     <Input 
-                                       type="text" 
-                                       placeholder="Contraseña de acceso" 
-                                       value={captainPassword}
-                                       onChange={(e) => setCaptainPassword(e.target.value)}
-                                       data-testid="input-captain-password"
-                                     />
-                                     <Button onClick={handlePromoteCaptain} className="w-full cursor-pointer" data-testid="button-confirm-promote">Confirmar Ascenso</Button>
-                                   </div>
-                                 </DialogContent>
-                               </Dialog>
-                             )}
                              <Button 
                                size="sm" 
                                variant="ghost" 
@@ -531,45 +452,58 @@ export default function AdminDashboard() {
       </div>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="bg-card border-white/10">
+        <DialogContent className="bg-card border-white/10 max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-display">Editar Torneo</DialogTitle>
+            <DialogTitle className="font-display text-2xl">Editar Torneo</DialogTitle>
+            <p className="text-sm text-muted-foreground">Actualiza la informacion del torneo. Los cambios se reflejan al instante.</p>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <Input 
-              placeholder="Nombre" 
-              value={editTournamentName}
-              onChange={(e) => setEditTournamentName(e.target.value)}
-              className="bg-black/20"
-            />
-            <Input 
-              type="date"
-              value={editTournamentDate}
-              onChange={(e) => setEditTournamentDate(e.target.value)}
-              className="bg-black/20"
-            />
-            <Input 
-              placeholder="Ubicación" 
-              value={editTournamentLocation}
-              onChange={(e) => setEditTournamentLocation(e.target.value)}
-              className="bg-black/20"
-            />
-            <Input 
-              placeholder="Descripción" 
-              value={editTournamentDescription}
-              onChange={(e) => setEditTournamentDescription(e.target.value)}
-              className="bg-black/20"
-            />
-            <Input 
-              type="number"
-              placeholder="Equipos máximos" 
-              value={editTournamentMaxTeams}
-              onChange={(e) => setEditTournamentMaxTeams(e.target.value)}
-              className="bg-black/20"
-            />
-            <Button onClick={handleSaveEditTournament} className="w-full font-display cursor-pointer">
-              GUARDAR CAMBIOS
-            </Button>
+          <div className="space-y-5 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Nombre del Torneo *</label>
+              <Input 
+                placeholder="Nombre" 
+                value={editTournamentName}
+                onChange={(e) => setEditTournamentName(e.target.value)}
+                className="bg-black/20 h-12"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Fecha del Torneo *</label>
+              <Input 
+                type="date"
+                value={editTournamentDate}
+                onChange={(e) => setEditTournamentDate(e.target.value)}
+                className="bg-black/20 h-12"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Ubicacion</label>
+              <Input 
+                placeholder="Ubicacion" 
+                value={editTournamentLocation}
+                onChange={(e) => setEditTournamentLocation(e.target.value)}
+                className="bg-black/20 h-12"
+              />
+              <p className="text-xs text-muted-foreground">Direccion o nombre del lugar</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Descripcion</label>
+              <textarea 
+                placeholder="Descripcion del torneo"
+                value={editTournamentDescription}
+                onChange={(e) => setEditTournamentDescription(e.target.value)}
+                className="w-full bg-black/20 border border-input rounded-md px-3 py-2 min-h-[100px] text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div className="pt-2 border-t border-white/10">
+              <Button onClick={handleSaveEditTournament} className="w-full h-12 font-display text-lg tracking-wider cursor-pointer">
+                GUARDAR CAMBIOS
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

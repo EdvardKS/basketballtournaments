@@ -8,9 +8,12 @@ export const players = pgTable("players", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   mobile: text("mobile").notNull().unique(),
+  username: text("username"),
+  email: text("email"),
   role: text("role").notNull().default('player'), // 'player' | 'captain' | 'admin'
   password: text("password"), // Only for captains and admin
   avatar: text("avatar"), // Base64 or URL
+  isPublic: boolean("is_public").notNull().default(false),
   
   // Stats
   pace: integer("pace").notNull().default(50),
@@ -78,6 +81,7 @@ export const teams = pgTable("teams", {
   tournamentId: varchar("tournament_id").notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
   captainId: varchar("captain_id").notNull().references(() => players.id),
   name: text("name").notNull(),
+  nameConfirmed: boolean("name_confirmed").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -193,6 +197,8 @@ export const matches = pgTable("matches", {
   awayScore: integer("away_score"),
   winnerId: varchar("winner_id").references(() => teams.id),
   status: text("status").notNull().default('pending'), // 'pending' | 'in_progress' | 'completed'
+  durationMinutes: integer("duration_minutes"),
+  startedAt: timestamp("started_at"),
   scheduledAt: timestamp("scheduled_at"),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

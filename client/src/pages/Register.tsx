@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation, useSearch } from "wouter";
 import { useStore } from "@/lib/store";
+import { tournamentsApi, playersApi } from "@/lib/api";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,8 @@ import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useRef, useEffect } from "react";
 import { Camera } from "lucide-react";
@@ -21,14 +24,23 @@ const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/web
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
-  mobile: z.string().min(9, "Introduce un móvil válido."),
+  username: z.string().min(3, "El usuario debe tener al menos 3 caracteres."),
+  email: z.string().email("Introduce un email valido."),
+  password: z.string().min(6, "La contrasena debe tener al menos 6 caracteres."),
+  confirmPassword: z.string().min(6, "Confirma la contrasena."),
+  mobile: z.string().min(9, "Introduce un movil valido."),
   tournamentId: z.string().min(1, "Debes seleccionar un torneo."),
+  isPublic: z.boolean().default(false),
+  consent: z.boolean().refine((val) => val === true, { message: "Debes aceptar las condiciones legales." }),
   pace: z.number().min(0).max(99),
   shooting: z.number().min(0).max(99),
   passing: z.number().min(0).max(99),
   dribbling: z.number().min(0).max(99),
   defense: z.number().min(0).max(99),
   physical: z.number().min(0).max(99),
+}).refine((data) => data.password === data.confirmPassword, {
+  path: ["confirmPassword"],
+  message: "Las contrasenas no coinciden.",
 });
 
 export default function Register() {
@@ -37,23 +49,104 @@ export default function Register() {
   const params = new URLSearchParams(search);
   const preSelectedTournamentId = params.get("tournamentId");
 
-  const { registerPlayer, tournaments, fetchTournaments } = useStore();
+  const { registerPlayer, tournaments, fetchTournaments, currentUser } = useStore();
   const { toast } = useToast();
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "error">("idle");
 
   // Fetch tournaments on mount
   useEffect(() => {
     fetchTournaments();
   }, []);
 
+  const handleRegisterExisting = async () => {
+    if (!currentUser || !preSelectedTournamentId) return;
+    setIsSubmitting(true);
+    try {
+      await tournamentsApi.register(preSelectedTournamentId, currentUser.id);
+      toast({
+        title: "Inscripcion completada",
+        description: "Ya estas inscrito en el torneo",
+      });
+      setLocation(`/tournaments/${preSelectedTournamentId}`);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error en la inscripcion",
+        description: error.message || "No se pudo completar la inscripcion",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+
+  const handleUsernameBlur = async (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setUsernameStatus("idle");
+      return;
+    }
+
+    setUsernameStatus("checking");
+    try {
+      const result = await playersApi.checkUsernameAvailability(trimmed);
+      setUsernameStatus(result.available ? "available" : "taken");
+    } catch (error) {
+      setUsernameStatus("error");
+    }
+  };
+
+  if (currentUser) {
+    return (
+      <div className="min-h-screen bg-background text-foreground pb-20">
+        <Navbar />
+        <div className="container mx-auto px-4 py-20 flex justify-center">
+          <Card className="w-full max-w-lg bg-white/5 border-white/10">
+            <CardHeader>
+              <CardTitle className="font-display text-3xl">YA TIENES CUENTA</CardTitle>
+              <CardDescription>
+                Hola {currentUser.name}. Usa tu cuenta para inscribirte al torneo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {preSelectedTournamentId ? (
+                <Button
+                  onClick={handleRegisterExisting}
+                  className="w-full font-display text-lg h-12 bg-primary text-black hover:bg-white transition-colors cursor-pointer"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'INSCRIBIENDO...' : 'INSCRIBIRME AL TORNEO'}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setLocation('/tournaments')}
+                  className="w-full font-display text-lg h-12 bg-primary text-black hover:bg-white transition-colors cursor-pointer"
+                >
+                  VER TORNEOS
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
+      username: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
       mobile: "",
       tournamentId: preSelectedTournamentId || "",
+      isPublic: false,
+      consent: false,
       pace: 50,
       shooting: 50,
       passing: 50,
@@ -106,6 +199,10 @@ export default function Register() {
     try {
       const playerData = {
         name: values.name,
+        username: values.username,
+        email: values.email,
+        password: values.password,
+        isPublic: values.isPublic,
         mobile: values.mobile,
         avatar: previewImage || undefined,
         pace: values.pace,
@@ -124,7 +221,7 @@ export default function Register() {
         description: "Tu perfil ha sido creado y enviado a la bolsa de jugadores.",
       });
 
-      setLocation("/");
+      setLocation(`/tournaments/${values.tournamentId}`);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -182,7 +279,6 @@ export default function Register() {
                   />
                   <p className="text-xs text-muted-foreground mt-2">Max 2MB. JPG/PNG. <span className="text-red-400">*Obligatorio</span></p>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
@@ -191,18 +287,73 @@ export default function Register() {
                       <FormItem>
                         <FormLabel>Nombre Completo</FormLabel>
                         <FormControl>
-                          <Input placeholder="Ej: Juan Martínez" {...field} className="bg-white/5 border-white/10" />
+                          <Input placeholder="Ej: Juan Martinez" {...field} className="bg-white/5 border-white/10" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Usuario</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="tu_usuario"
+                            {...field}
+                            onBlur={(e) => {
+                              field.onBlur();
+                              handleUsernameBlur(e.target.value);
+                            }}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              if (usernameStatus !== "idle") {
+                                setUsernameStatus("idle");
+                              }
+                            }}
+                            className="bg-white/5 border-white/10"
+                          />
+                        </FormControl>
+                        {usernameStatus === "checking" && (
+                          <FormDescription className="text-xs">Comprobando disponibilidad...</FormDescription>
+                        )}
+                        {usernameStatus === "available" && (
+                          <FormDescription className="text-xs text-green-400">Usuario disponible</FormDescription>
+                        )}
+                        {usernameStatus === "taken" && (
+                          <FormDescription className="text-xs text-red-400">Usuario no disponible</FormDescription>
+                        )}
+                        {usernameStatus === "error" && (
+                          <FormDescription className="text-xs text-amber-400">No se pudo comprobar el usuario</FormDescription>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <Input placeholder="tu@email.com" {...field} className="bg-white/5 border-white/10" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   <FormField
                     control={form.control}
                     name="mobile"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Teléfono Móvil (ID Único)</FormLabel>
+                        <FormLabel>Telefono Movil (ID Unico)</FormLabel>
                         <FormControl>
                           <Input placeholder="600 000 000" {...field} className="bg-white/5 border-white/10" />
                         </FormControl>
@@ -213,7 +364,35 @@ export default function Register() {
                       </FormItem>
                     )}
                   />
-                  
+
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Contrasena</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="????????" {...field} className="bg-white/5 border-white/10" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confirmar Contrasena</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="????????" {...field} className="bg-white/5 border-white/10" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   <FormField
                     control={form.control}
                     name="tournamentId"
@@ -239,6 +418,24 @@ export default function Register() {
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="isPublic"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
+                      <div>
+                        <FormLabel className="text-sm">Perfil publico</FormLabel>
+                        <FormDescription className="text-xs">
+                          Si activas esto, los usuarios no registrados podran ver tu ficha completa.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
 
                 <Separator className="bg-white/10" />
 
@@ -362,6 +559,39 @@ export default function Register() {
                       )}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-4">
+                  <h4 className="font-display text-lg">Aviso Legal</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Cumplimos RGPD y LOPD. Los datos se usan para gestionar tu participacion en la liga, estadisticas y comunicacion del torneo.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Si un jugador sube fotos indebidas, usa nombres ofensivos o falsea habilidades, podra ser sancionado y no participar hasta resolver la sancion.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Consulta las politicas en <a href="/legal" className="text-primary underline">Privacidad y Cookies</a>.
+                  </p>
+                  <FormField
+                    control={form.control}
+                    name="consent"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={(checked) => field.onChange(checked === true)}
+                            />
+                            <div className="text-xs text-muted-foreground">
+                              Acepto las condiciones legales y entiendo las posibles sanciones.
+                            </div>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
                 <Button 

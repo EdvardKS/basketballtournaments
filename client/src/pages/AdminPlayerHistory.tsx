@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { adminApi, type PlayerStats } from "@/lib/api";
+import { adminApi, tournamentsApi, type PlayerStats, type Tournament } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Users, Trophy, TrendingUp, TrendingDown, Search, Filter } from "lucide-react";
 
@@ -15,6 +15,8 @@ export default function AdminPlayerHistory() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [tournamentFilter, setTournamentFilter] = useState<string>("all");
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [totalPlayers, setTotalPlayers] = useState(0);
   const [totalTournaments, setTotalTournaments] = useState(0);
   const [activeTournaments, setActiveTournaments] = useState(0);
@@ -22,13 +24,21 @@ export default function AdminPlayerHistory() {
 
   useEffect(() => {
     loadData();
-  }, [roleFilter]);
+  }, [roleFilter, tournamentFilter]);
+
+  useEffect(() => {
+    tournamentsApi.getAll()
+      .then((data) => setTournaments(data.tournaments))
+      .catch(() => {});
+  }, []);
 
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const filters = roleFilter !== 'all' ? { role: roleFilter } : undefined;
-      const data = await adminApi.getPlayerHistory(filters);
+      const filters: { role?: string; tournamentId?: string } = {};
+      if (roleFilter !== 'all') filters.role = roleFilter;
+      if (tournamentFilter !== 'all') filters.tournamentId = tournamentFilter;
+      const data = await adminApi.getPlayerHistory(Object.keys(filters).length ? filters : undefined);
       setPlayerStats(data.playerStats);
       setTotalPlayers(data.totalPlayers);
       setTotalTournaments(data.totalTournaments);
@@ -167,6 +177,19 @@ export default function AdminPlayerHistory() {
                     <SelectItem value="player">Jugadores</SelectItem>
                     <SelectItem value="captain">Capitanes</SelectItem>
                     <SelectItem value="admin">Admins</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={tournamentFilter} onValueChange={setTournamentFilter}>
+                  <SelectTrigger className="w-56 bg-black/20" data-testid="select-tournament-filter">
+                    <SelectValue placeholder="Filtrar por torneo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los torneos</SelectItem>
+                    {tournaments.map((tournament) => (
+                      <SelectItem key={tournament.id} value={tournament.id}>
+                        {tournament.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
