@@ -20,6 +20,16 @@ const updateScoreSchema = z.object({
   homeScore: z.coerce.number().int().min(0),
   awayScore: z.coerce.number().int().min(0),
 });
+const validPositions = new Set(["base", "alero-base", "escolta", "alero", "ala-pivot", "pivot", "alero-escolta"]);
+const tradeOfferSchema = z.object({
+  tournamentId: z.string().min(1),
+  targetPlayerId: z.string().min(1),
+  offeredPlayerIds: z.array(z.string().min(1)).min(1).max(3),
+  requestingTeamId: z.string().min(1).optional(),
+});
+const tradeResolveSchema = z.object({
+  action: z.enum(["accept", "reject"]),
+});
 
 const DEFAULT_TOURNAMENT_RULES = [
   "Formato 5v5 Cancha Completa",
@@ -83,6 +93,12 @@ export async function registerRoutes(
     const startDate = new Date(`${dateValue}T00:00:00`);
     if (Number.isNaN(startDate.getTime())) return null;
     return startDate;
+  };
+
+  const isTradeWindowOpen = (tournament: Tournament) => {
+    const startDate = getTournamentStartDate(tournament.date);
+    if (!startDate) return false;
+    return Date.now() < startDate.getTime();
   };
 
   const maybeActivateTournament = async (tournament: Tournament) => {
@@ -568,6 +584,12 @@ export async function registerRoutes(
       if (req.body.isPublic === undefined) {
         req.body.isPublic = false;
       }
+      if (!req.body.position) {
+        req.body.position = 'base';
+      }
+      if (!validPositions.has(req.body.position)) {
+        return res.status(400).json({ error: "Posicion invalida" });
+      }
 
       const tournamentId = req.body.tournamentId;
       if (tournamentId) {
@@ -828,6 +850,34 @@ export async function registerRoutes(
     }
   });
 
+  // Get team rosters for tournament
+  app.get("/api/tournaments/:id/teams/rosters", async (req, res) => {
+    try {
+      const rosters = await storage.getTeamsWithPlayers(req.params.id);
+      const isAuthenticated = !!req.session.playerId;
+
+      const safeRosters = rosters.map(({ team, players }) => {
+        const safePlayers = (isAuthenticated ? players : players.filter(p => p.isPublic)).map((player) => {
+          const { password, ...safePlayer } = player;
+          if (!isAuthenticated) {
+            return {
+              ...safePlayer,
+              mobile: "***",
+              email: undefined,
+            };
+          }
+          return safePlayer;
+        });
+        return { team, players: safePlayers };
+      });
+
+      res.json({ rosters: safeRosters });
+    } catch (error) {
+      console.error("Get rosters error:", error);
+      res.status(500).json({ error: "Error al obtener plantillas" });
+    }
+  });
+
   // Create team (Admin only)
   app.post("/api/teams", async (req, res) => {
     if (!req.session.playerId) {
@@ -956,6 +1006,52 @@ export async function registerRoutes(
     res.json({ team: updated, groupsGenerated, allReady, tournamentStatus });
   });
 
+  // Move player between teams (Admin only)
+  app.post("/api/teams/move-player", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer || currentPlayer.role !== 'admin') {
+      return res.status(403).json({ error: "Solo administradores pueden mover jugadores" });
+    }
+
+    try {
+      const { playerId, toTeamId } = req.body;
+      if (!playerId || !toTeamId) {
+        return res.status(400).json({ error: "Se requiere playerId y toTeamId" });
+      }
+
+      const targetTeam = await storage.getTeam(toTeamId);
+      if (!targetTeam) {
+        return res.status(404).json({ error: "Equipo destino no encontrado" });
+      }
+
+      const tournament = await storage.getTournament(targetTeam.tournamentId);
+      if (!tournament) {
+        return res.status(404).json({ error: "Torneo no encontrado" });
+      }
+      if (tournament.status === 'completed') {
+        return res.status(400).json({ error: "El torneo ya esta finalizado" });
+      }
+
+      const registration = await storage.getTournamentRegistration(playerId, targetTeam.tournamentId);
+      if (!registration) {
+        return res.status(404).json({ error: "El jugador no esta inscrito en este torneo" });
+      }
+      if (registration.isCaptain) {
+        return res.status(400).json({ error: "No se puede mover un capitan" });
+      }
+
+      await storage.setPlayerTeamInTournament(playerId, targetTeam.tournamentId, targetTeam.id);
+      res.json({ success: true, teamId: targetTeam.id, playerId });
+    } catch (error) {
+      console.error("Move player error:", error);
+      res.status(500).json({ error: "Error al mover jugador" });
+    }
+  });
+
   // Get team by captain
   app.get("/api/teams/captain/:captainId", async (req, res) => {
     try {
@@ -1079,6 +1175,12 @@ export async function registerRoutes(
         }
       }
 
+      if (payload.position !== undefined) {
+        if (!validPositions.has(payload.position)) {
+          return res.status(400).json({ error: "Posicion invalida" });
+        }
+      }
+
       const numericFields = ["pace", "shooting", "passing", "dribbling", "defense", "physical", "overall"];
       for (const field of numericFields) {
         if (payload[field] !== undefined) {
@@ -1165,10 +1267,7 @@ export async function registerRoutes(
           });
         }
 
-        const teamPlayers = await storage.getPlayersForTeam(team.id);
-        if (!teamPlayers.some((player) => player.id === team.captainId)) {
-          await storage.draftPlayer(team.id, team.captainId);
-        }
+        await storage.setPlayerTeamInTournament(team.captainId, tournamentId, team.id);
 
         teams.push(team);
       }
@@ -1212,8 +1311,11 @@ export async function registerRoutes(
 
       const draftState = await storage.getDraftState(tournamentId);
       res.json({ draftState, teams });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Start draft error:", error);
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: "Hay jugadores duplicados en equipos. Revisa las plantillas antes de iniciar." });
+      }
       res.status(500).json({ error: "Error al iniciar el draft" });
     }
   });
@@ -1399,6 +1501,222 @@ export async function registerRoutes(
     } catch (error) {
       console.error("End draft error:", error);
       res.status(500).json({ error: "Error al finalizar el draft" });
+    }
+  });
+
+  // ============ TRADE ROUTES ============
+
+  // Get trade offers for a tournament
+  app.get("/api/trades/:tournamentId", async (req, res) => {
+    try {
+      const offers = await storage.getTradeOffersForTournament(req.params.tournamentId);
+      const safeOffers = offers.map((offer) => {
+        const offeredPlayerIds = (() => {
+          try {
+            return JSON.parse(offer.offeredPlayerIds || "[]");
+          } catch {
+            return [];
+          }
+        })();
+        return { ...offer, offeredPlayerIds };
+      });
+      res.json({ offers: safeOffers });
+    } catch (error) {
+      console.error("Get trade offers error:", error);
+      res.status(500).json({ error: "Error al obtener intercambios" });
+    }
+  });
+
+  // Create trade offer (Captain/Admin)
+  app.post("/api/trades", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const isAdmin = currentPlayer.role === 'admin';
+    if (!isAdmin && currentPlayer.role !== 'captain') {
+      return res.status(403).json({ error: "Solo capitanes pueden solicitar intercambios" });
+    }
+
+    const parseResult = tradeOfferSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Datos invalidos", details: parseResult.error.issues });
+    }
+
+    try {
+      const { tournamentId, targetPlayerId, offeredPlayerIds, requestingTeamId } = parseResult.data;
+
+      const tournament = await storage.getTournament(tournamentId);
+      if (!tournament) {
+        return res.status(404).json({ error: "Torneo no encontrado" });
+      }
+      if (!isTradeWindowOpen(tournament)) {
+        return res.status(400).json({ error: "El periodo de intercambios ha terminado" });
+      }
+
+      const uniqueOfferIds = Array.from(new Set(offeredPlayerIds));
+      if (uniqueOfferIds.length !== offeredPlayerIds.length) {
+        return res.status(400).json({ error: "Hay jugadores repetidos en la oferta" });
+      }
+
+      let requestingTeam: Team | undefined;
+      if (isAdmin) {
+        if (!requestingTeamId) {
+          return res.status(400).json({ error: "requestingTeamId es requerido para admin" });
+        }
+        requestingTeam = await storage.getTeam(requestingTeamId);
+      } else {
+        requestingTeam = await storage.getTeamByCaptainForTournament(currentPlayer.id, tournamentId);
+      }
+
+      if (!requestingTeam || requestingTeam.tournamentId !== tournamentId) {
+        return res.status(404).json({ error: "Equipo solicitante no encontrado" });
+      }
+
+      const targetTeam = await storage.getPlayerTeamInTournament(targetPlayerId, tournamentId);
+      if (!targetTeam) {
+        return res.status(400).json({ error: "El jugador objetivo no esta asignado a un equipo" });
+      }
+      if (targetTeam.id === requestingTeam.id) {
+        return res.status(400).json({ error: "No puedes solicitar jugadores de tu propio equipo" });
+      }
+      if (targetPlayerId === targetTeam.captainId) {
+        return res.status(400).json({ error: "No se puede solicitar al capitan" });
+      }
+
+      const offersCount = await storage.countTradeOffersForPlayer(tournamentId, targetPlayerId);
+      if (offersCount >= 2) {
+        return res.status(400).json({ error: "Este jugador ya alcanzo el limite de ofertas" });
+      }
+
+      const requestingPlayers = await storage.getPlayersForTeam(requestingTeam.id);
+      const requestingIds = new Set(requestingPlayers.map((player) => player.id));
+      for (const offerId of uniqueOfferIds) {
+        if (!requestingIds.has(offerId)) {
+          return res.status(400).json({ error: "Solo puedes ofrecer jugadores de tu equipo" });
+        }
+        if (offerId === requestingTeam.captainId) {
+          return res.status(400).json({ error: "No puedes ofrecer al capitan" });
+        }
+      }
+
+      const offer = await storage.createTradeOffer({
+        tournamentId,
+        requestingTeamId: requestingTeam.id,
+        targetTeamId: targetTeam.id,
+        targetPlayerId,
+        offeredPlayerIds: JSON.stringify(uniqueOfferIds),
+        status: 'pending',
+      });
+
+      res.json({ offer: { ...offer, offeredPlayerIds: uniqueOfferIds } });
+    } catch (error) {
+      console.error("Create trade offer error:", error);
+      res.status(500).json({ error: "Error al crear la oferta" });
+    }
+  });
+
+  // Resolve trade offer (Target captain/Admin)
+  app.post("/api/trades/:id/resolve", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const currentPlayer = await storage.getPlayer(req.session.playerId);
+    if (!currentPlayer) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const parseResult = tradeResolveSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ error: "Datos invalidos", details: parseResult.error.issues });
+    }
+
+    try {
+      const offer = await storage.getTradeOffer(req.params.id);
+      if (!offer) {
+        return res.status(404).json({ error: "Oferta no encontrada" });
+      }
+      if (offer.status !== 'pending') {
+        return res.status(400).json({ error: "La oferta ya fue resuelta" });
+      }
+
+      const tournament = await storage.getTournament(offer.tournamentId);
+      if (!tournament) {
+        return res.status(404).json({ error: "Torneo no encontrado" });
+      }
+
+      const isAdmin = currentPlayer.role === 'admin';
+      if (!isAdmin) {
+        const myTeam = await storage.getTeamByCaptainForTournament(currentPlayer.id, offer.tournamentId);
+        if (!myTeam || myTeam.id !== offer.targetTeamId) {
+          return res.status(403).json({ error: "Solo el capitan receptor puede decidir" });
+        }
+        if (!isTradeWindowOpen(tournament)) {
+          return res.status(400).json({ error: "El periodo de intercambios ha terminado" });
+        }
+      }
+
+      const offeredPlayerIds = (() => {
+        try {
+          return JSON.parse(offer.offeredPlayerIds || "[]");
+        } catch {
+          return [];
+        }
+      })();
+
+      if (parseResult.data.action === 'reject') {
+        const updated = await storage.updateTradeOffer(offer.id, {
+          status: 'rejected',
+          resolvedAt: new Date(),
+          resolvedBy: currentPlayer.id,
+        });
+        return res.json({ offer: { ...updated, offeredPlayerIds } });
+      }
+
+      const requestingTeam = await storage.getTeam(offer.requestingTeamId);
+      const targetTeam = await storage.getTeam(offer.targetTeamId);
+      if (!requestingTeam || !targetTeam) {
+        return res.status(404).json({ error: "Equipos no encontrados" });
+      }
+      if (offer.targetPlayerId === targetTeam.captainId) {
+        return res.status(400).json({ error: "No se puede intercambiar al capitan" });
+      }
+
+      const targetPlayerTeam = await storage.getPlayerTeamInTournament(offer.targetPlayerId, offer.tournamentId);
+      if (!targetPlayerTeam || targetPlayerTeam.id !== targetTeam.id) {
+        return res.status(409).json({ error: "El jugador objetivo ya no esta en ese equipo" });
+      }
+
+      for (const offeredId of offeredPlayerIds) {
+        if (offeredId === requestingTeam.captainId) {
+          return res.status(400).json({ error: "No se puede intercambiar al capitan" });
+        }
+        const offeredTeam = await storage.getPlayerTeamInTournament(offeredId, offer.tournamentId);
+        if (!offeredTeam || offeredTeam.id !== requestingTeam.id) {
+          return res.status(409).json({ error: "Los jugadores ofrecidos ya no estan en el equipo solicitante" });
+        }
+      }
+
+      await storage.setPlayerTeamInTournament(offer.targetPlayerId, offer.tournamentId, requestingTeam.id);
+      for (const offeredId of offeredPlayerIds) {
+        await storage.setPlayerTeamInTournament(offeredId, offer.tournamentId, targetTeam.id);
+      }
+
+      const updated = await storage.updateTradeOffer(offer.id, {
+        status: 'accepted',
+        resolvedAt: new Date(),
+        resolvedBy: currentPlayer.id,
+      });
+      res.json({ offer: { ...updated, offeredPlayerIds } });
+    } catch (error) {
+      console.error("Resolve trade offer error:", error);
+      res.status(500).json({ error: "Error al resolver la oferta" });
     }
   });
 

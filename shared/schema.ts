@@ -11,6 +11,7 @@ export const players = pgTable("players", {
   username: text("username"),
   email: text("email"),
   role: text("role").notNull().default('player'), // 'player' | 'captain' | 'admin'
+  position: text("position").notNull().default('base'), // 'base' | 'alero-base' | 'escolta' | 'alero' | 'ala-pivot' | 'pivot'
   password: text("password"), // Only for captains and admin
   avatar: text("avatar"), // Base64 or URL
   isPublic: boolean("is_public").notNull().default(false),
@@ -150,6 +151,28 @@ export const insertDraftHistorySchema = createInsertSchema(draftHistory).omit({
 
 export type InsertDraftHistory = z.infer<typeof insertDraftHistorySchema>;
 export type DraftHistory = typeof draftHistory.$inferSelect;
+
+// Trade Offers - Captain trade requests and outcomes
+export const tradeOffers = pgTable("trade_offers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tournamentId: varchar("tournament_id").notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+  requestingTeamId: varchar("requesting_team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  targetTeamId: varchar("target_team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  targetPlayerId: varchar("target_player_id").notNull().references(() => players.id),
+  offeredPlayerIds: text("offered_player_ids").notNull(), // JSON array of player IDs
+  status: text("status").notNull().default('pending'), // 'pending' | 'accepted' | 'rejected' | 'cancelled'
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: varchar("resolved_by").references(() => players.id),
+});
+
+export const insertTradeOfferSchema = createInsertSchema(tradeOffers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTradeOffer = z.infer<typeof insertTradeOfferSchema>;
+export type TradeOffer = typeof tradeOffers.$inferSelect;
 
 // Tournament Groups (for group stage)
 export const tournamentGroups = pgTable("tournament_groups", {

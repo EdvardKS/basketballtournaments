@@ -6,15 +6,16 @@ import {
   type TeamPlayer, type InsertTeamPlayer,
   type DraftState, type InsertDraftState,
   type DraftHistory, type InsertDraftHistory,
+  type TradeOffer, type InsertTradeOffer,
   type TournamentGroup, type InsertTournamentGroup,
   type GroupMember, type InsertGroupMember,
   type Match, type InsertMatch,
   type PlayerSkillSnapshot, type InsertPlayerSkillSnapshot,
-  players, tournaments, tournamentRegistrations, teams, teamPlayers, draftState, draftHistory,
+  players, tournaments, tournamentRegistrations, teams, teamPlayers, draftState, draftHistory, tradeOffers,
   tournamentGroups, groupMembers, matches, playerSkillSnapshots
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, sql, desc } from "drizzle-orm";
+import { eq, and, or, sql, desc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Players
@@ -49,6 +50,9 @@ export interface IStorage {
   getTeamByCaptain(captainId: string): Promise<Team | undefined>;
   getTeamByCaptainForTournament(captainId: string, tournamentId: string): Promise<Team | undefined>;
   updateTeamInfo(teamId: string, update: Partial<InsertTeam>): Promise<Team | undefined>;
+  getTeamsWithPlayers(tournamentId: string): Promise<{ team: Team; players: Player[] }[]>;
+  getPlayerTeamInTournament(playerId: string, tournamentId: string): Promise<Team | undefined>;
+  setPlayerTeamInTournament(playerId: string, tournamentId: string, teamId: string): Promise<void>;
   
   // Draft
   draftPlayer(teamId: string, playerId: string): Promise<TeamPlayer>;
@@ -64,6 +68,13 @@ export interface IStorage {
   // Draft History
   addDraftHistory(history: InsertDraftHistory): Promise<DraftHistory>;
   getDraftHistory(tournamentId: string): Promise<DraftHistory[]>;
+
+  // Trades
+  getTradeOffer(id: string): Promise<TradeOffer | undefined>;
+  getTradeOffersForTournament(tournamentId: string): Promise<TradeOffer[]>;
+  createTradeOffer(offer: InsertTradeOffer): Promise<TradeOffer>;
+  updateTradeOffer(id: string, update: Partial<InsertTradeOffer>): Promise<TradeOffer | undefined>;
+  countTradeOffersForPlayer(tournamentId: string, playerId: string): Promise<number>;
   
   // Per-Tournament Captain Management
   setTournamentCaptain(playerId: string, tournamentId: string, isCaptain: boolean, teamName?: string): Promise<TournamentRegistration | undefined>;
@@ -293,6 +304,68 @@ export class DatabaseStorage implements IStorage {
     return team;
   }
 
+  async getTeamsWithPlayers(tournamentId: string): Promise<{ team: Team; players: Player[] }[]> {
+    const rows = await db.select({
+      team: teams,
+      player: players,
+    })
+      .from(teams)
+      .leftJoin(teamPlayers, eq(teamPlayers.teamId, teams.id))
+      .leftJoin(players, eq(players.id, teamPlayers.playerId))
+      .where(eq(teams.tournamentId, tournamentId));
+
+    const map = new Map<string, { team: Team; players: Player[] }>();
+    rows.forEach((row) => {
+      const entry = map.get(row.team.id) || { team: row.team, players: [] };
+      if (row.player) {
+        entry.players.push(row.player);
+      }
+      map.set(row.team.id, entry);
+    });
+
+    return Array.from(map.values()).map((entry) => ({
+      team: entry.team,
+      players: [...entry.players].sort((a, b) => (b.overall || 0) - (a.overall || 0)),
+    }));
+  }
+
+  async getPlayerTeamInTournament(playerId: string, tournamentId: string): Promise<Team | undefined> {
+    const [row] = await db.select({
+      team: teams,
+    })
+      .from(teamPlayers)
+      .innerJoin(teams, eq(teamPlayers.teamId, teams.id))
+      .where(and(
+        eq(teamPlayers.playerId, playerId),
+        eq(teams.tournamentId, tournamentId)
+      ));
+    return row?.team;
+  }
+
+  async setPlayerTeamInTournament(playerId: string, tournamentId: string, teamId: string): Promise<void> {
+    const rows = await db.select({
+      id: teamPlayers.id,
+      teamId: teamPlayers.teamId,
+    })
+      .from(teamPlayers)
+      .innerJoin(teams, eq(teamPlayers.teamId, teams.id))
+      .where(and(
+        eq(teamPlayers.playerId, playerId),
+        eq(teams.tournamentId, tournamentId)
+      ));
+
+    const alreadyOnTeam = rows.some((row) => row.teamId === teamId);
+    const toDelete = rows.filter((row) => row.teamId !== teamId).map((row) => row.id);
+
+    if (toDelete.length > 0) {
+      await db.delete(teamPlayers).where(inArray(teamPlayers.id, toDelete));
+    }
+
+    if (!alreadyOnTeam) {
+      await db.insert(teamPlayers).values({ teamId, playerId });
+    }
+  }
+
   // Draft
   async draftPlayer(teamId: string, playerId: string): Promise<TeamPlayer> {
     const [teamPlayer] = await db.insert(teamPlayers)
@@ -359,6 +432,43 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(draftHistory)
       .where(eq(draftHistory.tournamentId, tournamentId))
       .orderBy(desc(draftHistory.pickedAt));
+  }
+
+  // Trades
+  async getTradeOffer(id: string): Promise<TradeOffer | undefined> {
+    const [offer] = await db.select().from(tradeOffers).where(eq(tradeOffers.id, id));
+    return offer;
+  }
+
+  async getTradeOffersForTournament(tournamentId: string): Promise<TradeOffer[]> {
+    return await db.select().from(tradeOffers)
+      .where(eq(tradeOffers.tournamentId, tournamentId))
+      .orderBy(desc(tradeOffers.createdAt));
+  }
+
+  async createTradeOffer(offer: InsertTradeOffer): Promise<TradeOffer> {
+    const [newOffer] = await db.insert(tradeOffers).values(offer).returning();
+    return newOffer!;
+  }
+
+  async updateTradeOffer(id: string, update: Partial<InsertTradeOffer>): Promise<TradeOffer | undefined> {
+    const [offer] = await db.update(tradeOffers)
+      .set(update)
+      .where(eq(tradeOffers.id, id))
+      .returning();
+    return offer;
+  }
+
+  async countTradeOffersForPlayer(tournamentId: string, playerId: string): Promise<number> {
+    const [row] = await db.select({
+      count: sql<number>`count(*)`,
+    })
+      .from(tradeOffers)
+      .where(and(
+        eq(tradeOffers.tournamentId, tournamentId),
+        eq(tradeOffers.targetPlayerId, playerId)
+      ));
+    return Number(row?.count || 0);
   }
 
   // Per-Tournament Captain Management

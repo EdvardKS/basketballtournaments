@@ -8,20 +8,25 @@ import { Calendar, MapPin, Users, Trophy, Crown, AlertCircle, UserPlus, RefreshC
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { tournamentsApi, teamsApi, draftApi, playersApi, registrationsApi, type Player, type Tournament, type Team, type DraftStateResponse, type TournamentRegistration } from "@/lib/api";
+import { tournamentsApi, teamsApi, draftApi, tradesApi, playersApi, registrationsApi, type Player, type Tournament, type Team, type TeamRoster, type TradeOffer, type DraftStateResponse, type TournamentRegistration } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SkillRadarChart } from "@/components/SkillRadarChart";
 import { TournamentGroupsView } from "@/components/TournamentGroupsView";
 import { PlayerCard } from "@/components/PlayerCard";
+import { PackReveal } from "@/components/PackReveal";
+import { GuidedTour, type TourStep } from "@/components/GuidedTour";
 
 type PlayerWithRegistration = Player & { isCaptain: boolean };
+type RevealItem = { player: Player; teamName?: string };
 
 const DEFAULT_TOURNAMENT_RULES = [
   "Formato 5v5 Cancha Completa",
@@ -31,6 +36,15 @@ const DEFAULT_TOURNAMENT_RULES = [
   "Reglas FIBA",
 ];
 const DEFAULT_TOURNAMENT_RULES_TEXT = DEFAULT_TOURNAMENT_RULES.join("\n");
+const POSITION_OPTIONS = [
+  { value: "base", label: "Base" },
+  { value: "alero-base", label: "Alero-Base" },
+  { value: "escolta", label: "Escolta" },
+  { value: "alero", label: "Alero" },
+  { value: "ala-pivot", label: "Ala-Pivot" },
+  { value: "pivot", label: "Pivot" },
+  { value: "alero-escolta", label: "Alero-Escolta" },
+];
 
 export default function TournamentDetails() {
   const [match, params] = useRoute("/tournaments/:id");
@@ -39,12 +53,22 @@ export default function TournamentDetails() {
   const [registeredPlayers, setRegisteredPlayers] = useState<Player[]>([]);
   const [registrations, setRegistrations] = useState<TournamentRegistration[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [teamRosters, setTeamRosters] = useState<TeamRoster[]>([]);
+  const [tradeOffers, setTradeOffers] = useState<TradeOffer[]>([]);
   const [draftState, setDraftState] = useState<DraftStateResponse | null>(null);
   const [draftedPlayerIds, setDraftedPlayerIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDrafting, setIsDrafting] = useState(false);
   const [isStartingDraft, setIsStartingDraft] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [isMovingPlayerId, setIsMovingPlayerId] = useState<string | null>(null);
+  const [isTradeDialogOpen, setIsTradeDialogOpen] = useState(false);
+  const [tradeTarget, setTradeTarget] = useState<{ player: Player; team: Team } | null>(null);
+  const [tradeOfferPlayers, setTradeOfferPlayers] = useState<string[]>([]);
+  const [isSendingTrade, setIsSendingTrade] = useState(false);
+  const [isResolvingTrade, setIsResolvingTrade] = useState(false);
+  const [revealQueue, setRevealQueue] = useState<RevealItem[]>([]);
+  const [activeReveal, setActiveReveal] = useState<RevealItem | null>(null);
   const { toast } = useToast();
 
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
@@ -55,6 +79,7 @@ export default function TournamentDetails() {
   const [newPlayerPassword, setNewPlayerPassword] = useState("");
   const [newPlayerConfirmPassword, setNewPlayerConfirmPassword] = useState("");
   const [newPlayerIsPublic, setNewPlayerIsPublic] = useState(false);
+  const [newPlayerPosition, setNewPlayerPosition] = useState("base");
   const [newPlayerStats, setNewPlayerStats] = useState({
     pace: 50, shooting: 50, passing: 50, dribbling: 50, defense: 50, physical: 50
   });
@@ -81,19 +106,42 @@ export default function TournamentDetails() {
       setRegistrations(registrationsRes.registrations);
       setRegisteredPlayers(registrationsRes.registrations.map(r => r.player));
 
-      const { teams: tournamentTeams } = await teamsApi.getForTournament(id);
-      setTeams(tournamentTeams);
-
-      const allDraftedIds: string[] = [];
-      for (const team of tournamentTeams) {
-        try {
-          const teamData = await teamsApi.getByCaptain(team.captainId, id);
-          if (teamData.players) {
-            allDraftedIds.push(...teamData.players.map(p => p.id));
-          }
-        } catch {}
+      let rosterData: { rosters: TeamRoster[] } = { rosters: [] };
+      try {
+        rosterData = await teamsApi.getRosters(id);
+      } catch (error) {
+        console.error("Failed to load rosters:", error);
       }
-      setDraftedPlayerIds(allDraftedIds);
+
+      if (rosterData.rosters.length > 0) {
+        const rostersWithCaptains = rosterData.rosters.map((roster) => {
+          const filteredPlayers = roster.players.filter((player) => player.role !== 'admin');
+          const hasCaptain = filteredPlayers.some((player) => player.id === roster.team.captainId);
+          if (!hasCaptain) {
+            const captain = registrationsRes.registrations.find(r => r.playerId === roster.team.captainId)?.player;
+            if (captain && captain.role !== 'admin') {
+              return { ...roster, players: [...filteredPlayers, captain] };
+            }
+          }
+          return { ...roster, players: filteredPlayers };
+        });
+        setTeamRosters(rostersWithCaptains);
+        setTeams(rostersWithCaptains.map(r => r.team));
+        setDraftedPlayerIds(rostersWithCaptains.flatMap(r => r.players.map(p => p.id)));
+      } else {
+        const { teams: tournamentTeams } = await teamsApi.getForTournament(id);
+        setTeams(tournamentTeams);
+        setTeamRosters(tournamentTeams.map(team => ({ team, players: [] })));
+        setDraftedPlayerIds([]);
+      }
+
+      try {
+        const tradeRes = await tradesApi.getForTournament(id);
+        setTradeOffers(tradeRes.offers);
+      } catch (error) {
+        console.error("Failed to load trade offers:", error);
+        setTradeOffers([]);
+      }
 
       if (data.tournament.status === 'draft') {
         try {
@@ -139,6 +187,22 @@ export default function TournamentDetails() {
     setTeamWhatsappLink(myTeam.whatsappGroupLink || "");
   }, [teams, currentUser]);
 
+  useEffect(() => {
+    if (!activeReveal && revealQueue.length > 0) {
+      setActiveReveal(revealQueue[0]);
+    }
+  }, [activeReveal, revealQueue]);
+
+  const enqueueReveal = useCallback((items: RevealItem[]) => {
+    if (items.length === 0) return;
+    setRevealQueue((queue) => [...queue, ...items]);
+  }, []);
+
+  const handleRevealClose = useCallback(() => {
+    setRevealQueue((queue) => queue.slice(1));
+    setActiveReveal(null);
+  }, []);
+
   const handleRefresh = async () => {
     if (params?.id) {
       await loadTournament(params.id);
@@ -165,6 +229,11 @@ export default function TournamentDetails() {
         toast({ title: "Draft completado", description: result.message });
       } else {
         toast({ title: "Jugador drafteado" });
+      }
+
+      const draftedPlayer = playersById.get(playerId);
+      if (draftedPlayer) {
+        enqueueReveal([{ player: draftedPlayer, teamName: teamToDraft.name }]);
       }
 
       if (params?.id) {
@@ -198,6 +267,123 @@ export default function TournamentDetails() {
     }
   };
 
+  const handleMovePlayer = async (playerId: string, toTeamId: string) => {
+    if (!params?.id) return;
+    setIsMovingPlayerId(playerId);
+    try {
+      await teamsApi.movePlayer(playerId, toTeamId);
+      const movedPlayer = playersById.get(playerId);
+      const targetTeam = teamById.get(toTeamId);
+      if (movedPlayer) {
+        enqueueReveal([{ player: movedPlayer, teamName: targetTeam?.name }]);
+      }
+      await loadTournament(params.id);
+      toast({ title: "Jugador movido" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al mover jugador", description: error.message });
+    } finally {
+      setIsMovingPlayerId(null);
+    }
+  };
+
+  const openTradeDialog = (player: Player, team: Team) => {
+    setTradeTarget({ player, team });
+    setTradeOfferPlayers([]);
+    setIsTradeDialogOpen(true);
+  };
+
+  const toggleTradeOfferPlayer = (playerId: string) => {
+    setTradeOfferPlayers((current) => {
+      if (current.includes(playerId)) {
+        return current.filter((id) => id !== playerId);
+      }
+      if (current.length >= 3) {
+        toast({ variant: "destructive", title: "Maximo 3 jugadores por oferta" });
+        return current;
+      }
+      return [...current, playerId];
+    });
+  };
+
+  const handleSendTradeOffer = async () => {
+    if (!tradeTarget || !tournament) return;
+    if (!myTeam) {
+      toast({ variant: "destructive", title: "No tienes equipo asignado" });
+      return;
+    }
+    if (!tradeWindowOpen) {
+      toast({ variant: "destructive", title: "El periodo de intercambios termino" });
+      return;
+    }
+    if (tradeOfferPlayers.length === 0) {
+      toast({ variant: "destructive", title: "Selecciona al menos un jugador" });
+      return;
+    }
+    setIsSendingTrade(true);
+    try {
+      await tradesApi.createOffer({
+        tournamentId: tournament.id,
+        targetPlayerId: tradeTarget.player.id,
+        offeredPlayerIds: tradeOfferPlayers,
+      });
+      toast({ title: "Oferta enviada" });
+      setIsTradeDialogOpen(false);
+      setTradeOfferPlayers([]);
+      if (params?.id) {
+        await loadTournament(params.id);
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al enviar oferta", description: error.message });
+    } finally {
+      setIsSendingTrade(false);
+    }
+  };
+
+  const handleResolveTradeOffer = async (offerId: string, action: 'accept' | 'reject') => {
+    if (!params?.id) return;
+    setIsResolvingTrade(true);
+    try {
+      const { offer } = await tradesApi.resolveOffer(offerId, action);
+
+      if (action === 'accept') {
+        const revealItems: RevealItem[] = [];
+        const requestingTeam = teamById.get(offer.requestingTeamId);
+        const targetTeam = teamById.get(offer.targetTeamId);
+
+        if (currentUser?.role === 'admin') {
+          const targetPlayer = playersById.get(offer.targetPlayerId);
+          if (targetPlayer && requestingTeam) {
+            revealItems.push({ player: targetPlayer, teamName: requestingTeam.name });
+          }
+          offer.offeredPlayerIds.forEach((playerId) => {
+            const player = playersById.get(playerId);
+            if (player && targetTeam) {
+              revealItems.push({ player, teamName: targetTeam.name });
+            }
+          });
+        } else if (myTeam && myTeam.id === offer.targetTeamId) {
+          offer.offeredPlayerIds.forEach((playerId) => {
+            const player = playersById.get(playerId);
+            if (player) {
+              revealItems.push({ player, teamName: myTeam.name });
+            }
+          });
+        }
+
+        enqueueReveal(revealItems);
+        toast({ title: "Intercambio aceptado" });
+      } else {
+        toast({ title: "Oferta rechazada" });
+      }
+
+      await loadTournament(params.id);
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al resolver oferta", description: error.message });
+    } finally {
+      setIsResolvingTrade(false);
+    }
+  };
+
   const handleRegisterNewPlayer = async () => {
     if (!newPlayerName || !newPlayerUsername || !newPlayerEmail || !newPlayerMobile || !newPlayerPassword) {
       toast({ variant: "destructive", title: "Nombre, usuario, email y movil son requeridos" });
@@ -215,6 +401,7 @@ export default function TournamentDetails() {
         username: newPlayerUsername,
         email: newPlayerEmail,
         password: newPlayerPassword,
+        position: newPlayerPosition,
         isPublic: newPlayerIsPublic,
         mobile: newPlayerMobile,
         ...newPlayerStats,
@@ -230,6 +417,7 @@ export default function TournamentDetails() {
       setNewPlayerPassword("");
       setNewPlayerConfirmPassword("");
       setNewPlayerIsPublic(false);
+      setNewPlayerPosition("base");
       setNewPlayerStats({ pace: 50, shooting: 50, passing: 50, dribbling: 50, defense: 50, physical: 50 });
 
       if (params?.id) {
@@ -329,11 +517,49 @@ export default function TournamentDetails() {
   const captainIds = useMemo(() => new Set(registrations.filter(r => r.isCaptain).map(r => r.playerId)), [registrations]);
 
   const playersWithRole = useMemo<PlayerWithRegistration[]>(() => {
-    return registrations.map((registration) => ({
-      ...registration.player,
-      isCaptain: registration.isCaptain,
-    }));
+    return registrations
+      .filter((registration) => registration.player.role !== 'admin')
+      .map((registration) => ({
+        ...registration.player,
+        isCaptain: registration.isCaptain,
+      }));
   }, [registrations]);
+
+  const playersById = useMemo(() => {
+    return new Map(registrations.map((registration) => [registration.playerId, registration.player]));
+  }, [registrations]);
+
+  const teamById = useMemo(() => {
+    return new Map(teams.map((team) => [team.id, team]));
+  }, [teams]);
+
+  const rosterByTeamId = useMemo(() => {
+    return new Map(teamRosters.map((roster) => [roster.team.id, roster]));
+  }, [teamRosters]);
+
+  const assignedPlayerIds = useMemo(() => {
+    return new Set(teamRosters.flatMap((roster) => roster.players.map((player) => player.id)));
+  }, [teamRosters]);
+
+  const unassignedPlayers = useMemo(() => {
+    return playersWithRole.filter((player) => !player.isCaptain && !assignedPlayerIds.has(player.id));
+  }, [playersWithRole, assignedPlayerIds]);
+
+  const tradeCountByPlayer = useMemo(() => {
+    const map = new Map<string, number>();
+    tradeOffers.forEach((offer) => {
+      const count = map.get(offer.targetPlayerId) || 0;
+      map.set(offer.targetPlayerId, count + 1);
+    });
+    return map;
+  }, [tradeOffers]);
+
+  const tradeWindowOpen = useMemo(() => {
+    if (!tournament?.date) return false;
+    const startDate = new Date(`${tournament.date}T00:00:00`);
+    if (Number.isNaN(startDate.getTime())) return false;
+    return Date.now() < startDate.getTime();
+  }, [tournament?.date]);
 
   const filteredPlayers = useMemo(() => {
     const list = playersWithRole.filter((player) => {
@@ -404,6 +630,122 @@ export default function TournamentDetails() {
       setActiveTab(defaultTab);
     }
   }, [tournament, tabItems, activeTab, defaultTab]);
+
+  const isRegistered = !!currentUser && registrations.some(r => r.playerId === currentUser.id);
+  const isAdmin = currentUser?.role === 'admin';
+  const isCaptain = !!currentUser && registrations.some(r => r.playerId === currentUser.id && r.isCaptain);
+  const tournamentStatus = tournament?.status;
+  const isDraftActive = tournamentStatus === 'draft' && draftState?.draftState?.isActive === 'true';
+  const isDraftPhase = tournamentStatus === 'draft';
+  const isSetupPhase = tournamentStatus === 'setup';
+  const isDraftView = activeTab === "draft";
+  const canManageCaptains = tournamentStatus === "open" || (tournamentStatus === "draft" && !isDraftActive);
+  const showDraftControls = isDraftActive && isDraftView;
+  
+  const myTeam = isCaptain ? teams.find(t => t.captainId === currentUser?.id) : null;
+  const myTeamRoster = myTeam ? rosterByTeamId.get(myTeam.id) : null;
+  const isMyTurn = isDraftActive && isDraftView && draftState?.currentTeam?.id === myTeam?.id;
+  const canRequestTrades = Boolean(isCaptain && myTeam && tradeWindowOpen);
+  const getOffersRemaining = useCallback((playerId: string) => {
+    const count = tradeCountByPlayer.get(playerId) || 0;
+    return Math.max(0, 2 - count);
+  }, [tradeCountByPlayer]);
+
+  const rosterList = useMemo(() => {
+    if (teamRosters.length > 0) return teamRosters;
+    return teams.map((team) => ({ team, players: [] }));
+  }, [teamRosters, teams]);
+
+  const myTradePlayers = useMemo(() => {
+    if (!myTeamRoster) return [];
+    return myTeamRoster.players.filter((player) => player.id !== myTeam?.captainId);
+  }, [myTeamRoster, myTeam?.captainId]);
+
+  const tourKey = useMemo(() => {
+    if (!tournament || !currentUser) return "";
+    return `tour:${tournament.id}:${currentUser.role}:v2`;
+  }, [tournament?.id, currentUser?.role]);
+
+  const tourSteps = useMemo<TourStep[]>(() => {
+    if (!tournament || !currentUser) return [];
+    const steps: TourStep[] = [];
+
+    if (tournament.status === "draft") {
+      steps.push({
+        id: "tab-draft",
+        selector: '[data-tour="tab-draft"]',
+        title: "Pestana Draft",
+        body: "Entra aqui para seguir turnos, rondas y jugadores disponibles.",
+        durationMs: 5000,
+      });
+      if (isAdmin && !isDraftActive) {
+        steps.push({
+          id: "start-draft",
+          selector: '[data-tour="start-draft"]',
+          title: "Iniciar draft",
+          body: "Activa el draft para que los capitanes empiecen a elegir.",
+          durationMs: 5500,
+        });
+      }
+      if (isDraftActive) {
+        steps.push({
+          id: "draft-turn",
+          selector: '[data-tour="draft-turn"]',
+          title: "Turno actual",
+          body: "Aqui ves quien elige ahora y el orden de la ronda.",
+          durationMs: 5500,
+        });
+      }
+    }
+
+    steps.push({
+      id: "tab-teams",
+      selector: '[data-tour="tab-teams"]',
+      title: "Equipos",
+      body: "Plantillas, WhatsApp e intercambios se gestionan aqui.",
+      durationMs: 5000,
+    });
+
+    if (isAdmin) {
+      steps.push({
+        id: "admin-roster",
+        selector: '[data-tour="admin-roster"]',
+        title: "Mover jugadores",
+        body: "Como admin puedes mover jugadores entre equipos en tiempo real.",
+        durationMs: 5500,
+      });
+    }
+
+    if (isCaptain) {
+      steps.push({
+        id: "trade-request",
+        selector: '[data-tour="trade-request"]',
+        title: "Solicitar intercambio",
+        body: "Desde otro equipo puedes pedir un jugador y ofrecer hasta 3.",
+        durationMs: 5500,
+      });
+      steps.push({
+        id: "trade-inbox",
+        selector: '[data-tour="trade-inbox"]',
+        title: "Ofertas recibidas",
+        body: "Aqui aceptas o rechazas ofertas pendientes.",
+        durationMs: 5500,
+      });
+    }
+
+    if (tradeOffers.length > 0) {
+      steps.push({
+        id: "trade-history",
+        selector: '[data-tour="trade-history"]',
+        title: "Historial de intercambios",
+        body: "Todas las ofertas quedan registradas para los participantes.",
+        durationMs: 5000,
+      });
+    }
+
+    return steps;
+  }, [currentUser, isAdmin, isCaptain, isDraftActive, tradeOffers.length, tournament]);
+
   if (!match || !params) return null;
   
   if (isLoading) {
@@ -429,19 +771,6 @@ export default function TournamentDetails() {
       </div>
     );
   }
-
-  const isRegistered = !!currentUser && registrations.some(r => r.playerId === currentUser.id);
-  const isAdmin = currentUser?.role === 'admin';
-  const isCaptain = !!currentUser && registrations.some(r => r.playerId === currentUser.id && r.isCaptain);
-  const isDraftActive = tournament.status === 'draft' && draftState?.draftState?.isActive === 'true';
-  const isDraftPhase = tournament.status === 'draft';
-  const isSetupPhase = tournament.status === 'setup';
-  const isDraftView = activeTab === "draft";
-  const canManageCaptains = tournament.status === "open" || (tournament.status === "draft" && !isDraftActive);
-  const showDraftControls = isDraftActive && isDraftView;
-  
-  const myTeam = isCaptain ? teams.find(t => t.captainId === currentUser?.id) : null;
-  const isMyTurn = isDraftActive && isDraftView && draftState?.currentTeam?.id === myTeam?.id;
 
   const availablePlayers = playersWithRole.filter(p => 
     !p.isCaptain && !draftedPlayerIds.includes(p.id)
@@ -526,7 +855,7 @@ export default function TournamentDetails() {
     const isDraftMode = draftMode && isDraftActive;
 
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" data-tour={draftMode ? "draft-players" : undefined}>
         {playersList.map((player) => {
           const isDrafted = draftedPlayerIds.includes(player.id);
           const isCaptainRole = player.isCaptain;
@@ -687,6 +1016,7 @@ export default function TournamentDetails() {
                 key={tab.value}
                 value={tab.value}
                 className="data-[state=active]:bg-primary data-[state=active]:text-black"
+                data-tour={tab.value === "draft" ? "tab-draft" : tab.value === "teams" ? "tab-teams" : undefined}
               >
                 {tab.label}
               </TabsTrigger>
@@ -734,6 +1064,7 @@ export default function TournamentDetails() {
                         className="font-display cursor-pointer"
                         onClick={handleStartDraft}
                         disabled={isStartingDraft}
+                        data-tour="start-draft"
                       >
                         {isStartingDraft ? "INICIANDO..." : "INICIAR DRAFT"}
                       </Button>
@@ -776,7 +1107,7 @@ export default function TournamentDetails() {
                       </div>
                     </div>
 
-                    <div className="p-4 bg-primary/20 rounded-lg border border-primary/30">
+                    <div className="p-4 bg-primary/20 rounded-lg border border-primary/30" data-tour="draft-turn">
                       <p className="text-sm text-muted-foreground mb-1">TURNO DE:</p>
                       <p className="text-2xl font-display text-primary">
                         {draftState.currentTeam?.name || "Cargando..."}
@@ -856,6 +1187,21 @@ export default function TournamentDetails() {
                                 placeholder="Numero de movil"
                                 className="bg-black/20"
                               />
+                            </div>
+                            <div>
+                              <Label>Posicion</Label>
+                              <Select value={newPlayerPosition} onValueChange={setNewPlayerPosition}>
+                                <SelectTrigger className="bg-black/20">
+                                  <SelectValue placeholder="Selecciona una posicion" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {POSITION_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                             <div>
                               <Label>Contrasena</Label>
@@ -1037,16 +1383,22 @@ export default function TournamentDetails() {
                 </Card>
               )}
 
-              {teams.length > 0 ? (
-                <div>
-                  <h2 className="text-3xl font-display font-bold mb-6">EQUIPOS ({teams.length})</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {teams.map(team => {
+              {rosterList.length > 0 ? (
+                <div data-tour="admin-roster">
+                  <h2 className="text-3xl font-display font-bold mb-6">PLANTILLAS ({rosterList.length})</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {rosterList.map(({ team, players }) => {
                       const captain = registeredPlayers.find(p => p.id === team.captainId);
                       const isReady = Boolean(team.whatsappGroupName && team.whatsappGroupLink);
+                      const isCurrentTurn = isDraftActive && draftState?.currentTeam?.id === team.id;
+                      const rosterPlayers = [...players].sort((a, b) => (b.overall || 0) - (a.overall || 0));
+
                       return (
-                        <Card key={team.id} className="bg-white/5 border-white/10">
-                          <CardContent className="pt-4 space-y-2">
+                        <Card
+                          key={team.id}
+                          className={`bg-white/5 border-white/10 ${isCurrentTurn ? "border-primary ring-2 ring-primary/40" : ""}`}
+                        >
+                          <CardContent className="pt-4 space-y-3">
                             <div className="flex items-center justify-between gap-2">
                               <h3 className="font-display text-lg">{team.name}</h3>
                               <Badge
@@ -1072,6 +1424,73 @@ export default function TournamentDetails() {
                                 Abrir grupo
                               </a>
                             )}
+
+                            <div className="space-y-2 pt-2">
+                              {rosterPlayers.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">Sin jugadores asignados.</p>
+                              ) : (
+                                rosterPlayers.map((player) => {
+                                  const isCaptainPlayer = player.id === team.captainId;
+                                  const offersRemaining = getOffersRemaining(player.id);
+                                  const canOfferForPlayer = canRequestTrades && myTeam?.id !== team.id && !isCaptainPlayer && offersRemaining > 0;
+
+                                  return (
+                                    <div
+                                      key={player.id}
+                                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+                                    >
+                                      <div>
+                                        <p className="text-sm font-medium">{player.name}</p>
+                                        <p className="text-xs text-muted-foreground">OVR {player.overall}</p>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        {isCaptainPlayer && (
+                                          <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            Capitan
+                                          </Badge>
+                                        )}
+                                        {isAdmin && !isCaptainPlayer && (
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="cursor-pointer"
+                                                disabled={isMovingPlayerId === player.id || teams.length === 0}
+                                              >
+                                                {isMovingPlayerId === player.id ? "Moviendo..." : "Mover"}
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent>
+                                              {teams.filter(t => t.id !== team.id).map((option) => (
+                                                <DropdownMenuItem
+                                                  key={option.id}
+                                                  onSelect={() => handleMovePlayer(player.id, option.id)}
+                                                >
+                                                  Mover a {option.name}
+                                                </DropdownMenuItem>
+                                              ))}
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        )}
+                                        {canRequestTrades && myTeam?.id !== team.id && !isCaptainPlayer && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="cursor-pointer"
+                                            onClick={() => openTradeDialog(player, team)}
+                                            disabled={!canOfferForPlayer}
+                                            data-tour="trade-request"
+                                          >
+                                            {offersRemaining <= 0 ? "Sin ofertas" : "Solicitar"}
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
                           </CardContent>
                         </Card>
                       );
@@ -1082,6 +1501,107 @@ export default function TournamentDetails() {
                 <Card className="bg-white/5 border-white/10">
                   <CardContent className="py-12 text-center">
                     <p className="text-muted-foreground">Aun no hay equipos creados.</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {isAdmin && unassignedPlayers.length > 0 && (
+                <Card className="bg-white/5 border-white/10">
+                  <CardHeader>
+                    <CardTitle className="font-display text-2xl">Jugadores sin equipo</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {unassignedPlayers.map((player) => (
+                      <div key={player.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium">{player.name}</p>
+                          <p className="text-xs text-muted-foreground">OVR {player.overall}</p>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" className="cursor-pointer" disabled={isMovingPlayerId === player.id}>
+                              {isMovingPlayerId === player.id ? "Asignando..." : "Asignar"}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            {teams.map((option) => (
+                              <DropdownMenuItem key={option.id} onSelect={() => handleMovePlayer(player.id, option.id)}>
+                                Asignar a {option.name}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {tradeOffers.length > 0 && (
+                <Card className="bg-white/5 border-white/10" data-tour="trade-history">
+                  <CardHeader>
+                    <CardTitle className="font-display text-2xl">Historial de intercambios</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {tradeOffers.map((offer) => {
+                      const targetPlayer = playersById.get(offer.targetPlayerId);
+                      const offeredPlayers = offer.offeredPlayerIds.map((id) => playersById.get(id)).filter(Boolean) as Player[];
+                      const requestingTeam = teamById.get(offer.requestingTeamId);
+                      const targetTeam = teamById.get(offer.targetTeamId);
+                      const isPending = offer.status === "pending";
+                      const isMineToResolve = isAdmin || (isCaptain && myTeam?.id === offer.targetTeamId);
+
+                      const statusStyles: Record<string, string> = {
+                        pending: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+                        accepted: "bg-green-500/10 text-green-400 border-green-500/30",
+                        rejected: "bg-red-500/10 text-red-400 border-red-500/30",
+                      };
+
+                      return (
+                        <div key={offer.id} className="rounded-lg border border-white/10 bg-black/20 p-3 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm">
+                              <p className="font-medium">
+                                {requestingTeam?.name || "Equipo"} pide a {targetPlayer?.name || "Jugador"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Objetivo en {targetTeam?.name || "equipo destino"}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className={statusStyles[offer.status] || "bg-white/10 text-white/60 border-white/20"}>
+                              {offer.status === "pending" ? "Pendiente" : offer.status === "accepted" ? "Aceptada" : "Rechazada"}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Ofrece: {offeredPlayers.length > 0 ? offeredPlayers.map(p => p.name).join(", ") : "N/A"}
+                          </div>
+                          {isPending && isMineToResolve && (
+                            <div className="flex gap-2" data-tour="trade-inbox">
+                              <Button
+                                size="sm"
+                                className="font-display bg-green-500/20 text-green-300 hover:bg-green-500/30"
+                                onClick={() => handleResolveTradeOffer(offer.id, "accept")}
+                                disabled={isResolvingTrade || (!tradeWindowOpen && !isAdmin)}
+                              >
+                                Aceptar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="font-display"
+                                onClick={() => handleResolveTradeOffer(offer.id, "reject")}
+                                disabled={isResolvingTrade}
+                              >
+                                Rechazar
+                              </Button>
+                              {!tradeWindowOpen && !isAdmin && (
+                                <p className="text-xs text-muted-foreground self-center">Periodo cerrado</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </CardContent>
                 </Card>
               )}
@@ -1142,6 +1662,67 @@ export default function TournamentDetails() {
           </TabsContent>
         </Tabs>
       </div>
+      <Dialog
+        open={isTradeDialogOpen}
+        onOpenChange={(open) => {
+          setIsTradeDialogOpen(open);
+          if (!open) {
+            setTradeOfferPlayers([]);
+          }
+        }}
+      >
+        <DialogContent className="bg-card border-white/10 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl">Solicitar intercambio</DialogTitle>
+          </DialogHeader>
+          {tradeTarget ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-white/10 bg-black/20 p-3 space-y-1">
+                <p className="text-sm text-muted-foreground">Jugador objetivo</p>
+                <p className="text-lg font-display">{tradeTarget.player.name}</p>
+                <p className="text-xs text-muted-foreground">Equipo: {tradeTarget.team.name}</p>
+                <p className="text-xs text-muted-foreground">Ofertas restantes: {getOffersRemaining(tradeTarget.player.id)}</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Selecciona hasta 3 jugadores de tu equipo</p>
+                {myTradePlayers.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Tu equipo no tiene jugadores disponibles para ofrecer.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {myTradePlayers.map((player) => (
+                      <label key={player.id} className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm">
+                        <Checkbox
+                          checked={tradeOfferPlayers.includes(player.id)}
+                          onCheckedChange={() => toggleTradeOfferPlayer(player.id)}
+                        />
+                        <span className="flex-1">{player.name}</span>
+                        <span className="text-xs text-muted-foreground">OVR {player.overall}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {!tradeWindowOpen && (
+                <p className="text-xs text-muted-foreground">
+                  El periodo de intercambios ya termino.
+                </p>
+              )}
+
+              <Button
+                onClick={handleSendTradeOffer}
+                className="w-full font-display cursor-pointer"
+                disabled={isSendingTrade || tradeOfferPlayers.length === 0 || !tradeWindowOpen}
+              >
+                {isSendingTrade ? "ENVIANDO..." : "ENVIAR OFERTA"}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Selecciona un jugador para continuar.</p>
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog open={isRulesOpen} onOpenChange={setIsRulesOpen}>
         <DialogContent className="bg-card border-white/10 max-w-lg">
           <DialogHeader>
@@ -1166,7 +1747,16 @@ export default function TournamentDetails() {
           </div>
         </DialogContent>
       </Dialog>
-
+      {activeReveal && (
+        <PackReveal player={activeReveal.player} teamName={activeReveal.teamName} onClose={handleRevealClose} />
+      )}
+      {tourKey && (
+        <GuidedTour
+          steps={tourSteps}
+          storageKey={tourKey}
+          enabled={Boolean(currentUser && tournament)}
+        />
+      )}
     </div>
   );
 }

@@ -26,6 +26,17 @@ function getOverallLabel(overall: number) {
   return "AMATEUR";
 }
 
+function getPositionLabel(position?: string | null) {
+  const value = (position || "base").toLowerCase();
+  if (value === "alero-base") return "ALERO-BASE";
+  if (value === "alero-escolta") return "ALERO-ESCOLTA";
+  if (value === "ala-pivot") return "ALA-PIVOT";
+  if (value === "pivot") return "PIVOT";
+  if (value === "alero") return "ALERO";
+  if (value === "escolta") return "ESCOLTA";
+  return "BASE";
+}
+
 function getStatColor(value: number) {
   if (value >= 90) return "text-yellow-400";
   if (value >= 80) return "text-green-400";
@@ -54,7 +65,7 @@ export function PlayerCard({
   const overallLabel = getOverallLabel(player.overall);
 
   const isCaptain = player.role === "captain";
-  const roleLabel = isCaptain ? "CPT" : "JUG";
+  const positionLabel = getPositionLabel(player.position);
 
   const showAvatar = !!player.avatar && !imgError;
 
@@ -114,7 +125,7 @@ export function PlayerCard({
                 </div>
               )}
               <div className="text-xs font-bold text-white/70 uppercase tracking-wider">
-                {roleLabel}
+                {positionLabel}
               </div>
             </div>
 

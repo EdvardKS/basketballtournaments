@@ -25,6 +25,15 @@ const DEFAULT_TOURNAMENT_RULES = [
   "Reglas FIBA",
 ];
 const DEFAULT_TOURNAMENT_RULES_TEXT = DEFAULT_TOURNAMENT_RULES.join("\n");
+const POSITION_OPTIONS = [
+  { value: "base", label: "Base" },
+  { value: "alero-base", label: "Alero-Base" },
+  { value: "escolta", label: "Escolta" },
+  { value: "alero", label: "Alero" },
+  { value: "ala-pivot", label: "Ala-Pivot" },
+  { value: "pivot", label: "Pivot" },
+  { value: "alero-escolta", label: "Alero-Escolta" },
+];
 
 export default function AdminDashboard() {
   const { 
@@ -67,6 +76,7 @@ export default function AdminDashboard() {
   const [editEmail, setEditEmail] = useState("");
   const [editMobile, setEditMobile] = useState("");
   const [editRole, setEditRole] = useState<"player" | "captain" | "admin">("player");
+  const [editPosition, setEditPosition] = useState("base");
   const [editAvatar, setEditAvatar] = useState("");
   const [editIsPublic, setEditIsPublic] = useState(false);
   const [editStats, setEditStats] = useState({
@@ -114,6 +124,10 @@ export default function AdminDashboard() {
       return haystack.includes(term);
     });
   }, [players, playerSearch, playerRoleFilter, playerMinOverall]);
+
+  const filteredCardPlayers = useMemo(() => {
+    return filteredPlayers.filter((player) => player.role !== "admin");
+  }, [filteredPlayers]);
 
   const handleCreateTournament = async () => {
     if (!newTournamentName || !newTournamentDate) {
@@ -251,6 +265,7 @@ export default function AdminDashboard() {
     setEditEmail(player.email || "");
     setEditMobile(player.mobile || "");
     setEditRole((player.role as "player" | "captain" | "admin") || "player");
+    setEditPosition(player.position || "base");
     setEditAvatar(player.avatar || "");
     setEditIsPublic(!!player.isPublic);
     setEditStats({
@@ -283,6 +298,7 @@ export default function AdminDashboard() {
       email: editEmail.trim() || null,
       mobile: editMobile.trim(),
       role: editRole,
+      position: editPosition,
       avatar: editAvatar.trim() || null,
       isPublic: editIsPublic,
       pace: editStats.pace,
@@ -664,7 +680,7 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          {filteredPlayers.length === 0 ? (
+          {filteredCardPlayers.length === 0 ? (
             <Card className="bg-white/5 border-white/10">
               <CardContent className="py-12 text-center">
                 <p className="text-muted-foreground">No hay jugadores con esos filtros.</p>
@@ -672,7 +688,7 @@ export default function AdminDashboard() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-              {filteredPlayers.map((player) => (
+              {filteredCardPlayers.map((player) => (
                 <div key={player.id} className="space-y-3" data-testid={`admin-player-card-${player.id}`}>
                   <PlayerCard
                     player={player}
@@ -826,6 +842,21 @@ export default function AdminDashboard() {
                     <SelectItem value="player">Jugador</SelectItem>
                     <SelectItem value="captain">Capitan</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Posicion</label>
+                <Select value={editPosition} onValueChange={setEditPosition}>
+                  <SelectTrigger className="bg-black/20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {POSITION_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

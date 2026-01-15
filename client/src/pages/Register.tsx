@@ -21,6 +21,15 @@ import { Camera } from "lucide-react";
 // Max file size 2MB
 const MAX_FILE_SIZE = 2000000;
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+const POSITION_OPTIONS = [
+  { value: "base", label: "Base" },
+  { value: "alero-base", label: "Alero-Base" },
+  { value: "escolta", label: "Escolta" },
+  { value: "alero", label: "Alero" },
+  { value: "ala-pivot", label: "Ala-Pivot" },
+  { value: "pivot", label: "Pivot" },
+  { value: "alero-escolta", label: "Alero-Escolta" },
+];
 
 const formSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
@@ -29,6 +38,7 @@ const formSchema = z.object({
   password: z.string().min(6, "La contrasena debe tener al menos 6 caracteres."),
   confirmPassword: z.string().min(6, "Confirma la contrasena."),
   mobile: z.string().min(9, "Introduce un movil valido."),
+  position: z.string().min(1, "Selecciona una posicion."),
   tournamentId: z.string().min(1, "Debes seleccionar un torneo."),
   isPublic: z.boolean().default(false),
   consent: z.boolean().refine((val) => val === true, { message: "Debes aceptar las condiciones legales." }),
@@ -144,6 +154,7 @@ export default function Register() {
       password: "",
       confirmPassword: "",
       mobile: "",
+      position: "base",
       tournamentId: preSelectedTournamentId || "",
       isPublic: false,
       consent: false,
@@ -202,6 +213,7 @@ export default function Register() {
         username: values.username,
         email: values.email,
         password: values.password,
+        position: values.position,
         isPublic: values.isPublic,
         mobile: values.mobile,
         avatar: previewImage || undefined,
@@ -360,6 +372,31 @@ export default function Register() {
                         <FormDescription className="text-xs">
                           Usaremos esto para tu historial en la liga.
                         </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="position"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Posicion</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="bg-white/5 border-white/10">
+                              <SelectValue placeholder="Selecciona una posicion..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {POSITION_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

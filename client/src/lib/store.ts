@@ -20,6 +20,7 @@ export interface Player {
   username?: string | null;
   email?: string | null;
   role: PlayerRole;
+  position?: string | null;
   isPublic?: boolean;
   pace: number;
   shooting: number;

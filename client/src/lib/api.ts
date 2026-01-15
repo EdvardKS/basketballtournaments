@@ -10,6 +10,7 @@ export interface Player {
   username?: string | null;
   email?: string | null;
   role: 'player' | 'captain' | 'admin';
+  position?: string | null;
   isPublic?: boolean;
   pace: number;
   shooting: number;
@@ -39,6 +40,7 @@ export interface RegisterPlayerData {
   username: string;
   email: string;
   password: string;
+  position?: string;
   isPublic?: boolean;
   pace: number;
   shooting: number;
@@ -247,10 +249,24 @@ export interface Team {
   whatsappGroupLink?: string | null;
 }
 
+export interface TeamRoster {
+  team: Team;
+  players: Player[];
+}
+
 export const teamsApi = {
   async getForTournament(tournamentId: string): Promise<{ teams: Team[] }> {
     const res = await apiFetch(`/api/tournaments/${tournamentId}/teams`);
     if (!res.ok) throw new Error('Failed to fetch teams');
+    return res.json();
+  },
+
+  async getRosters(tournamentId: string): Promise<{ rosters: TeamRoster[] }> {
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/teams/rosters`);
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to fetch rosters');
+    }
     return res.json();
   },
 
@@ -291,6 +307,19 @@ export const teamsApi = {
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.error || 'Failed to update team name');
+    }
+    return res.json();
+  },
+
+  async movePlayer(playerId: string, toTeamId: string): Promise<{ teamId: string; playerId: string }> {
+    const res = await apiFetch('/api/teams/move-player', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId, toTeamId }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to move player');
     }
     return res.json();
   },
@@ -373,6 +402,57 @@ export const draftApi = {
       const error = await res.json();
       throw new Error(error.error || 'Failed to end draft');
     }
+  },
+};
+
+// Trade API
+export interface TradeOffer {
+  id: string;
+  tournamentId: string;
+  requestingTeamId: string;
+  targetTeamId: string;
+  targetPlayerId: string;
+  offeredPlayerIds: string[];
+  status: string;
+  createdAt: string;
+  resolvedAt?: string | null;
+  resolvedBy?: string | null;
+}
+
+export const tradesApi = {
+  async getForTournament(tournamentId: string): Promise<{ offers: TradeOffer[] }> {
+    const res = await apiFetch(`/api/trades/${tournamentId}`);
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to fetch trade offers');
+    }
+    return res.json();
+  },
+
+  async createOffer(data: { tournamentId: string; targetPlayerId: string; offeredPlayerIds: string[]; requestingTeamId?: string }): Promise<{ offer: TradeOffer }> {
+    const res = await apiFetch('/api/trades', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to create trade offer');
+    }
+    return res.json();
+  },
+
+  async resolveOffer(offerId: string, action: 'accept' | 'reject'): Promise<{ offer: TradeOffer }> {
+    const res = await apiFetch(`/api/trades/${offerId}/resolve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to resolve trade offer');
+    }
+    return res.json();
   },
 };
 

@@ -7,6 +7,7 @@ CREATE TABLE public.players (
   username text UNIQUE,
   email text UNIQUE,
   role text NOT NULL DEFAULT 'player',
+  position text NOT NULL DEFAULT 'base',
   password text,
   avatar text,
   is_public boolean NOT NULL DEFAULT false,
@@ -119,6 +120,19 @@ CREATE TABLE public.draft_history (
   picked_at timestamp NOT NULL DEFAULT now()
 );
 
+CREATE TABLE public.trade_offers (
+  id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+  tournament_id varchar NOT NULL,
+  requesting_team_id varchar NOT NULL,
+  target_team_id varchar NOT NULL,
+  target_player_id varchar NOT NULL,
+  offered_player_ids text NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  created_at timestamp NOT NULL DEFAULT now(),
+  resolved_at timestamp,
+  resolved_by varchar
+);
+
 CREATE TABLE public.player_skill_snapshots (
   id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id varchar NOT NULL,
@@ -196,6 +210,18 @@ ALTER TABLE draft_history
   FOREIGN KEY (team_id) REFERENCES teams(id),
   ADD CONSTRAINT fk_draft_history_player
   FOREIGN KEY (player_id) REFERENCES players(id);
+
+ALTER TABLE trade_offers
+  ADD CONSTRAINT fk_trade_offers_tournament
+  FOREIGN KEY (tournament_id) REFERENCES tournaments(id),
+  ADD CONSTRAINT fk_trade_offers_requesting_team
+  FOREIGN KEY (requesting_team_id) REFERENCES teams(id),
+  ADD CONSTRAINT fk_trade_offers_target_team
+  FOREIGN KEY (target_team_id) REFERENCES teams(id),
+  ADD CONSTRAINT fk_trade_offers_target_player
+  FOREIGN KEY (target_player_id) REFERENCES players(id),
+  ADD CONSTRAINT fk_trade_offers_resolved_by
+  FOREIGN KEY (resolved_by) REFERENCES players(id);
 
 -- snapshots
 ALTER TABLE player_skill_snapshots

@@ -1,12 +1,15 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initDatabaseIfEmpty } from "./init-db";
+import { pool } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
+const PgSession = connectPgSimple(session);
 
 declare module "http" {
   interface IncomingMessage {
@@ -26,13 +29,21 @@ app.use(
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 app.use(session({
+  store: new PgSession({
+    pool,
+    tableName: "session",
+    createTableIfMissing: true,
+  }),
+  name: "basketball_sid",
   secret: process.env.SESSION_SECRET || 'villena-basket-league-secret-2024',
   resave: false,
+  rolling: true,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    sameSite: "lax",
+    maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
   }
 }));
 

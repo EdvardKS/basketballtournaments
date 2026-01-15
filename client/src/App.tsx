@@ -69,8 +69,11 @@ function App() {
     authApi.me().then((data) => {
       if (data?.player) {
         setCurrentUser(data.player);
+      } else {
+        setCurrentUser(null);
       }
     }).catch(() => {
+      setCurrentUser(null);
     }).finally(() => {
       setIsLoading(false);
     });
