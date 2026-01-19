@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertPlayerSchema, insertTournamentSchema, type Player, type Team, type Tournament } from "@shared/schema";
 import { z } from "zod";
+import bcrypt from "bcrypt";
 
 const setCaptainSchema = z.object({
   isCaptain: z.boolean(),
@@ -455,7 +456,7 @@ export async function registerRoutes(
       }
 
       // Check if it's admin login
-      if (identifier === "edvardks" && password === "SX515wifi") {
+      if (identifier === "edvardks" && password === process.env.ADMIN_PASSWORD) {
         const admin = await storage.getPlayerByMobile("edvardks");
         if (admin) {
           req.session.playerId = admin.id;
@@ -473,9 +474,12 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Credenciales invalidas" });
       }
 
-      if (player.password === password) {
+      // Compare hashed password using bcrypt
+      const isPasswordValid = await bcrypt.compare(password, player.password);
+      if (isPasswordValid) {
         req.session.playerId = player.id;
-        return res.json({ player });
+        const { password: _, ...safePlayer } = player;
+        return res.json({ player: safePlayer });
       }
 
       return res.status(401).json({ error: "Credenciales invalidas" });
@@ -579,7 +583,8 @@ export async function registerRoutes(
 
       req.body.username = trimmedUsername;
       req.body.email = trimmedEmail;
-      req.body.password = String(password);
+      // Hash password before storing
+      req.body.password = await bcrypt.hash(String(password), 10);
       req.body.role = 'player';
       if (req.body.isPublic === undefined) {
         req.body.isPublic = false;

@@ -31,6 +31,9 @@ export const players = pgTable("players", {
 export const insertPlayerSchema = createInsertSchema(players).omit({
   id: true,
   createdAt: true,
+}).extend({
+  avatar: z.string().min(1, "La foto es obligatoria"),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
 export type InsertPlayer = z.infer<typeof insertPlayerSchema>;
