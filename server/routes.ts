@@ -552,10 +552,6 @@ export async function registerRoutes(
   // Register player
   app.post("/api/players/register", async (req, res) => {
     try {
-      if (!req.body.avatar) {
-        return res.status(400).json({ error: "La foto es obligatoria" });
-      }
-
       const { username, email, password } = req.body;
       if (!username || !email || !password) {
         return res.status(400).json({ error: "Usuario, email y contrasena son requeridos" });
@@ -834,6 +830,36 @@ export async function registerRoutes(
         return res.status(409).json({ error: "Ya estas inscrito en este torneo" });
       }
       res.status(500).json({ error: "Error al inscribirse al torneo" });
+    }
+  });
+
+  // Get players not registered in a tournament (Admin only)
+  app.get("/api/tournaments/:id/players/available", async (req, res) => {
+    if (!req.session.playerId) {
+      return res.status(401).json({ error: "No autenticado" });
+    }
+
+    try {
+      const currentPlayer = await storage.getPlayer(req.session.playerId);
+      if (!currentPlayer || currentPlayer.role !== 'admin') {
+        return res.status(403).json({ error: "Solo administradores pueden ver este listado" });
+      }
+
+      const tournament = await storage.getTournament(req.params.id);
+      if (!tournament) {
+        return res.status(404).json({ error: "Torneo no encontrado" });
+      }
+
+      const query = String(req.query.q || "").trim();
+      const players = await storage.getAvailablePlayersForTournament(req.params.id, query);
+      const safePlayers = players.map((player) => {
+        const { password, ...safePlayer } = player;
+        return safePlayer;
+      });
+      res.json({ players: safePlayers });
+    } catch (error) {
+      console.error("Get available players error:", error);
+      res.status(500).json({ error: "Error al obtener jugadores disponibles" });
     }
   });
 
@@ -1391,6 +1417,9 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No hay draft activo para este torneo" });
       }
 
+      const teamOrder = JSON.parse(draftState.teamOrder);
+      const currentTeamId = teamOrder[draftState.currentTeamIndex];
+
       if (!isAdmin) {
         const registration = await storage.getTournamentRegistration(currentPlayer.id, team.tournamentId);
         if (!registration || !registration.isCaptain) {
@@ -1400,14 +1429,15 @@ export async function registerRoutes(
         if (team.captainId !== currentPlayer.id) {
           return res.status(403).json({ error: "No puedes draftear para un equipo que no es tuyo" });
         }
+      }
 
-        const teamOrder = JSON.parse(draftState.teamOrder);
-        const currentTeamId = teamOrder[draftState.currentTeamIndex];
-        if (teamId !== currentTeamId) {
-          const currentTeam = await storage.getTeam(currentTeamId);
-          const captain = currentTeam ? await storage.getPlayer(currentTeam.captainId) : null;
-          return res.status(403).json({ error: `No es tu turno. Es el turno de ${captain?.name || 'otro capitan'}` });
+      if (teamId !== currentTeamId) {
+        const currentTeam = await storage.getTeam(currentTeamId);
+        const captain = currentTeam ? await storage.getPlayer(currentTeam.captainId) : null;
+        if (isAdmin) {
+          return res.status(403).json({ error: `No es el turno de ese equipo. Turno de ${currentTeam?.name || 'otro equipo'}` });
         }
+        return res.status(403).json({ error: `No es tu turno. Es el turno de ${captain?.name || 'otro capitan'}` });
       }
 
       const draftedIds = await storage.getDraftedPlayerIds(team.tournamentId);

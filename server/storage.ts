@@ -15,7 +15,7 @@ import {
   tournamentGroups, groupMembers, matches, playerSkillSnapshots
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, sql, desc, inArray } from "drizzle-orm";
+import { type SQL, eq, and, or, sql, desc, inArray, isNull, ne } from "drizzle-orm";
 
 export interface IStorage {
   // Players
@@ -40,6 +40,7 @@ export interface IStorage {
   // Tournament Registrations
   registerPlayerToTournament(playerId: string, tournamentId: string): Promise<TournamentRegistration>;
   getPlayersForTournament(tournamentId: string): Promise<Player[]>;
+  getAvailablePlayersForTournament(tournamentId: string, query?: string): Promise<Player[]>;
   getTournamentsForPlayer(playerId: string): Promise<Tournament[]>;
   
   // Teams
@@ -246,6 +247,41 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(players, eq(tournamentRegistrations.playerId, players.id))
       .where(eq(tournamentRegistrations.tournamentId, tournamentId));
     
+    return result.map((r: { player: Player }) => r.player);
+  }
+
+  async getAvailablePlayersForTournament(tournamentId: string, query?: string): Promise<Player[]> {
+    const conditions: SQL<unknown>[] = [
+      isNull(tournamentRegistrations.id),
+      ne(players.role, 'admin'),
+    ];
+
+    if (query) {
+      const pattern = `%${query}%`;
+      const searchCondition = or(
+        sql`${players.name} ILIKE ${pattern}`,
+        sql`${players.username} ILIKE ${pattern}`,
+        sql`${players.email} ILIKE ${pattern}`,
+        sql`${players.mobile} ILIKE ${pattern}`,
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
+    }
+
+    const result = await db
+      .select({ player: players })
+      .from(players)
+      .leftJoin(
+        tournamentRegistrations,
+        and(
+          eq(tournamentRegistrations.playerId, players.id),
+          eq(tournamentRegistrations.tournamentId, tournamentId),
+        ),
+      )
+      .where(and(...conditions))
+      .orderBy(desc(players.overall), desc(players.createdAt));
+
     return result.map((r: { player: Player }) => r.player);
   }
 

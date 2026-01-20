@@ -39,7 +39,7 @@ const formSchema = z.object({
   confirmPassword: z.string().min(6, "Confirma la contrasena."),
   mobile: z.string().min(9, "Introduce un movil valido."),
   position: z.string().min(1, "Selecciona una posicion."),
-  tournamentId: z.string().min(1, "Debes seleccionar un torneo."),
+  tournamentId: z.string().optional(),
   isPublic: z.boolean().default(false),
   consent: z.boolean().refine((val) => val === true, { message: "Debes aceptar las condiciones legales." }),
   pace: z.number().min(0).max(99),
@@ -155,7 +155,7 @@ export default function Register() {
       confirmPassword: "",
       mobile: "",
       position: "base",
-      tournamentId: preSelectedTournamentId || "",
+      tournamentId: preSelectedTournamentId || "none",
       isPublic: false,
       consent: false,
       pace: 50,
@@ -196,18 +196,12 @@ export default function Register() {
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!previewImage) {
-      toast({
-        variant: "destructive",
-        title: "Foto requerida",
-        description: "Debes subir una foto para completar el registro.",
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     
     try {
+      const selectedTournamentId = values.tournamentId && values.tournamentId !== "none"
+        ? values.tournamentId
+        : undefined;
       const playerData = {
         name: values.name,
         username: values.username,
@@ -223,17 +217,23 @@ export default function Register() {
         dribbling: values.dribbling,
         defense: values.defense,
         physical: values.physical,
-        tournamentId: values.tournamentId,
+        tournamentId: selectedTournamentId,
       };
       
       await registerPlayer(playerData);
       
       toast({
         title: "Registro Completado",
-        description: "Tu perfil ha sido creado y enviado a la bolsa de jugadores.",
+        description: selectedTournamentId
+          ? "Tu perfil ha sido creado y enviado a la bolsa de jugadores."
+          : "Tu perfil ha sido creado. Ya puedes inscribirte a un torneo cuando quieras.",
       });
 
-      setLocation(`/tournaments/${values.tournamentId}`);
+      if (selectedTournamentId) {
+        setLocation(`/tournaments/${selectedTournamentId}`);
+      } else {
+        setLocation(`/tournaments`);
+      }
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -289,7 +289,7 @@ export default function Register() {
                     accept="image/*"
                     onChange={handleImageChange}
                   />
-                  <p className="text-xs text-muted-foreground mt-2">Max 2MB. JPG/PNG. <span className="text-red-400">*Obligatorio</span></p>
+                  <p className="text-xs text-muted-foreground mt-2">Max 2MB. JPG/PNG. Opcional.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
@@ -435,7 +435,7 @@ export default function Register() {
                     name="tournamentId"
                     render={({ field }) => (
                       <FormItem className="md:col-span-2">
-                        <FormLabel>Torneo a Inscribirse</FormLabel>
+                        <FormLabel>Torneo (opcional)</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger className="bg-white/5 border-white/10">
@@ -443,6 +443,7 @@ export default function Register() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
+                            <SelectItem value="none">Sin torneo (solo perfil)</SelectItem>
                             {tournaments.filter(t => t.status === 'open').map((t) => (
                               <SelectItem key={t.id} value={t.id}>
                                 {t.name}
@@ -450,6 +451,9 @@ export default function Register() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <FormDescription className="text-xs">
+                          Puedes crear tu perfil ahora y apuntarte a un torneo cuando quieras.
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

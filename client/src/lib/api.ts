@@ -528,6 +528,18 @@ export const registrationsApi = {
     return res.json();
   },
 
+  async getAvailablePlayers(tournamentId: string, query?: string): Promise<{ players: Player[] }> {
+    const params = new URLSearchParams();
+    if (query) params.append('q', query);
+    const suffix = params.toString();
+    const res = await apiFetch(`/api/tournaments/${tournamentId}/players/available${suffix ? `?${suffix}` : ""}`);
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to fetch available players');
+    }
+    return res.json();
+  },
+
   async getCaptains(tournamentId: string): Promise<{ captains: TournamentRegistration[] }> {
     const res = await apiFetch(`/api/tournaments/${tournamentId}/captains`);
     if (!res.ok) throw new Error('Failed to fetch captains');
