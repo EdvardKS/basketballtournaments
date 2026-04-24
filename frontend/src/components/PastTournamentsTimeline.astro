@@ -1,46 +1,44 @@
 ---
-import type { Tournament } from "../lib/types.ts";
-interface Props { tournaments: Tournament[]; }
-const { tournaments } = Astro.props;
-const sorted = [...tournaments].sort((a, b) => b.date.localeCompare(a.date));
-const year = (d: string) => d.slice(0, 4);
----
-<section class="mb-14">
-  <header class="flex items-baseline gap-3 mb-6">
-    <span class="h-3 w-3 rounded-full bg-slate-500"></span>
-    <h2 class="text-sm uppercase tracking-[0.3em] text-slate-300 font-bold">
-      Ediciones anteriores
-    </h2>
-  </header>
+import type { Tournament } from "../lib/types.js";
+import { formatDate } from "../lib/display.js";
 
-  {sorted.length === 0 ? (
-    <p class="text-slate-500 text-sm">Aún no hay torneos finalizados.</p>
-  ) : (
-    <ol class="relative border-l border-slate-800 pl-8 space-y-6">
-      {sorted.map((t) => (
-        <li class="relative">
-          <span class="absolute -left-[37px] top-2 grid place-items-center
-                       h-6 w-6 rounded-full bg-court-card border border-slate-700
-                       font-display text-[10px] text-court-muted">
-            {year(t.date).slice(2)}
-          </span>
-          <a href={`/tournaments/${t.id}`}
-             class="card block hover:border-court-accent transition-colors">
-            <div class="flex flex-wrap justify-between items-baseline gap-3">
-              <h3 class="font-display text-3xl text-slate-100">{t.name}</h3>
-              <span class="text-xs uppercase tracking-widest text-slate-500">
-                {t.date}
-              </span>
-            </div>
-            <p class="text-sm text-slate-400 mt-2 line-clamp-2">{t.description}</p>
-            <div class="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
-              <span>📍 {t.location}</span>
-              <span>🏀 {t.maxTeams} equipos</span>
-              <span class="chip bg-slate-700/40 text-slate-300">Finalizado</span>
-            </div>
-          </a>
-        </li>
-      ))}
-    </ol>
-  )}
-</section>
+interface Props { tournaments: Tournament[] }
+const { tournaments } = Astro.props;
+const completed = tournaments.filter((t) => t.status === "completed");
+---
+{completed.length > 0 && (
+  <section class="max-w-7xl mx-auto px-4 py-12">
+    <h2 class="font-display text-3xl text-white mb-6">Historial de torneos</h2>
+
+    <div class="relative">
+      <!-- Vertical line -->
+      <div class="absolute left-3 top-0 bottom-0 w-0.5 bg-court-border" />
+
+      <ul class="space-y-6 pl-10">
+        {completed.map((t) => (
+          <li class="relative animate-slide-in">
+            <!-- Dot -->
+            <div class="absolute -left-7 top-2 w-3 h-3 rounded-full border-2 border-court-accent bg-court-dark" />
+
+            <a href={`/tournaments/${t.id}`} class="block card hover:border-court-accent/40 transition-colors group">
+              <div class="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p class="text-xs text-court-muted mb-0.5">{formatDate(t.matchDate ?? t.date)}</p>
+                  <h3 class="font-display text-xl text-white group-hover:text-court-accent transition-colors">{t.name}</h3>
+                  <p class="text-xs text-court-muted">{t.location}</p>
+                </div>
+                {t.winnerId && (
+                  <div class="text-right">
+                    <p class="text-xs text-court-muted">Campeón</p>
+                    <span class="chip bg-court-gold/20 text-court-gold">🏆 Registrado</span>
+                  </div>
+                )}
+              </div>
+              <p class="text-sm text-court-muted mt-2 line-clamp-1">{t.description}</p>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+)}

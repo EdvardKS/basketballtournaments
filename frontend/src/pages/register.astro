@@ -1,17 +1,13 @@
 ---
 import Main from "../layouts/Main.astro";
-import RegisterForm from "../islands/RegisterForm.tsx";
+import RegisterForm from "../islands/RegisterForm.js";
+import { loadSession } from "../lib/session.js";
+
+const session = await loadSession(Astro.request);
+if (session.isAuthenticated) return Astro.redirect("/dashboard/player");
 ---
-<Main title="Crear cuenta — Villena Basket">
-  <section class="max-w-2xl mx-auto">
-    <h1 class="text-5xl text-court-accent mb-2">CREAR CUENTA</h1>
-    <p class="text-slate-400 mb-6 text-sm">
-      Configura tu carta como en FIFA: estadísticas y un overall calculado
-      automáticamente. Podrás inscribirte a cualquier torneo abierto nada más
-      registrarte.
-    </p>
-    <div class="card">
-      <RegisterForm client:load />
-    </div>
-  </section>
+<Main title="Crear cuenta" player={null}>
+  <div class="max-w-7xl mx-auto px-4 py-16">
+    <RegisterForm client:load />
+  </div>
 </Main>

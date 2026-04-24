@@ -1,0 +1,30 @@
+---
+import type { Tournament } from "../lib/types.js";
+import { STATUS_LABEL, STATUS_COLOR, formatDate } from "../lib/display.js";
+import TournamentPhaseBar from "./TournamentPhaseBar.astro";
+
+interface Props { tournament: Tournament }
+const { tournament: t } = Astro.props;
+---
+<a href={`/tournaments/${t.id}`} class="card block hover:border-court-accent/50 transition-colors group animate-slide-in">
+  <div class="flex items-start justify-between gap-3 mb-3">
+    <div>
+      <span class={STATUS_COLOR[t.status]}>{STATUS_LABEL[t.status]}</span>
+      <h3 class="font-display text-2xl text-white mt-1 group-hover:text-court-accent transition-colors">{t.name}</h3>
+      <p class="text-xs text-court-muted">{t.location}</p>
+    </div>
+    <div class="text-right shrink-0">
+      <p class="text-xs text-court-muted">Día del torneo</p>
+      <p class="font-display text-lg text-white">{formatDate(t.matchDate ?? t.date)}</p>
+    </div>
+  </div>
+
+  <p class="text-sm text-court-muted line-clamp-2 mb-4">{t.description}</p>
+
+  <TournamentPhaseBar tournament={t} />
+
+  <div class="flex items-center justify-between mt-4 pt-3 border-t border-court-border">
+    <span class="text-xs text-court-muted">Equipos: {t.maxTeams} max</span>
+    <span class="text-xs text-court-accent font-semibold group-hover:underline">Ver detalles →</span>
+  </div>
+</a>

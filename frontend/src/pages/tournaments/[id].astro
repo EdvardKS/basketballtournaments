@@ -1,92 +1,129 @@
 ---
 import Main from "../../layouts/Main.astro";
-import { api, getCookieHeader, ApiError } from "../../lib/api.ts";
-import { loadSession } from "../../lib/session.ts";
-import type { TournamentDetail, TournamentStatus } from "../../lib/types.ts";
-import TournamentHeader from "../../components/TournamentHeader.astro";
+import TournamentPhaseBar from "../../components/TournamentPhaseBar.astro";
 import TeamsGrid from "../../components/TeamsGrid.astro";
 import GroupsTable from "../../components/GroupsTable.astro";
 import MatchesList from "../../components/MatchesList.astro";
+import KnockoutBracketView from "../../components/KnockoutBracketView.astro";
 import PlayerCard from "../../components/PlayerCard.astro";
-import RegisterButton from "../../islands/RegisterButton.tsx";
-import { displayName } from "../../lib/display.ts";
+import { loadSession } from "../../lib/session.js";
+import { api, ApiError, getCookieHeader } from "../../lib/api.js";
+import { STATUS_LABEL, STATUS_COLOR, formatDate } from "../../lib/display.js";
+import type { Tournament, TeamWithPlayers, GroupWithMembers, Match, Player } from "../../lib/types.js";
 
 const { id } = Astro.params;
-const cookie = getCookieHeader(Astro.request);
+if (!id) return Astro.redirect("/");
+
 const session = await loadSession(Astro.request);
+const cookie = getCookieHeader(Astro.request);
+const auth = session.isAuthenticated;
+const isAdmin = session.isAdmin;
 
-let detail: TournamentDetail;
+let tournament: Tournament | null = null;
+let teams: TeamWithPlayers[] = [];
+let groups: GroupWithMembers[] = [];
+let matches: Match[] = [];
+let registrations: { player_id: string; name: string; mobile: string }[] = [];
+
 try {
-  detail = await api<TournamentDetail>(`/tournaments/${id}`, {}, cookie);
-} catch (err) {
-  if (err instanceof ApiError && err.status === 404) return Astro.redirect("/404");
-  throw err;
+  const detail = await api<{ tournament: Tournament; teams: TeamWithPlayers[]; registrations: unknown[] }>(`/tournaments/${id}`, {}, cookie);
+  tournament = detail.tournament;
+  teams = detail.teams;
+  registrations = detail.registrations as typeof registrations;
+} catch (e) {
+  if (e instanceof ApiError && e.status === 404) return Astro.redirect("/");
 }
-const { tournament, registrations, teams } = detail;
+if (!tournament) return Astro.redirect("/");
 
-const loggedIn = !!session.player;
-const showRegister = loggedIn && ["open","draft"].includes(tournament.status as TournamentStatus);
-const isRegistered = session.player
-  ? registrations.some((r) => r.player_id === session.player!.id) : false;
+const showPhases = ["setup","scheduled","active","completed"].includes(tournament.status);
+if (showPhases) {
+  try { groups = await api<GroupWithMembers[]>(`/matches/tournament/${id}/groups`, {}, cookie); } catch { /* empty */ }
+  try { matches = await api<Match[]>(`/matches/tournament/${id}`, {}, cookie); } catch { /* empty */ }
+}
 
-const groups = ["active","completed"].includes(tournament.status)
-  ? await api<Array<{ id: string; name: string; table: unknown[] | null }>>(
-      `/matches/tournament/${id}/groups`, {}, cookie).catch(() => [])
-  : [];
-const matches = ["active","completed"].includes(tournament.status)
-  ? await api<Array<{ id: string; stage: string; status: string;
-      homeTeamId: string | null; awayTeamId: string | null;
-      homeScore: number | null; awayScore: number | null;
-      winnerId: string | null }>>(
-      `/matches/tournament/${id}`, {}, cookie).catch(() => [])
-  : [];
+const captains: Record<string, { id: string; name: string }> = {};
+for (const reg of registrations) {
+  const t = teams.find((team) => team.captainId === reg.player_id);
+  if (t) captains[reg.player_id] = { id: reg.player_id, name: reg.name };
+}
+
+const koMatches = matches.filter((m) => m.stage !== "group");
+const groupMatches = matches.filter((m) => m.stage === "group");
 ---
-<Main title={`${tournament.name} — Villena Basket`}>
-  <TournamentHeader tournament={tournament} />
-
-  {showRegister && (
-    <div class="card mb-8 flex flex-wrap items-center justify-between gap-4">
-      <div>
-        <h3 class="text-xl">¿Quieres jugar?</h3>
-        <p class="text-sm text-slate-400">
-          Inscripciones abiertas hasta el día del torneo.
-        </p>
+<Main title={tournament.name} player={session.player}>
+  <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
+    <!-- Header -->
+    <div class="space-y-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class={STATUS_COLOR[tournament.status]}>{STATUS_LABEL[tournament.status]}</span>
+        {tournament.matchDate && <span class="text-xs text-court-muted">📅 {formatDate(tournament.matchDate)}</span>}
+        <span class="text-xs text-court-muted">📍 {tournament.location}</span>
       </div>
-      <RegisterButton client:load tournamentId={tournament.id} initiallyRegistered={isRegistered} />
+      <h1 class="font-display text-5xl text-white">{tournament.name}</h1>
+      <p class="text-court-muted max-w-2xl">{tournament.description}</p>
+      <TournamentPhaseBar tournament={tournament} />
     </div>
-  )}
 
-  <section class="mb-10">
-    <h2 class="text-3xl mb-4">Equipos</h2>
-    <TeamsGrid teams={teams as never} loggedIn={loggedIn} />
-  </section>
-
-  {groups.length > 0 && (
-    <section class="mb-10">
-      <h2 class="text-3xl mb-4">Clasificación</h2>
-      <GroupsTable groups={groups as never} />
-    </section>
-  )}
-
-  {matches.length > 0 && (
-    <section class="mb-10">
-      <h2 class="text-3xl mb-4">Partidos</h2>
-      <MatchesList matches={matches as never} teams={teams as never} />
-    </section>
-  )}
-
-  {registrations.length > 0 && (
-    <section class="mb-10">
-      <h2 class="text-3xl mb-4">Inscritos ({registrations.length})</h2>
-      <div class="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        {registrations.map((r) => (
-          <PlayerCard name={displayName(r.name, loggedIn)} overall={r.overall}
-            position={""}
-            pace={r.pace} shooting={r.shooting} passing={r.passing}
-            dribbling={r.dribbling} defense={r.defense} physical={r.physical}
-            size="sm" />
-        ))}
+    <!-- Rules (for open/upcoming) -->
+    {["upcoming","open","draft"].includes(tournament.status) && tournament.rules && (
+      <div class="card">
+        <h2 class="font-display text-2xl text-white mb-3">Bases</h2>
+        <pre class="text-court-muted text-sm whitespace-pre-wrap font-body">{tournament.rules}</pre>
       </div>
-    </section>
-  )}
+    )}
+
+    <!-- Registration CTA -->
+    {tournament.status === "open" && !auth && (
+      <div class="card border-court-accent/40 flex items-center justify-between gap-4 flex-wrap">
+        <p class="text-white font-semibold">¿Quieres participar? Inscríbete ahora</p>
+        <div class="flex gap-3">
+          <a href="/register" class="btn-primary">Crear cuenta</a>
+          <a href="/login" class="btn-ghost">Ya tengo cuenta</a>
+        </div>
+      </div>
+    )}
+
+    <!-- Teams -->
+    <div>
+      <h2 class="font-display text-2xl text-white mb-4">Equipos ({teams.length})</h2>
+      <TeamsGrid teams={teams} authenticated={auth} captains={captains} />
+    </div>
+
+    <!-- Registered players (only for admin/open status) -->
+    {isAdmin && registrations.length > 0 && (
+      <div>
+        <h2 class="font-display text-2xl text-white mb-4">Jugadores inscritos ({registrations.length})</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {registrations.map((r) => {
+            const p = { id: r.player_id, name: r.name, mobile: r.mobile, email: null, avatar: null, position: "base", overall: 50, pace: 50, shooting: 50, passing: 50, dribbling: 50, defense: 50, physical: 50, role: "player", isPublic: true, age: null, gdprAccepted: true, gdprAcceptedAt: null, username: null, createdAt: "" } as Player;
+            return <PlayerCard player={p} authenticated={isAdmin} showContact={isAdmin} />;
+          })}
+        </div>
+      </div>
+    )}
+
+    <!-- Group phase -->
+    {showPhases && groups.length > 0 && (
+      <div>
+        <h2 class="font-display text-2xl text-white mb-4">Fase de grupos</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <GroupsTable groups={groups} />
+          {groupMatches.length > 0 && (
+            <div>
+              <h3 class="font-display text-xl text-white mb-3">Partidos de grupos</h3>
+              <MatchesList matches={groupMatches} hoursConfirmed={tournament.hoursConfirmed} />
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
+    <!-- Knockout -->
+    {koMatches.length > 0 && (
+      <div>
+        <h2 class="font-display text-2xl text-white mb-4">Eliminatorias</h2>
+        <KnockoutBracketView matches={koMatches} hoursConfirmed={tournament.hoursConfirmed} />
+      </div>
+    )}
+  </div>
 </Main>

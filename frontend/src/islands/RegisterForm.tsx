@@ -1,82 +1,105 @@
-// React island: registration with stat sliders + overall preview.
-import { useMemo, useState, type FormEvent } from "react";
+import { useState } from "react";
+import { api, ApiError } from "../lib/api.js";
 
-const STATS = [
-  ["pace", "Velocidad"], ["shooting", "Tiro"], ["passing", "Pase"],
-  ["dribbling", "Manejo"], ["defense", "Defensa"], ["physical", "Físico"],
-] as const;
+const resizeImage = (file: File, maxPx = 200): Promise<string> =>
+  new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(maxPx / img.width, maxPx / img.height, 1);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width * s; canvas.height = img.height * s;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.72));
+    };
+    img.src = url;
+  });
 
 export default function RegisterForm() {
-  const [form, setForm] = useState({
-    name: "", mobile: "", email: "", password: "", position: "base",
-    pace: 60, shooting: 60, passing: 60, dribbling: 60, defense: 60, physical: 60,
-  });
+  const [form, setForm] = useState({ name: "", mobile: "", email: "", password: "", confirm: "", age: "", gdpr: false });
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const overall = useMemo(() => {
-    const ks = STATS.map(([k]) => form[k as keyof typeof form] as number);
-    return Math.round(ks.reduce((a, b) => a + b, 0) / ks.length);
-  }, [form]);
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault(); setError(null); setLoading(true);
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setAvatar(await resizeImage(file));
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (form.password !== form.confirm) { setError("Las contraseñas no coinciden"); return; }
+    if (!form.gdpr) { setError("Debes aceptar la política de privacidad"); return; }
+    setLoading(true);
     try {
-      const res = await fetch("/api/auth/register", {
+      await api("/auth/register", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          name: form.name, mobile: form.mobile, email: form.email || null,
+          password: form.password, age: form.age ? Number(form.age) : null,
+          avatar, gdprAccepted: true,
+        }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error === "MOBILE_TAKEN"
-          ? "Ese móvil ya está registrado." : `Error: ${body.error ?? res.status}`);
-        return;
-      }
       window.location.href = "/dashboard/player";
+    } catch (err) {
+      const code = err instanceof ApiError ? err.code : "ERROR";
+      const msgs: Record<string, string> = { MOBILE_TAKEN: "Ese teléfono ya está registrado", GDPR_REQUIRED: "Debes aceptar la privacidad" };
+      setError(msgs[code] ?? "Error al registrarse");
     } finally { setLoading(false); }
   };
 
-  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
-    setForm({ ...form, [k]: v });
-
   return (
-    <form onSubmit={submit} className="space-y-5">
-      <div className="grid md:grid-cols-2 gap-4">
-        <label className="block"><span className="text-sm">Nombre</span>
-          <input required minLength={2} className="w-full mt-1" value={form.name}
-            onChange={(e) => set("name", e.target.value)} /></label>
-        <label className="block"><span className="text-sm">Móvil</span>
-          <input required inputMode="numeric" className="w-full mt-1" value={form.mobile}
-            onChange={(e) => set("mobile", e.target.value)} /></label>
-        <label className="block"><span className="text-sm">Email (opcional)</span>
-          <input type="email" className="w-full mt-1" value={form.email}
-            onChange={(e) => set("email", e.target.value)} /></label>
-        <label className="block"><span className="text-sm">Contraseña</span>
-          <input type="password" required minLength={6} className="w-full mt-1"
-            value={form.password} onChange={(e) => set("password", e.target.value)} /></label>
-      </div>
-      <div className="card bg-slate-900/50">
-        <header className="flex justify-between items-center mb-3">
-          <h3 className="text-xl">Stats</h3>
-          <span className="font-display text-4xl text-court-accent">{overall}</span>
-        </header>
-        <div className="grid md:grid-cols-2 gap-3">
-          {STATS.map(([k, label]) => (
-            <label key={k} className="flex items-center gap-3">
-              <span className="w-28 text-xs text-slate-300">{label}</span>
-              <input type="range" min={30} max={99} value={form[k as keyof typeof form] as number}
-                onChange={(e) => set(k as keyof typeof form, Number(e.target.value) as never)}
-                className="flex-1 accent-court-accent" />
-              <span className="w-8 text-right text-sm">{form[k as keyof typeof form] as number}</span>
-            </label>
-          ))}
+    <form onSubmit={submit} className="card max-w-md mx-auto space-y-4">
+      <h2 className="font-display text-3xl text-white">Crear cuenta</h2>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="label-text">Nombre completo *</label>
+          <input className="input-field" value={form.name} onChange={set("name")} placeholder="Lucas Gil" required />
+        </div>
+        <div>
+          <label className="label-text">Teléfono *</label>
+          <input className="input-field" value={form.mobile} onChange={set("mobile")} placeholder="600123456" required />
+        </div>
+        <div>
+          <label className="label-text">Edad *</label>
+          <input className="input-field" type="number" value={form.age} onChange={set("age")} placeholder="25" min="10" max="80" required />
+        </div>
+        <div className="col-span-2">
+          <label className="label-text">Email (opcional)</label>
+          <input className="input-field" type="email" value={form.email} onChange={set("email")} placeholder="tu@email.com" />
+        </div>
+        <div>
+          <label className="label-text">Contraseña *</label>
+          <input className="input-field" type="password" value={form.password} onChange={set("password")} placeholder="••••••••" minLength={6} required />
+        </div>
+        <div>
+          <label className="label-text">Confirmar contraseña *</label>
+          <input className="input-field" type="password" value={form.confirm} onChange={set("confirm")} placeholder="••••••••" required />
+        </div>
+        <div className="col-span-2">
+          <label className="label-text">Foto (opcional)</label>
+          {avatar && <img src={avatar} className="w-16 h-16 rounded-xl object-cover mb-2 border border-court-border" alt="preview" />}
+          <input type="file" accept="image/*" onChange={handlePhoto} className="input-field text-court-muted py-1.5 cursor-pointer" />
         </div>
       </div>
-      {error && <p className="text-court-danger text-sm">{error}</p>}
-      <button type="submit" disabled={loading} className="btn-primary w-full">
-        {loading ? "Creando…" : "Crear cuenta"}
+
+      <label className="flex items-start gap-3 cursor-pointer group">
+        <input type="checkbox" checked={form.gdpr} onChange={set("gdpr")} className="mt-0.5 accent-court-accent" required />
+        <span className="text-xs text-court-muted group-hover:text-white transition-colors">
+          Acepto la <a href="/legal" target="_blank" className="text-court-accent hover:underline">política de privacidad</a> y el tratamiento de mis datos conforme al RGPD. *
+        </span>
+      </label>
+
+      {error && <div className="chip bg-court-danger/20 text-court-danger w-full justify-center py-2 rounded-lg text-sm">{error}</div>}
+
+      <button type="submit" className="btn-primary w-full justify-center" disabled={loading}>
+        {loading ? "Creando cuenta…" : "Crear cuenta →"}
       </button>
     </form>
   );

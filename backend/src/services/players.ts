@@ -17,16 +17,12 @@ export const computeOverall = (s: WithStats): number => {
 export const registerSchema = z.object({
   name: z.string().min(2).max(80),
   mobile: z.string().min(6).max(30),
-  username: z.string().min(3).max(30).optional().nullable(),
   email: z.string().email().optional().nullable(),
   password: z.string().min(6).max(100),
+  age: z.coerce.number().int().min(10).max(80).optional().nullable(),
+  avatar: z.string().max(600_000).optional().nullable(),
+  gdprAccepted: z.boolean().refine((v) => v === true, { message: "GDPR_REQUIRED" }),
   position: z.string().min(2).max(20).default("base"),
-  pace: z.coerce.number().int().min(1).max(99).default(50),
-  shooting: z.coerce.number().int().min(1).max(99).default(50),
-  passing: z.coerce.number().int().min(1).max(99).default(50),
-  dribbling: z.coerce.number().int().min(1).max(99).default(50),
-  defense: z.coerce.number().int().min(1).max(99).default(50),
-  physical: z.coerce.number().int().min(1).max(99).default(50),
   isPublic: z.boolean().default(true),
 });
 
@@ -34,17 +30,17 @@ export const createPlayer = async (raw: unknown) => {
   const data = registerSchema.parse(raw);
   const existing = await queryOne("SELECT id FROM players WHERE mobile=$1", [data.mobile]);
   if (existing) throw new HttpError(409, "MOBILE_TAKEN");
-  const overall = computeOverall(data);
+  const overall = computeOverall({});
   const row = await queryOne(
     `INSERT INTO players
-      (name, mobile, username, email, role, position, password, is_public,
+      (name, mobile, email, role, position, password, is_public, avatar,
+       age, gdpr_accepted, gdpr_accepted_at,
        pace, shooting, passing, dribbling, defense, physical, overall)
-     VALUES ($1,$2,$3,$4,'player',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+     VALUES ($1,$2,$3,'player',$4,$5,$6,$7,$8,$9,NOW(),50,50,50,50,50,50,$10)
      RETURNING *`,
-    [data.name, data.mobile, data.username ?? null, data.email ?? null,
-     data.position, data.password, data.isPublic,
-     data.pace, data.shooting, data.passing, data.dribbling,
-     data.defense, data.physical, overall],
+    [data.name, data.mobile, data.email ?? null,
+     data.position, data.password, data.isPublic, data.avatar ?? null,
+     data.age ?? null, data.gdprAccepted, overall],
   );
   return toPlayer(row!);
 };

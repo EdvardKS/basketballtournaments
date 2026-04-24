@@ -1,77 +1,47 @@
 ---
 import Main from "../layouts/Main.astro";
+import { loadSession } from "../lib/session.js";
+const session = await loadSession(Astro.request);
 ---
-<Main title="Cómo funciona — Villena Basket">
-  <header class="mb-10">
-    <span class="chip bg-court-accent/20 text-court-accent tracking-[0.3em]">GUÍA RÁPIDA</span>
-    <h1 class="text-5xl md:text-6xl text-court-accent mt-3 mb-2">CÓMO FUNCIONA</h1>
-    <p class="text-slate-400 max-w-2xl">
-      De la inscripción a la final: todo el flujo que vive un jugador, un
-      capitán y un administrador en cada edición de la liga.
-    </p>
-  </header>
+<Main title="Bases del torneo" player={session.player}>
+  <article class="max-w-3xl mx-auto px-4 py-12 prose prose-invert prose-sm max-w-none">
+    <h1 class="font-display text-5xl text-white mb-2">Bases del torneo</h1>
+    <p class="text-court-muted mb-8">Villena Basket League · Temporada 2026</p>
 
-  <section class="grid md:grid-cols-3 gap-4 mb-10">
-    <article class="card">
-      <span class="chip bg-court-ok/20 text-court-ok">Jugador</span>
-      <h3 class="text-2xl mt-3">Te inscribes</h3>
-      <p class="text-sm text-slate-400 mt-2">
-        Creas tu carta con 6 stats y un overall. Te apuntas al torneo abierto
-        con un click. Esperas al draft.
-      </p>
-    </article>
-    <article class="card">
-      <span class="chip bg-amber-500/20 text-amber-300">Capitán</span>
-      <h3 class="text-2xl mt-3">Construyes tu equipo</h3>
-      <p class="text-sm text-slate-400 mt-2">
-        Eliges en el draft por turnos. Confirmas nombre de equipo y grupo
-        WhatsApp. Pides intercambios si hace falta.
-      </p>
-    </article>
-    <article class="card">
-      <span class="chip bg-court-accent/20 text-court-accent">Admin</span>
-      <h3 class="text-2xl mt-3">Organiza la liga</h3>
-      <p class="text-sm text-slate-400 mt-2">
-        Abre torneos, promueve capitanes, arranca el draft, genera grupos y
-        lleva los marcadores al día durante los partidos.
-      </p>
-    </article>
-  </section>
+    <div class="card space-y-6">
+      <section>
+        <h2 class="font-display text-2xl text-court-accent">Formato</h2>
+        <ul class="text-court-muted text-sm space-y-1 list-disc list-inside">
+          <li>Baloncesto 5v5 en media cancha (2 partidos simultáneos)</li>
+          <li>Partidos de 20 minutos de duración</li>
+          <li>Fase de grupos + eliminatorias</li>
+          <li>Reglas FIBA adaptadas al formato amateur</li>
+        </ul>
+      </section>
 
-  <section class="card mb-6">
-    <h2 class="text-3xl mb-3">Ciclo de vida del torneo</h2>
-    <ol class="list-decimal pl-6 space-y-2 text-sm text-slate-300">
-      <li><strong>Inscripciones abiertas.</strong> Cualquier jugador registrado
-        puede apuntarse.</li>
-      <li><strong>Draft.</strong> El admin fija capitanes; el sistema asigna
-        orden aleatorio y los capitanes eligen por turnos.</li>
-      <li><strong>Configuración de equipos.</strong> Cada capitán confirma nombre
-        y grupo de WhatsApp.</li>
-      <li><strong>Calendario y grupos.</strong> Se reparten los equipos en
-        grupos y se genera el round-robin.</li>
-      <li><strong>En juego.</strong> Marcador en vivo, tabla recalculada tras
-        cada partido.</li>
-      <li><strong>Finalizado.</strong> Campeón registrado y snapshot de stats
-        guardado para ver tu evolución.</li>
-    </ol>
-  </section>
+      <section>
+        <h2 class="font-display text-2xl text-court-accent">Fases del torneo</h2>
+        <ol class="text-court-muted text-sm space-y-2 list-decimal list-inside">
+          <li><strong class="text-white">Inscripción:</strong> Los jugadores se registran en la plataforma durante el periodo abierto.</li>
+          <li><strong class="text-white">Draft:</strong> Los capitanes eligen jugadores por turnos en rondas rotativas aleatorias.</li>
+          <li><strong class="text-white">Grupos:</strong> Los equipos se dividen en grupos. Cada equipo se enfrenta a todos los del grupo.</li>
+          <li><strong class="text-white">Eliminatorias:</strong> Los mejores de cada grupo avanzan a cuartos, semis y final.</li>
+        </ol>
+      </section>
 
-  <section class="card mb-6">
-    <h2 class="text-3xl mb-3">Intercambios entre capitanes</h2>
-    <p class="text-sm text-slate-300">
-      Antes del día del torneo, un capitán puede pedir a otro un jugador
-      ofreciendo entre 1 y 3 de su plantilla. Un mismo objetivo no puede
-      tener más de 2 ofertas simultáneas. El capitán receptor (o un admin)
-      acepta o rechaza. Al aceptar, se mueve un jugador en cada sentido.
-    </p>
-  </section>
+      <section>
+        <h2 class="font-display text-2xl text-court-accent">Sistema de puntuación (grupos)</h2>
+        <ul class="text-court-muted text-sm space-y-1 list-disc list-inside">
+          <li>Victoria: <strong class="text-court-ok">2 puntos</strong></li>
+          <li>Derrota: <strong class="text-court-danger">0 puntos</strong></li>
+          <li>Desempate: diferencia de puntos anotados</li>
+        </ul>
+      </section>
 
-  <section class="card">
-    <h2 class="text-3xl mb-3">Privacidad</h2>
-    <p class="text-sm text-slate-300">
-      Si no estás logueado solo verás el <strong>nombre</strong> de los
-      jugadores — los apellidos quedan ocultos hasta que te registras. Más
-      detalles en <a href="/legal#privacidad">Privacidad y RGPD</a>.
-    </p>
-  </section>
+      <section>
+        <h2 class="font-display text-2xl text-court-accent">Privacidad</h2>
+        <p class="text-court-muted text-sm">Los nombres de los jugadores solo son visibles para usuarios registrados. Los visitantes anónimos solo ven nombres y logos de equipos.</p>
+      </section>
+    </div>
+  </article>
 </Main>

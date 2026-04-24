@@ -1,94 +1,43 @@
 ---
 import Main from "../layouts/Main.astro";
-const today = new Date().toISOString().slice(0, 10);
+import { loadSession } from "../lib/session.js";
+const session = await loadSession(Astro.request);
 ---
-<Main title="Avisos legales — Villena Basket">
-  <nav class="flex flex-wrap gap-2 mb-8 text-xs">
-    <a href="#aviso" class="chip">Aviso legal</a>
-    <a href="#privacidad" class="chip">Privacidad (RGPD)</a>
-    <a href="#cookies" class="chip">Cookies</a>
-    <a href="#derechos" class="chip">Tus derechos</a>
-  </nav>
+<Main title="Legal & Privacidad" player={session.player}>
+  <article class="max-w-3xl mx-auto px-4 py-12">
+    <h1 class="font-display text-5xl text-white mb-2">Legal &amp; Privacidad</h1>
+    <p class="text-court-muted text-sm mb-8">Última actualización: enero 2026</p>
 
-  <h1 class="text-5xl text-court-accent mb-2">AVISOS LEGALES</h1>
-  <p class="text-slate-400 mb-10 text-sm">
-    Última actualización: <time>{today}</time>. Si algo no está claro, escríbenos a
-    <a href="mailto:privacidad@villena.test">privacidad@villena.test</a>.
-  </p>
+    <div class="card space-y-6 text-sm text-court-muted">
+      <section>
+        <h2 class="font-display text-xl text-white mb-2">Responsable del tratamiento</h2>
+        <p>Villena Basket League (VBL) · Villena, Alicante, España · contacto@vbl.local</p>
+      </section>
 
-  <section id="aviso" class="card mb-6">
-    <h2 class="text-3xl mb-3">1. Aviso legal</h2>
-    <p class="text-sm text-slate-300">
-      Este sitio web lo gestiona la <strong>Liga Amateur Villena Basket</strong>
-      (asociación sin ánimo de lucro), con sede en Villena (Alicante, España).
-      Contacto: <a href="mailto:info@villena.test">info@villena.test</a>.
-    </p>
-    <p class="text-sm text-slate-300 mt-3">
-      El acceso y uso del sitio implica la aceptación de estas condiciones.
-      Los contenidos son orientativos; la organización puede modificar los
-      calendarios, reglas o plantillas según necesidad deportiva.
-    </p>
-  </section>
+      <section>
+        <h2 class="font-display text-xl text-white mb-2">Datos recogidos</h2>
+        <p>Al registrarte recopilamos: nombre completo, número de teléfono, correo electrónico (opcional), edad y foto de perfil (opcional). Estos datos se usan exclusivamente para gestionar tu participación en los torneos.</p>
+      </section>
 
-  <section id="privacidad" class="card mb-6">
-    <h2 class="text-3xl mb-3">2. Política de privacidad (RGPD)</h2>
-    <p class="text-sm text-slate-300">
-      Tratamos tus datos según el Reglamento (UE) 2016/679 (RGPD) y la LOPDGDD
-      3/2018. <strong>Responsable del tratamiento:</strong> Liga Amateur Villena Basket.
-    </p>
-    <h3 class="mt-4 font-semibold text-slate-100">Qué datos guardamos</h3>
-    <ul class="text-sm text-slate-300 list-disc pl-5 space-y-1">
-      <li>Nombre, móvil y email (para login e inscripción en torneos).</li>
-      <li>Estadísticas deportivas (pace, tiro, pase, defensa…).</li>
-      <li>Historial de partidos y equipos a los que has pertenecido.</li>
-      <li>Datos técnicos de sesión (cookie de autenticación, dirección IP temporal).</li>
-    </ul>
-    <h3 class="mt-4 font-semibold text-slate-100">Finalidad y base legal</h3>
-    <p class="text-sm text-slate-300">
-      Gestión deportiva de la liga (ejecución de contrato/inscripción — art. 6.1.b
-      RGPD) y comunicaciones operativas puntuales (interés legítimo — art. 6.1.f).
-      No cedemos datos a terceros ni los usamos para publicidad.
-    </p>
-    <h3 class="mt-4 font-semibold text-slate-100">Plazo de conservación</h3>
-    <p class="text-sm text-slate-300">
-      Mientras formes parte de la liga + 4 años por posible reclamación.
-      Después eliminamos o anonimizamos la información.
-    </p>
-  </section>
+      <section>
+        <h2 class="font-display text-xl text-white mb-2">Base legal</h2>
+        <p>El tratamiento se basa en tu <strong class="text-white">consentimiento explícito</strong> (Art. 6.1.a RGPD) otorgado al aceptar esta política en el momento del registro.</p>
+      </section>
 
-  <section id="cookies" class="card mb-6">
-    <h2 class="text-3xl mb-3">3. Política de cookies</h2>
-    <p class="text-sm text-slate-300">
-      Usamos <strong>únicamente cookies técnicas estrictamente necesarias</strong>:
-    </p>
-    <table class="w-full text-sm mt-3">
-      <thead class="text-xs text-slate-500 uppercase">
-        <tr><th class="text-left py-1">Nombre</th><th>Finalidad</th><th>Duración</th></tr>
-      </thead>
-      <tbody class="text-slate-300">
-        <tr class="border-t border-slate-800">
-          <td class="py-1"><code>basket_sid</code></td>
-          <td class="text-center">Mantener tu sesión iniciada</td>
-          <td class="text-center">7 días</td>
-        </tr>
-      </tbody>
-    </table>
-    <p class="text-sm text-slate-300 mt-3">
-      No usamos cookies analíticas, publicitarias ni de redes sociales. No
-      necesitamos, por tanto, banner de consentimiento adicional según los
-      criterios de la AEPD para cookies exceptuadas.
-    </p>
-  </section>
+      <section>
+        <h2 class="font-display text-xl text-white mb-2">Visibilidad de datos</h2>
+        <p>Los visitantes no registrados no pueden ver nombres de jugadores. Los usuarios registrados sí pueden ver los nombres de otros jugadores del torneo. Solo los administradores tienen acceso a datos de contacto (teléfono, email).</p>
+      </section>
 
-  <section id="derechos" class="card">
-    <h2 class="text-3xl mb-3">4. Tus derechos</h2>
-    <p class="text-sm text-slate-300">
-      Puedes ejercer en cualquier momento los derechos de acceso, rectificación,
-      supresión, oposición, limitación y portabilidad escribiendo a
-      <a href="mailto:privacidad@villena.test">privacidad@villena.test</a>.
-      Si consideras que no hemos atendido bien tu solicitud puedes reclamar
-      ante la <a href="https://www.aepd.es" target="_blank" rel="noopener">
-      Agencia Española de Protección de Datos (aepd.es)</a>.
-    </p>
-  </section>
+      <section>
+        <h2 class="font-display text-xl text-white mb-2">Tus derechos</h2>
+        <p>Tienes derecho a acceder, rectificar, suprimir, limitar el tratamiento y oponerte al mismo. Ejercita estos derechos contactando con nosotros.</p>
+      </section>
+
+      <section>
+        <h2 class="font-display text-xl text-white mb-2">Conservación</h2>
+        <p>Los datos se conservan mientras participas activamente en la liga. Puedes solicitar su eliminación en cualquier momento.</p>
+      </section>
+    </div>
+  </article>
 </Main>

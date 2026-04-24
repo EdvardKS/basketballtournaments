@@ -1,62 +1,76 @@
-// Shared domain types mirroring the backend's types.ts
+// Frontend domain types — mirrors backend with privacy-aware player variants.
 export type Role = "player" | "captain" | "admin";
 export type TournamentStatus =
-  | "open" | "draft" | "setup" | "scheduled" | "active" | "completed";
+  | "upcoming" | "open" | "draft" | "setup" | "scheduled" | "active" | "completed";
+export type MatchStage = "group" | "quarterfinal" | "semifinal" | "final" | "third_place";
 export type MatchStatus = "pending" | "in_progress" | "completed";
 
 export interface Player {
-  id: string; name: string; mobile: string;
-  username: string | null; email: string | null;
-  role: Role; position: string;
+  id: string; name: string; mobile: string; username: string | null;
+  email: string | null; role: Role; position: string;
   avatar: string | null; isPublic: boolean;
+  age: number | null; gdprAccepted: boolean; gdprAcceptedAt: string | null;
   pace: number; shooting: number; passing: number;
   dribbling: number; defense: number; physical: number; overall: number;
   createdAt: string;
 }
 
-export interface Tournament {
-  id: string; name: string; date: string;
-  status: TournamentStatus;
-  location: string; description: string;
-  rules: string | null; maxTeams: number;
-  winnerId: string | null; createdAt: string;
+// Minimum visible info when anonymous
+export interface PublicPlayer {
+  id: string; avatar: string | null; position: string; overall: number;
 }
 
-export interface TeamWithPlayers {
-  id: string; tournamentId: string; captainId: string;
-  name: string; nameConfirmed: boolean;
-  whatsappGroupName: string | null; whatsappGroupLink: string | null;
-  createdAt: string;
-  players: Array<{ id: string; name: string; overall: number; position: string }>;
+export interface Tournament {
+  id: string; name: string; date: string; status: TournamentStatus;
+  location: string; description: string; rules: string | null;
+  maxTeams: number; winnerId: string | null; createdAt: string;
+  inscriptionStart: string | null; inscriptionEnd: string | null;
+  draftStart: string | null; draftEnd: string | null; matchDate: string | null;
+  courtCount: number; halfCourt: boolean;
+  gameDurationMinutes: number; hoursConfirmed: boolean;
+}
+
+export interface Team {
+  id: string; tournamentId: string; captainId: string; name: string;
+  nameConfirmed: boolean; logo: string | null; description: string | null;
+  whatsappLink: string | null; createdAt: string;
+}
+
+export interface TeamWithPlayers extends Team {
+  players: { id: string; name?: string; avatar: string | null; position: string; overall: number }[];
+}
+
+export interface Match {
+  id: string; tournamentId: string; groupId: string | null;
+  stage: MatchStage; roundNumber: number | null;
+  homeTeamId: string | null; awayTeamId: string | null;
+  homeTeamName?: string; awayTeamName?: string;
+  homeTeamLogo?: string | null; awayTeamLogo?: string | null;
+  homeScore: number | null; awayScore: number | null;
+  winnerId: string | null; status: MatchStatus;
+  scheduledAt: string | null; completedAt: string | null;
+}
+
+export interface GroupMember {
+  id: string; groupId: string; teamId: string; teamName?: string; teamLogo?: string | null;
+  points: number; gamesPlayed: number; gamesWon: number; gamesLost: number;
+  pointsFor: number; pointsAgainst: number;
+}
+
+export interface GroupWithMembers {
+  group: { id: string; name: string };
+  members: GroupMember[];
+}
+
+export interface DraftState {
+  id: string; tournamentId: string;
+  teamOrder: string[]; currentTeamIndex: number;
+  currentRound: number; isActive: boolean;
+  roundOrderHistory: { round: number; order: string[] }[];
 }
 
 export interface TournamentDetail {
   tournament: Tournament;
-  registrations: Array<{
-    id: string; player_id: string; tournament_id: string;
-    is_captain: boolean; team_name: string | null;
-    name: string; mobile: string;
-    pace: number; shooting: number; passing: number;
-    dribbling: number; defense: number; physical: number; overall: number;
-    is_public: boolean; avatar: string | null;
-  }>;
+  registrations: unknown[];
   teams: TeamWithPlayers[];
 }
-
-export const STATUS_LABEL: Record<TournamentStatus, string> = {
-  open: "Inscripciones",
-  draft: "Draft en curso",
-  setup: "Configurando equipos",
-  scheduled: "Programado",
-  active: "En juego",
-  completed: "Finalizado",
-};
-
-export const STATUS_COLOR: Record<TournamentStatus, string> = {
-  open: "bg-court-ok/20 text-court-ok",
-  draft: "bg-amber-500/20 text-amber-300",
-  setup: "bg-indigo-500/20 text-indigo-300",
-  scheduled: "bg-sky-500/20 text-sky-300",
-  active: "bg-court-accent/20 text-court-accent",
-  completed: "bg-slate-500/20 text-slate-300",
-};

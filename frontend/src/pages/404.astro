@@ -1,10 +1,13 @@
 ---
 import Main from "../layouts/Main.astro";
+import { loadSession } from "../lib/session.js";
+const session = await loadSession(Astro.request);
 ---
-<Main title="No encontrado — Villena Basket">
-  <section class="text-center py-16">
-    <h1 class="text-7xl text-court-accent">404</h1>
-    <p class="text-xl mt-2">Esta canasta no existe.</p>
-    <a href="/" class="btn-primary inline-block mt-6">Volver al inicio</a>
-  </section>
+<Main title="404 - No encontrado" player={session.player}>
+  <div class="max-w-7xl mx-auto px-4 py-24 text-center">
+    <p class="font-display text-8xl text-court-accent mb-4">404</p>
+    <h1 class="font-display text-4xl text-white mb-3">Página no encontrada</h1>
+    <p class="text-court-muted mb-8">La página que buscas no existe o fue eliminada.</p>
+    <a href="/" class="btn-primary">← Volver al inicio</a>
+  </div>
 </Main>

@@ -1,78 +1,79 @@
 ---
 import Main from "../../layouts/Main.astro";
-import { requireAuth } from "../../lib/session.ts";
-import { api, getCookieHeader } from "../../lib/api.ts";
-import type { Tournament, TournamentDetail } from "../../lib/types.ts";
-import DraftBoard from "../../islands/DraftBoard.tsx";
-import TeamSettings from "../../islands/TeamSettings.tsx";
+import TeamSettings from "../../islands/TeamSettings.js";
+import DraftBoard from "../../islands/DraftBoard.js";
+import { requireRole } from "../../lib/session.js";
+import { api, getCookieHeader } from "../../lib/api.js";
+import type { Tournament, Team } from "../../lib/types.js";
 
-const { session, redirect } = await requireAuth(Astro.request);
+const { redirect, session } = await requireRole(Astro.request, "captain");
 if (redirect) return Astro.redirect(redirect);
-if (!session.isCaptain && !session.isAdmin) return Astro.redirect("/dashboard/player");
-const me = session.player!;
-const cookie = getCookieHeader(Astro.request);
 
-const all = await api<Tournament[]>("/tournaments", {}, cookie);
-const activeT = all.find((t) => ["draft","setup","scheduled","active"].includes(t.status)
-  // captain must own a team in it
-);
-let detail: TournamentDetail | null = null;
-let myTeam = null as TournamentDetail["teams"][number] | null;
-if (activeT) {
-  detail = await api<TournamentDetail>(`/tournaments/${activeT.id}`, {}, cookie);
-  myTeam = detail.teams.find((t) => t.captainId === me.id) ?? null;
+const cookie = getCookieHeader(Astro.request);
+const player = session.player!;
+
+let tournaments: Tournament[] = [];
+let myTeam: Team | null = null;
+
+try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
+
+const active = tournaments.find((t) => !["completed","upcoming"].includes(t.status)) ?? null;
+
+if (active) {
+  try {
+    const detail = await api<{ teams: (Team & { captainId: string })[] }>(`/tournaments/${active.id}`, {}, cookie);
+    myTeam = detail.teams.find((t) => t.captainId === player.id) ?? null;
+  } catch { /* empty */ }
 }
 
-const availablePlayers = detail
-  ? detail.registrations.filter((r) => !r.is_captain).map((r) => ({
-      id: r.player_id, name: r.name, overall: r.overall, position: "",
-    }))
-  : [];
+const isDraft = active?.status === "draft";
 ---
-<Main title="Panel capitán — Villena Basket">
-  <h1 class="text-5xl text-court-accent">PANEL CAPITÁN</h1>
-  {!activeT && <p class="text-slate-400 mt-4">No tienes ningún torneo en curso.</p>}
+<Main title="Panel capitán" player={player}>
+  <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
+    <div>
+      <h1 class="font-display text-4xl text-white">Panel del Capitán</h1>
+      <p class="text-court-muted text-sm">{player.name}</p>
+    </div>
 
-  {activeT && (
-    <section class="mt-6">
-      <header class="flex justify-between items-baseline mb-3">
-        <h2 class="text-3xl">{activeT.name}</h2>
-        <a href={`/tournaments/${activeT.id}`} class="text-sm">Ver ficha pública →</a>
-      </header>
+    {!active && (
+      <div class="card text-center py-12">
+        <p class="text-4xl mb-3">🏀</p>
+        <p class="text-court-muted">No hay torneo activo actualmente</p>
+      </div>
+    )}
 
-      {activeT.status === "draft" && (
-        <DraftBoard client:load tournamentId={activeT.id}
-          teams={detail!.teams as never}
-          availablePlayers={availablePlayers as never}
-          myTeamId={myTeam?.id ?? null}
-          isAdmin={session.isAdmin} />
-      )}
-
-      {myTeam && ["setup","scheduled","active"].includes(activeT.status) && (
-        <div class="card mt-6">
-          <h3 class="text-2xl mb-3">Configuración de {myTeam.name}</h3>
-          <TeamSettings client:load teamId={myTeam.id} name={myTeam.name}
-            nameConfirmed={myTeam.nameConfirmed}
-            whatsappGroupName={myTeam.whatsappGroupName}
-            whatsappGroupLink={myTeam.whatsappGroupLink} />
+    {active && (
+      <div class="space-y-6">
+        <div class="flex items-center gap-3">
+          <h2 class="font-display text-2xl text-white">{active.name}</h2>
+          <a href={`/tournaments/${active.id}`} class="btn-ghost text-xs">Ver torneo</a>
         </div>
-      )}
 
-      {myTeam && (
-        <section class="card mt-6">
-          <h3 class="text-2xl mb-3">Plantilla ({myTeam.players.length} jugadores)</h3>
-          <ul class="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {myTeam.players.map((p) => (
-              <li class="card py-3">
-                <div class="flex items-baseline gap-2">
-                  <span class="font-display text-3xl text-court-accent">{p.overall}</span>
-                  <span class="text-sm">{p.name}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </section>
-  )}
+        {myTeam && (
+          <TeamSettings
+            team={myTeam}
+            matchDate={active.matchDate}
+            client:load
+          />
+        )}
+
+        {isDraft && (
+          <div>
+            <h3 class="font-display text-2xl text-white mb-3">Draft en vivo</h3>
+            <DraftBoard
+              tournamentId={active.id}
+              myTeamId={myTeam?.id ?? null}
+              client:load
+            />
+          </div>
+        )}
+
+        {!isDraft && !myTeam && (
+          <div class="card text-center py-8">
+            <p class="text-court-muted">El administrador te asignará un equipo cuando comience el draft</p>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
 </Main>

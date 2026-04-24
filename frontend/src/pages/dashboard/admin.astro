@@ -1,41 +1,67 @@
 ---
 import Main from "../../layouts/Main.astro";
-import { requireAuth } from "../../lib/session.ts";
-import { api, getCookieHeader } from "../../lib/api.ts";
-import type { Tournament, TournamentDetail } from "../../lib/types.ts";
-import AdminTournaments from "../../islands/AdminTournaments.tsx";
-import AdminDraftControls from "../../islands/AdminDraftControls.tsx";
+import AdminTournamentList from "../../islands/AdminTournamentList.js";
+import AdminDraftControls from "../../islands/AdminDraftControls.js";
+import AdminPlayerManager from "../../islands/AdminPlayerManager.js";
+import AdminScoreUpdater from "../../islands/AdminScoreUpdater.js";
+import AdminScheduleConfirm from "../../islands/AdminScheduleConfirm.js";
+import DraftBoard from "../../islands/DraftBoard.js";
+import { requireRole } from "../../lib/session.js";
+import { api, getCookieHeader } from "../../lib/api.js";
+import type { Tournament, Player, Match } from "../../lib/types.js";
 
-const { session, redirect } = await requireAuth(Astro.request);
+const { redirect, session } = await requireRole(Astro.request, "admin");
 if (redirect) return Astro.redirect(redirect);
-if (!session.isAdmin) return Astro.redirect("/");
+
 const cookie = getCookieHeader(Astro.request);
 
-const tournaments = await api<Tournament[]>("/tournaments", {}, cookie);
-const focused = tournaments.find((t) => ["draft","setup"].includes(t.status));
-const focusedDetail = focused
-  ? await api<TournamentDetail>(`/tournaments/${focused.id}`, {}, cookie) : null;
+let tournaments: Tournament[] = [];
+let allPlayers: Player[] = [];
+let activePlayers: Player[] = [];
+let matches: Match[] = [];
+let draftActive = false;
+
+try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
+try { allPlayers = await api<Player[]>("/players", {}, cookie); } catch { /* empty */ }
+
+const active = tournaments.find((t) => !["completed","upcoming"].includes(t.status)) ?? null;
+
+if (active) {
+  try {
+    const detail = await api<{ registrations: { player_id: string }[] }>(`/tournaments/${active.id}`, {}, cookie);
+    const ids = new Set(detail.registrations.map((r: { player_id: string }) => r.player_id));
+    activePlayers = allPlayers.filter((p) => ids.has(p.id));
+  } catch { /* empty */ }
+  try {
+    const state = await api<{ state: { is_active: boolean } }>(`/draft/${active.id}/state`, {}, cookie);
+    draftActive = state.state?.is_active ?? false;
+  } catch { /* empty */ }
+  try { matches = await api<Match[]>(`/matches/tournament/${active.id}`, {}, cookie); } catch { /* empty */ }
+}
 ---
-<Main title="Panel admin — Villena Basket">
-  <h1 class="text-5xl text-court-accent">PANEL ADMIN</h1>
-  <p class="text-slate-400 mb-8">Crea torneos, promueve capitanes y arranca
-    fases. Los cambios se reflejan en vivo en las fichas públicas.</p>
+<Main title="Panel admin" player={session.player}>
+  <div class="max-w-7xl mx-auto px-4 py-8 space-y-10">
+    <h1 class="font-display text-4xl text-white">Panel de administración</h1>
 
-  {focusedDetail && (
-    <section class="mb-10 card border-court-accent">
-      <header class="flex justify-between mb-3">
-        <h2 class="text-2xl">{focusedDetail.tournament.name}
-          <span class="chip ml-2">{focusedDetail.tournament.status}</span></h2>
-        <a href={`/tournaments/${focusedDetail.tournament.id}`} class="text-sm">
-          Ver ficha →
-        </a>
-      </header>
-      <AdminDraftControls client:load detail={focusedDetail} />
-    </section>
-  )}
+    <AdminTournamentList tournaments={tournaments} client:load />
 
-  <section>
-    <h2 class="text-3xl mb-4">Torneos</h2>
-    <AdminTournaments client:load tournaments={tournaments} />
-  </section>
+    {active && (
+      <div class="space-y-6">
+        <h2 class="font-display text-2xl text-white border-t border-court-border pt-6">Torneo activo: {active.name}</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <AdminDraftControls tournamentId={active.id} draftActive={draftActive} client:load />
+          <AdminPlayerManager tournamentId={active.id} players={activePlayers} allPlayers={allPlayers} teams={[]} client:load />
+        </div>
+        {(active.status === "draft" || draftActive) && (
+          <DraftBoard tournamentId={active.id} myTeamId={null} isAdmin client:load />
+        )}
+        {matches.length > 0 && (
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <AdminScoreUpdater matches={matches} client:load />
+            <AdminScheduleConfirm tournamentId={active.id} matches={matches} hoursConfirmed={active.hoursConfirmed} client:load />
+          </div>
+        )}
+      </div>
+    )}
+  </div>
 </Main>

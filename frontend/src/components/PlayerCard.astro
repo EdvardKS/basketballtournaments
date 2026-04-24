@@ -1,36 +1,47 @@
 ---
+import type { Player } from "../lib/types.js";
+import { POSITION_LABEL, overallColor } from "../lib/display.js";
+
 interface Props {
-  name: string;
-  overall: number;
-  position: string;
-  pace?: number; shooting?: number; passing?: number;
-  dribbling?: number; defense?: number; physical?: number;
-  size?: "sm" | "md";
+  player: Player;
+  authenticated?: boolean;
+  showContact?: boolean;
 }
-const { name, overall, position, size = "md",
-  pace, shooting, passing, dribbling, defense, physical } = Astro.props;
-const stats = [
-  { k: "PAC", v: pace }, { k: "TIR", v: shooting }, { k: "PAS", v: passing },
-  { k: "DRI", v: dribbling }, { k: "DEF", v: defense }, { k: "FIS", v: physical },
-].filter((s) => typeof s.v === "number");
+const { player: p, authenticated = false, showContact = false } = Astro.props;
+const displayName = authenticated ? p.name : p.name.charAt(0) + "***";
 ---
-<article class={`card flip-in ${size === "sm" ? "p-3" : "p-4"} relative overflow-hidden`}>
-  <div class="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-court-accent/10"></div>
-  <header class="flex items-baseline gap-3 mb-2">
-    <span class="font-display text-4xl text-court-accent leading-none">{overall}</span>
-    <div class="flex flex-col">
-      <span class="text-xs uppercase tracking-widest text-slate-500">{position}</span>
-      <span class="font-semibold truncate max-w-[12ch]">{name}</span>
+<div class="card flex gap-3 animate-flip-card hover:border-court-accent/40 transition-colors">
+  <!-- Avatar -->
+  <div class="shrink-0">
+    {p.avatar ? (
+      <img src={p.avatar} alt={displayName} class="w-14 h-14 rounded-xl object-cover border border-court-border" />
+    ) : (
+      <div class="w-14 h-14 rounded-xl bg-court-border flex items-center justify-center text-2xl text-court-muted">
+        {authenticated ? p.name.charAt(0) : "?"}
+      </div>
+    )}
+  </div>
+
+  <!-- Info -->
+  <div class="flex-1 min-w-0">
+    <div class="flex items-start justify-between gap-1">
+      <p class="font-semibold text-white text-sm truncate">{displayName}</p>
+      <span class:list={["font-display text-xl font-bold shrink-0", overallColor(p.overall)]}>
+        {p.overall}
+      </span>
     </div>
-  </header>
-  {stats.length > 0 && (
-    <ul class="grid grid-cols-3 gap-x-2 gap-y-1 mt-2 text-[11px]">
-      {stats.map((s) => (
-        <li class="flex justify-between">
-          <span class="text-slate-500">{s.k}</span>
-          <span class="text-slate-200 font-semibold">{s.v}</span>
-        </li>
-      ))}
-    </ul>
-  )}
-</article>
+    <p class="text-xs text-court-muted">{POSITION_LABEL[p.position] ?? p.position}</p>
+    {p.age && <p class="text-xs text-court-muted">{p.age} años</p>}
+
+    {showContact && authenticated && (
+      <div class="flex gap-2 mt-2 flex-wrap">
+        {p.mobile && (
+          <a href={`tel:${p.mobile}`} class="text-[10px] text-court-accent hover:underline">{p.mobile}</a>
+        )}
+        {p.email && (
+          <a href={`mailto:${p.email}`} class="text-[10px] text-court-muted hover:text-white hover:underline truncate max-w-[120px]">{p.email}</a>
+        )}
+      </div>
+    )}
+  </div>
+</div>

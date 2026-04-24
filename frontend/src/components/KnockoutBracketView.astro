@@ -1,0 +1,54 @@
+---
+import type { Match } from "../lib/types.js";
+import MatchCard from "./MatchCard.astro";
+
+interface Props { matches: Match[]; hoursConfirmed?: boolean }
+const { matches, hoursConfirmed = false } = Astro.props;
+
+const byStage = (stage: string) => matches.filter((m) => m.stage === stage);
+const quarters = byStage("quarterfinal");
+const semis = byStage("semifinal");
+const thirds = byStage("third_place");
+const final = byStage("final");
+const hasKo = quarters.length + semis.length + thirds.length + final.length > 0;
+---
+{hasKo ? (
+  <div class="space-y-8">
+    {quarters.length > 0 && (
+      <div>
+        <h3 class="font-display text-xl text-white mb-3">Cuartos de final</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {quarters.map((m) => <MatchCard match={m} hoursConfirmed={hoursConfirmed} />)}
+        </div>
+      </div>
+    )}
+    {semis.length > 0 && (
+      <div>
+        <h3 class="font-display text-xl text-white mb-3">Semifinales</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {semis.map((m) => <MatchCard match={m} hoursConfirmed={hoursConfirmed} />)}
+        </div>
+      </div>
+    )}
+    {thirds.length > 0 && (
+      <div>
+        <h3 class="font-display text-lg text-court-muted mb-2">3er y 4to puesto</h3>
+        <div class="max-w-sm">
+          {thirds.map((m) => <MatchCard match={m} hoursConfirmed={hoursConfirmed} />)}
+        </div>
+      </div>
+    )}
+    {final.length > 0 && (
+      <div class="border border-court-gold/30 rounded-xl p-1 bg-court-gold/5">
+        <h3 class="font-display text-2xl text-court-gold mb-3 px-3 pt-2">🏆 Final</h3>
+        <div class="max-w-sm px-3 pb-3">
+          {final.map((m) => <MatchCard match={m} hoursConfirmed={hoursConfirmed} />)}
+        </div>
+      </div>
+    )}
+  </div>
+) : (
+  <div class="card text-center py-8">
+    <p class="text-court-muted text-sm">Las eliminatorias se generarán al acabar la fase de grupos</p>
+  </div>
+)}

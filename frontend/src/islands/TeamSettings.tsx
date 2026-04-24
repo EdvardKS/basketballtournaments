@@ -1,63 +1,88 @@
-// Captain team settings: name + WhatsApp group info.
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import { api, ApiError } from "../lib/api.js";
+import type { Team } from "../lib/types.js";
 
-interface Props {
-  teamId: string; name: string;
-  nameConfirmed: boolean;
-  whatsappGroupName: string | null;
-  whatsappGroupLink: string | null;
-}
+interface Props { team: Team; matchDate: string | null }
 
-export default function TeamSettings(props: Props) {
-  const [form, setForm] = useState({
-    name: props.name,
-    whatsappGroupName: props.whatsappGroupName ?? "",
-    whatsappGroupLink: props.whatsappGroupLink ?? "",
-    nameConfirmed: props.nameConfirmed,
+const resizeLogo = (file: File): Promise<string> =>
+  new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(200 / img.width, 200 / img.height, 1);
+      const c = document.createElement("canvas");
+      c.width = img.width * s; c.height = img.height * s;
+      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); resolve(c.toDataURL("image/jpeg", 0.8));
+    };
+    img.src = url;
   });
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
-  const submit = async (e: FormEvent) => {
+export default function TeamSettings({ team, matchDate }: Props) {
+  const [name, setName] = useState(team.name);
+  const [description, setDescription] = useState(team.description ?? "");
+  const [whatsappLink, setWhatsappLink] = useState(team.whatsappLink ?? "");
+  const [logo, setLogo] = useState<string | null>(team.logo);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const locked = matchDate
+    ? new Date().getTime() > new Date(matchDate).getTime() - 24 * 60 * 60 * 1000
+    : false;
+
+  const handleLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setLogo(await resizeLogo(file));
+  };
+
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true); setMsg(null);
-    const res = await fetch(`/api/teams/${props.teamId}`, {
-      method: "PATCH", credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name: form.name,
-        nameConfirmed: form.nameConfirmed,
-        whatsappGroupName: form.whatsappGroupName || null,
-        whatsappGroupLink: form.whatsappGroupLink || null,
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setMsg(`Error: ${body.error ?? res.status}`);
-    } else { setMsg("Guardado."); }
-    setSaving(false);
+    setMsg(null); setLoading(true);
+    try {
+      await api(`/teams/${team.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name, description: description || null, whatsappLink: whatsappLink || null, logo }),
+      });
+      setMsg("¡Guardado!");
+    } catch (err) {
+      setMsg(err instanceof ApiError ? err.code : "Error al guardar");
+    } finally { setLoading(false); }
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <label className="block"><span className="text-sm">Nombre del equipo</span>
-        <input required className="w-full mt-1" value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={form.nameConfirmed}
-          onChange={(e) => setForm({ ...form, nameConfirmed: e.target.checked })} />
-        Confirmar nombre definitivo
-      </label>
-      <label className="block"><span className="text-sm">Nombre del grupo WhatsApp</span>
-        <input className="w-full mt-1" value={form.whatsappGroupName}
-          onChange={(e) => setForm({ ...form, whatsappGroupName: e.target.value })} /></label>
-      <label className="block"><span className="text-sm">Link de invitación</span>
-        <input type="url" className="w-full mt-1" value={form.whatsappGroupLink}
-          placeholder="https://chat.whatsapp.com/..."
-          onChange={(e) => setForm({ ...form, whatsappGroupLink: e.target.value })} /></label>
-      {msg && <p className="text-xs text-slate-400">{msg}</p>}
-      <button type="submit" disabled={saving} className="btn-primary">
-        {saving ? "Guardando…" : "Guardar cambios"}
+    <form onSubmit={save} className="card space-y-4 max-w-lg">
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-2xl text-white">Mi equipo</h3>
+        {locked && <span className="chip bg-court-warn/20 text-court-warn">🔒 Edición bloqueada</span>}
+      </div>
+
+      <div>
+        <label className="label-text">Nombre del equipo</label>
+        <input className="input-field" value={name} onChange={(e) => setName(e.target.value)} disabled={locked} required />
+      </div>
+
+      <div>
+        <label className="label-text">Descripción</label>
+        <input className="input-field" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="El equipo más duro de Villena…" disabled={locked} maxLength={500} />
+      </div>
+
+      <div>
+        <label className="label-text">Enlace WhatsApp del equipo</label>
+        <input className="input-field" value={whatsappLink} onChange={(e) => setWhatsappLink(e.target.value)} placeholder="https://wa.me/..." disabled={locked} />
+      </div>
+
+      <div>
+        <label className="label-text">Logo del equipo</label>
+        {logo && <img src={logo} className="w-16 h-16 rounded-xl object-cover mb-2 border border-court-border" alt="logo" />}
+        <input type="file" accept="image/*" onChange={handleLogo} disabled={locked} className="input-field text-court-muted py-1.5 cursor-pointer" />
+      </div>
+
+      {msg && (
+        <p className={msg === "¡Guardado!" ? "text-court-ok text-sm" : "text-court-danger text-sm"}>{msg}</p>
+      )}
+
+      <button type="submit" className="btn-primary" disabled={locked || loading}>
+        {loading ? "Guardando…" : "Guardar cambios"}
       </button>
     </form>
   );

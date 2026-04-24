@@ -1,76 +1,92 @@
 @import "tailwindcss";
 
 @theme {
-  --color-court-dark: #0b0f1a;
-  --color-court-card: #141a2c;
+  --color-court-dark:   #0b0f1a;
+  --color-court-card:   #141a2c;
+  --color-court-border: #1e2842;
   --color-court-accent: #ff6b1a;
-  --color-court-muted: #a0a7b8;
-  --color-court-ok: #3ecf8e;
-  --color-court-warn: #ffcc5c;
+  --color-court-gold:   #f5c518;
+  --color-court-muted:  #a0a7b8;
+  --color-court-ok:     #3ecf8e;
+  --color-court-warn:   #ffcc5c;
   --color-court-danger: #ef5350;
-  --font-display: "Teko", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, sans-serif;
+  --font-display: "Teko", sans-serif;
+  --font-body:    "Inter", sans-serif;
 }
 
-@layer base {
-  :root { color-scheme: dark; }
-  html, body {
-    background: var(--color-court-dark);
-    color: #e2e8f0;
-    font-family: var(--font-body);
-    min-height: 100vh;
-  }
-  h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.05em; }
-  a { color: var(--color-court-accent); }
-  a:hover { text-decoration: underline; }
-  input, textarea, select {
-    @apply bg-court-card border border-slate-700 rounded-md px-3 py-2
-           focus:outline-none focus:ring-2 focus:ring-court-accent;
-  }
+*, *::before, *::after { box-sizing: border-box; }
+
+html { color-scheme: dark; scroll-behavior: smooth; }
+body {
+  background-color: var(--color-court-dark);
+  color: #e8eaf6;
+  font-family: var(--font-body);
+  min-height: 100vh;
 }
 
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-md
-         px-4 py-2 font-semibold text-sm uppercase tracking-wide transition-colors;
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold
+         text-sm transition-all duration-150 cursor-pointer select-none
+         disabled:opacity-40 disabled:cursor-not-allowed;
 }
 @utility btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2
-         font-semibold text-sm uppercase tracking-wide bg-court-accent text-black
-         hover:bg-orange-400 transition-colors;
+  @apply btn bg-court-accent text-white hover:bg-orange-500 active:scale-95;
 }
 @utility btn-ghost {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2
-         font-semibold text-sm uppercase tracking-wide bg-slate-800 text-slate-100
-         hover:bg-slate-700 transition-colors;
+  @apply btn border border-court-border text-court-muted hover:border-court-accent hover:text-white;
 }
 @utility btn-danger {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2
-         font-semibold text-sm uppercase tracking-wide bg-court-danger text-white
-         hover:bg-red-500 transition-colors;
+  @apply btn bg-court-danger/10 text-court-danger border border-court-danger/30 hover:bg-court-danger/20;
 }
-@utility card {
-  @apply bg-court-card border border-slate-800 rounded-lg p-5 shadow-lg;
+@utility btn-ok {
+  @apply btn bg-court-ok/10 text-court-ok border border-court-ok/30 hover:bg-court-ok/20;
 }
-@utility chip {
-  @apply inline-block text-xs font-semibold uppercase tracking-wider rounded-full
-         px-2 py-1 bg-slate-800 text-slate-200;
-}
-@utility stat-bar {
-  @apply h-2 rounded-full bg-slate-700 overflow-hidden;
-}
-.stat-bar > span {
-  display: block; height: 100%;
-  background: linear-gradient(to right, var(--color-court-accent), #fcd34d);
-  transition: width 0.5s;
-}
-.pulse-turn { animation: pulseTurn 2s ease-in-out infinite; }
-.flip-in { animation: flipIn 0.6s ease-out both; }
 
-@keyframes pulseTurn {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 26, 0.45); }
-  50% { box-shadow: 0 0 0 12px rgba(255, 107, 26, 0); }
+@utility card {
+  @apply bg-court-card border border-court-border rounded-xl p-4;
 }
-@keyframes flipIn {
-  0% { transform: rotateY(90deg); opacity: 0; }
-  100% { transform: rotateY(0); opacity: 1; }
+
+@utility chip {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold;
 }
+
+@utility input-field {
+  @apply w-full bg-court-dark border border-court-border rounded-lg px-3 py-2
+         text-sm text-white placeholder-court-muted
+         focus:outline-none focus:border-court-accent transition-colors;
+}
+
+@utility label-text {
+  @apply block text-xs font-semibold text-court-muted uppercase tracking-wider mb-1;
+}
+
+@keyframes pulse-pick {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,107,26,0.7); }
+  50% { box-shadow: 0 0 0 12px rgba(255,107,26,0); }
+}
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes flip-card {
+  0%   { transform: rotateY(90deg); opacity: 0; }
+  100% { transform: rotateY(0deg);  opacity: 1; }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes court-line {
+  from { stroke-dashoffset: 400; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.animate-slide-in  { animation: slide-in  0.3s ease both; }
+.animate-flip-card { animation: flip-card 0.4s ease both; }
+.animate-shimmer   {
+  background: linear-gradient(90deg, var(--color-court-card) 25%, var(--color-court-border) 50%, var(--color-court-card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+.pulse-turn        { animation: pulse-pick 1.5s infinite; }
+.court-line        { stroke-dasharray: 400; animation: court-line 1.2s ease forwards; }

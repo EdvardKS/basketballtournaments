@@ -1,5 +1,8 @@
 // Convert snake_case rows from Postgres to camelCase domain objects.
-import type { Player, Tournament, Team, Match } from "../types.js";
+import type {
+  Player, Tournament, Team, Match,
+  DraftState, DraftHistoryEntry, Group, GroupMember,
+} from "../types.js";
 
 type Row = Record<string, unknown>;
 
@@ -10,6 +13,9 @@ export const toPlayer = (r: Row): Player => ({
   role: r.role as Player["role"], position: r.position as string,
   avatar: (r.avatar as string | null) ?? null,
   isPublic: Boolean(r.is_public),
+  age: r.age == null ? null : Number(r.age),
+  gdprAccepted: Boolean(r.gdpr_accepted),
+  gdprAcceptedAt: r.gdpr_accepted_at == null ? null : String(r.gdpr_accepted_at),
   pace: Number(r.pace), shooting: Number(r.shooting),
   passing: Number(r.passing), dribbling: Number(r.dribbling),
   defense: Number(r.defense), physical: Number(r.physical),
@@ -25,12 +31,24 @@ export const toTournament = (r: Row): Tournament => ({
   maxTeams: Number(r.max_teams),
   winnerId: (r.winner_id as string | null) ?? null,
   createdAt: String(r.created_at),
+  inscriptionStart: r.inscription_start == null ? null : String(r.inscription_start),
+  inscriptionEnd: r.inscription_end == null ? null : String(r.inscription_end),
+  draftStart: r.draft_start == null ? null : String(r.draft_start),
+  draftEnd: r.draft_end == null ? null : String(r.draft_end),
+  matchDate: r.match_date == null ? null : String(r.match_date),
+  courtCount: Number(r.court_count ?? 1),
+  halfCourt: Boolean(r.half_court ?? true),
+  gameDurationMinutes: Number(r.game_duration_minutes ?? 20),
+  hoursConfirmed: Boolean(r.hours_confirmed),
 });
 
 export const toTeam = (r: Row): Team => ({
   id: r.id as string, tournamentId: r.tournament_id as string,
   captainId: r.captain_id as string, name: r.name as string,
   nameConfirmed: Boolean(r.name_confirmed),
+  logo: (r.logo as string | null) ?? null,
+  description: (r.description as string | null) ?? null,
+  whatsappLink: (r.whatsapp_link as string | null) ?? null,
   whatsappGroupName: (r.whatsapp_group_name as string | null) ?? null,
   whatsappGroupLink: (r.whatsapp_group_link as string | null) ?? null,
   createdAt: String(r.created_at),
@@ -52,4 +70,34 @@ export const toMatch = (r: Row): Match => ({
   scheduledAt: r.scheduled_at == null ? null : String(r.scheduled_at),
   completedAt: r.completed_at == null ? null : String(r.completed_at),
   createdAt: String(r.created_at),
+});
+
+export const toDraftState = (r: Row): DraftState => ({
+  id: r.id as string, tournamentId: r.tournament_id as string,
+  teamOrder: JSON.parse(r.team_order as string) as string[],
+  currentTeamIndex: Number(r.current_team_index),
+  currentRound: Number(r.current_round),
+  maxRounds: Number(r.max_rounds),
+  isActive: r.is_active === "true" || r.is_active === true,
+  roundOrderHistory: (r.round_order_history as { round: number; order: string[] }[] | null) ?? [],
+  createdAt: String(r.created_at),
+});
+
+export const toDraftHistory = (r: Row): DraftHistoryEntry => ({
+  id: r.id as string, tournamentId: r.tournament_id as string,
+  teamId: r.team_id as string, playerId: r.player_id as string,
+  round: Number(r.round), pickOrder: Number(r.pick_order),
+  pickedAt: String(r.picked_at),
+});
+
+export const toGroup = (r: Row): Group => ({
+  id: r.id as string, tournamentId: r.tournament_id as string,
+  name: r.name as string, createdAt: String(r.created_at),
+});
+
+export const toGroupMember = (r: Row): GroupMember => ({
+  id: r.id as string, groupId: r.group_id as string, teamId: r.team_id as string,
+  points: Number(r.points), gamesPlayed: Number(r.games_played),
+  gamesWon: Number(r.games_won), gamesLost: Number(r.games_lost),
+  pointsFor: Number(r.points_for), pointsAgainst: Number(r.points_against),
 });

@@ -1,0 +1,45 @@
+---
+import type { Tournament, TournamentStatus } from "../lib/types.js";
+
+interface Props { tournament: Tournament }
+const { tournament: t } = Astro.props;
+
+const PHASES: { key: TournamentStatus; label: string }[] = [
+  { key: "open",      label: "Inscripción" },
+  { key: "draft",     label: "Draft" },
+  { key: "setup",     label: "Grupos" },
+  { key: "active",    label: "Torneo" },
+  { key: "completed", label: "Finalizado" },
+];
+
+const ORDER: TournamentStatus[] = ["upcoming","open","draft","setup","scheduled","active","completed"];
+const currentIdx = ORDER.indexOf(t.status);
+
+const phaseState = (key: TournamentStatus): "done" | "active" | "pending" => {
+  const phaseIdx = ORDER.indexOf(key);
+  if (phaseIdx < currentIdx) return "done";
+  if (phaseIdx === currentIdx || (key === "setup" && ["setup","scheduled"].includes(t.status))) return "active";
+  return "pending";
+};
+---
+<div class="flex items-center gap-0.5 w-full">
+  {PHASES.map((phase, i) => {
+    const state = phaseState(phase.key);
+    return (
+      <div class="flex-1 flex flex-col items-center gap-1 min-w-0">
+        <div class:list={[
+          "h-1 w-full rounded-full transition-all",
+          state === "done"    && "bg-court-ok",
+          state === "active"  && "bg-court-accent",
+          state === "pending" && "bg-court-border",
+        ]} />
+        <span class:list={[
+          "text-[10px] truncate w-full text-center",
+          state === "done"    && "text-court-ok",
+          state === "active"  && "text-court-accent font-semibold",
+          state === "pending" && "text-court-border",
+        ]}>{phase.label}</span>
+      </div>
+    );
+  })}
+</div>

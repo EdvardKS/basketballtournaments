@@ -57,3 +57,39 @@ tournamentsRouter.post("/:id/captains", requireRole("admin"),
     res.json(await setCaptain(req.params.id, data.playerId,
       data.isCaptain, data.teamName));
   }));
+
+const addPlayerSchema = z.object({ playerId: z.string().min(1) });
+
+// Admin: register any player to tournament without self-registration
+tournamentsRouter.post("/:id/add-player", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    const { playerId } = addPlayerSchema.parse(req.body);
+    const existing = await import("../db/query.js").then(({ queryOne }) =>
+      queryOne(
+        "SELECT id FROM tournament_registrations WHERE tournament_id=$1 AND player_id=$2",
+        [req.params.id, playerId],
+      ));
+    if (!existing) {
+      await import("../db/query.js").then(({ queryOne }) =>
+        queryOne(
+          "INSERT INTO tournament_registrations (tournament_id, player_id) VALUES ($1,$2)",
+          [req.params.id, playerId],
+        ));
+    }
+    res.json({ ok: true });
+  }));
+
+// Admin: remove player from tournament (and any team)
+tournamentsRouter.delete("/:id/players/:playerId", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    const { queryOne: qo, query: q } = await import("../db/query.js");
+    await q(
+      "DELETE FROM team_players WHERE player_id=$1 AND team_id IN (SELECT id FROM teams WHERE tournament_id=$2)",
+      [req.params.playerId, req.params.id],
+    );
+    await qo(
+      "DELETE FROM tournament_registrations WHERE tournament_id=$1 AND player_id=$2",
+      [req.params.id, req.params.playerId],
+    );
+    res.json({ ok: true });
+  }));

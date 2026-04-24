@@ -1,46 +1,55 @@
 ---
-// Hero NBA-style con imagen de fondo oscura y título gigante.
-interface Props { hasActive: boolean; activeName?: string; }
-const { hasActive, activeName } = Astro.props;
+import type { Tournament } from "../lib/types.js";
+import { STATUS_LABEL, STATUS_COLOR } from "../lib/display.js";
+
+interface Props { active?: Tournament | null }
+const { active } = Astro.props;
 ---
-<section class="relative overflow-hidden rounded-2xl mb-14 border border-slate-800">
-  <div class="absolute inset-0 bg-cover bg-center"
-       style="background-image:url('/img/court-bg.png');"></div>
-  <div class="absolute inset-0"
-       style="background:linear-gradient(180deg,rgba(11,15,26,.55),rgba(11,15,26,.95));"></div>
+<section class="relative overflow-hidden min-h-[480px] flex items-center">
+  <!-- Animated court background -->
+  <div class="absolute inset-0 pointer-events-none select-none opacity-10" aria-hidden="true">
+    <svg class="w-full h-full" viewBox="0 0 800 480" preserveAspectRatio="xMidYMid slice">
+      <line x1="400" y1="0" x2="400" y2="480" stroke="#ff6b1a" stroke-width="2" class="court-line" />
+      <circle cx="400" cy="240" r="80" fill="none" stroke="#ff6b1a" stroke-width="2" class="court-line" />
+      <rect x="80" y="140" width="160" height="200" fill="none" stroke="#ff6b1a" stroke-width="2" class="court-line" />
+      <rect x="560" y="140" width="160" height="200" fill="none" stroke="#ff6b1a" stroke-width="2" class="court-line" />
+      <rect x="20" y="60" width="760" height="360" fill="none" stroke="#ff6b1a" stroke-width="1.5" class="court-line" />
+      <circle cx="160" cy="240" r="20" fill="none" stroke="#ff6b1a" stroke-width="2" class="court-line" />
+      <circle cx="640" cy="240" r="20" fill="none" stroke="#ff6b1a" stroke-width="2" class="court-line" />
+    </svg>
+  </div>
 
-  <div class="relative px-6 md:px-14 py-16 md:py-24 text-center">
-    <span class="inline-block chip bg-court-accent/20 text-court-accent mb-4 tracking-[0.3em]">
-      VILLENA · 2026 SEASON
-    </span>
-    <h1 class="font-display text-6xl md:text-8xl leading-[0.9] uppercase tracking-wider
-               bg-gradient-to-br from-white via-slate-200 to-court-accent
-               bg-clip-text text-transparent drop-shadow-[0_4px_24px_rgba(0,0,0,0.6)]">
-      Villena <br class="md:hidden" />Basket League
-    </h1>
-    <p class="mt-5 max-w-2xl mx-auto text-slate-300 text-base md:text-lg">
-      La liga amateur oficial de Villena. Inscríbete, sigue el draft en directo,
-      vive los playoffs y conserva tu carta con estadísticas temporada tras temporada.
-    </p>
+  <!-- Gradient overlay -->
+  <div class="absolute inset-0 bg-gradient-to-r from-court-dark via-court-dark/80 to-transparent" />
 
-    <div class="mt-8 flex flex-wrap justify-center gap-3">
-      {hasActive ? (
-        <a href="#active-tournament" class="btn-primary">
-          Ver {activeName ?? "el torneo en curso"} →
-        </a>
+  <div class="relative z-10 max-w-7xl mx-auto px-4 py-16 w-full">
+    <div class="max-w-xl animate-slide-in">
+      <p class="font-display text-court-accent text-xl uppercase tracking-widest mb-2">Villena Basket League</p>
+      <h1 class="font-display text-6xl sm:text-7xl font-bold text-white leading-none mb-4">
+        El basket<br/>de Villena.
+      </h1>
+      <p class="text-court-muted text-base mb-8 max-w-sm">
+        Liga amateur de baloncesto 5×5. Draft de jugadores, grupos, eliminatorias y campeón.
+      </p>
+
+      {active ? (
+        <div class="flex flex-col gap-4">
+          <div class="card inline-flex flex-col gap-2 max-w-xs">
+            <span class={STATUS_COLOR[active.status]}>{STATUS_LABEL[active.status]}</span>
+            <span class="font-display text-2xl text-white">{active.name}</span>
+            <span class="text-xs text-court-muted">{active.location}</span>
+          </div>
+          <div class="flex gap-3">
+            <a href={`/tournaments/${active.id}`} class="btn-primary">Ver torneo →</a>
+            <a href="/register" class="btn-ghost">Inscríbete</a>
+          </div>
+        </div>
       ) : (
-        <a href="/login" class="btn-ghost">Entrar al panel</a>
+        <div class="flex gap-3">
+          <a href="/register" class="btn-primary">Únete a la liga →</a>
+          <a href="/docs" class="btn-ghost">Ver bases</a>
+        </div>
       )}
-      <a href="/docs" class="btn-ghost">Cómo funciona</a>
-    </div>
-
-    <div class="mt-10 grid grid-cols-3 gap-4 text-center max-w-xl mx-auto">
-      <div><div class="font-display text-3xl text-court-accent">5v5</div>
-        <div class="text-xs uppercase tracking-wider text-slate-400">Formato FIBA</div></div>
-      <div><div class="font-display text-3xl text-court-accent">Draft</div>
-        <div class="text-xs uppercase tracking-wider text-slate-400">Por capitanes</div></div>
-      <div><div class="font-display text-3xl text-court-accent">Live</div>
-        <div class="text-xs uppercase tracking-wider text-slate-400">Marcadores en vivo</div></div>
     </div>
   </div>
 </section>

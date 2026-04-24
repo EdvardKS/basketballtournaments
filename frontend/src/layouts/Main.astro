@@ -2,29 +2,35 @@
 import "../styles/global.css";
 import Navbar from "../components/Navbar.astro";
 import Footer from "../components/Footer.astro";
-import { loadSession } from "../lib/session.ts";
+import type { Player } from "../lib/types.js";
 
-interface Props { title?: string; description?: string; }
-const { title = "Villena Basket League", description = "Gestor de torneos de basket amateur en Villena." } = Astro.props;
-const session = await loadSession(Astro.request);
+interface Props {
+  title?: string;
+  description?: string;
+  player?: Player | null;
+}
+
+const { title = "Villena Basket League", description = "Liga de baloncesto amateur de Villena", player } = Astro.props;
 ---
-
 <!doctype html>
 <html lang="es">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title} · VBL</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Teko:wght@400;600;700&display=swap" rel="stylesheet" />
-    <title>{title}</title>
-    <meta name="description" content={description} />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
-  <body>
-    <Navbar session={session} />
-    <main class="max-w-6xl mx-auto px-4 py-8">
-      <slot name="hero" />
-      <slot session={session} />
+  <body class="min-h-screen flex flex-col">
+    <Navbar player={player} />
+    <main class="flex-1">
+      <slot />
     </main>
     <Footer />
   </body>

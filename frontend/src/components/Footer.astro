@@ -1,41 +1,12 @@
 ---
+const year = new Date().getFullYear();
 ---
-<footer class="border-t border-slate-800 mt-16 pt-10 pb-8">
-  <div class="max-w-6xl mx-auto px-4 grid md:grid-cols-4 gap-8 text-sm">
-    <div class="md:col-span-2">
-      <div class="font-display text-3xl text-court-accent tracking-widest">
-        🏀 VILLENA BASKET
-      </div>
-      <p class="text-slate-400 mt-2 text-xs max-w-md">
-        Liga amateur de Villena. Organización abierta, participación por
-        inscripción, draft en directo y marcadores actualizados al momento.
-      </p>
+<footer class="border-t border-court-border mt-auto py-6">
+  <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-court-muted">
+    <span>© {year} Villena Basket League · Todos los derechos reservados</span>
+    <div class="flex gap-4">
+      <a href="/docs" class="hover:text-white transition-colors">Bases del torneo</a>
+      <a href="/legal" class="hover:text-white transition-colors">Legal &amp; RGPD</a>
     </div>
-
-    <div>
-      <h4 class="text-xs uppercase tracking-widest text-slate-500 mb-3">Navegar</h4>
-      <ul class="space-y-1 text-slate-300">
-        <li><a href="/" class="hover:text-court-accent">Torneos</a></li>
-        <li><a href="/docs" class="hover:text-court-accent">Cómo funciona</a></li>
-        <li><a href="/login" class="hover:text-court-accent">Entrar</a></li>
-        <li><a href="/register" class="hover:text-court-accent">Crear cuenta</a></li>
-      </ul>
-    </div>
-
-    <div>
-      <h4 class="text-xs uppercase tracking-widest text-slate-500 mb-3">Legal</h4>
-      <ul class="space-y-1 text-slate-300">
-        <li><a href="/legal#aviso" class="hover:text-court-accent">Aviso legal</a></li>
-        <li><a href="/legal#privacidad" class="hover:text-court-accent">Privacidad (RGPD)</a></li>
-        <li><a href="/legal#cookies" class="hover:text-court-accent">Cookies</a></li>
-        <li><a href="/legal#derechos" class="hover:text-court-accent">Tus derechos</a></li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="max-w-6xl mx-auto px-4 mt-8 pt-6 border-t border-slate-800
-              flex flex-wrap justify-between gap-3 text-xs text-slate-500">
-    <span>&copy; {new Date().getFullYear()} Liga Amateur Villena Basket</span>
-    <span>Hecho con Astro + Express + Postgres</span>
   </div>
 </footer>

@@ -1,37 +1,36 @@
 ---
-interface Match {
-  id: string; stage: string; status: string;
-  homeTeamId: string | null; awayTeamId: string | null;
-  homeScore: number | null; awayScore: number | null;
-  winnerId: string | null;
-}
-interface TeamInfo { id: string; name: string; }
-interface Props { matches: Match[]; teams: TeamInfo[]; }
-const { matches, teams } = Astro.props;
-const nameOf = (id: string | null) =>
-  id ? teams.find((t) => t.id === id)?.name ?? "?" : "—";
-const statusColor = (s: string) => s === "completed" ? "text-court-ok"
-  : s === "in_progress" ? "text-court-accent" : "text-slate-500";
----
+import type { Match } from "../lib/types.js";
+import MatchCard from "./MatchCard.astro";
 
-{matches.length === 0 ? (
-  <p class="text-slate-500 text-sm">Sin partidos todavía.</p>
-) : (
-  <ul class="space-y-2">
-    {matches.map((m) => (
-      <li class="card py-3 flex items-center gap-3 text-sm">
-        <span class="chip">{m.stage}</span>
-        <span class={`flex-1 ${m.winnerId === m.homeTeamId ? "font-semibold text-court-accent" : ""}`}>
-          {nameOf(m.homeTeamId)}
-        </span>
-        <span class="font-display text-2xl tabular-nums">
-          {m.homeScore ?? "-"} : {m.awayScore ?? "-"}
-        </span>
-        <span class={`flex-1 text-right ${m.winnerId === m.awayTeamId ? "font-semibold text-court-accent" : ""}`}>
-          {nameOf(m.awayTeamId)}
-        </span>
-        <span class={`chip ${statusColor(m.status)}`}>{m.status}</span>
-      </li>
+interface Props { matches: Match[]; hoursConfirmed?: boolean }
+const { matches, hoursConfirmed = false } = Astro.props;
+
+const byStage = matches.reduce<Record<string, Match[]>>((acc, m) => {
+  const key = m.stage; (acc[key] ??= []).push(m); return acc;
+}, {});
+
+const STAGE_LABEL: Record<string, string> = {
+  group: "Fase de grupos", quarterfinal: "Cuartos de final",
+  semifinal: "Semifinales", final: "Final",
+  third_place: "3er y 4to puesto",
+};
+const STAGE_ORDER = ["group","quarterfinal","semifinal","third_place","final"];
+---
+{Object.keys(byStage).length > 0 ? (
+  <div class="space-y-8">
+    {STAGE_ORDER.filter((s) => byStage[s]).map((stage) => (
+      <div>
+        <h3 class="font-display text-xl text-white mb-3">{STAGE_LABEL[stage] ?? stage}</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {byStage[stage].map((m) => (
+            <MatchCard match={m} hoursConfirmed={hoursConfirmed} />
+          ))}
+        </div>
+      </div>
     ))}
-  </ul>
+  </div>
+) : (
+  <div class="card text-center py-8">
+    <p class="text-court-muted text-sm">Los partidos aparecerán aquí cuando estén programados</p>
+  </div>
 )}

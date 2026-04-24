@@ -1,38 +1,45 @@
-// Helper for Astro pages: resolve the current user server-side by forwarding
-// the browser cookie to the backend /api/auth/me endpoint.
-import { api, getCookieHeader, ApiError } from "./api.js";
+// Session helpers for Astro SSR: load current user, enforce auth, role checks.
+import { api, ApiError, getCookieHeader } from "./api.js";
 import type { Player } from "./types.js";
 
 export interface SessionInfo {
   player: Player | null;
   isAdmin: boolean;
   isCaptain: boolean;
+  isAuthenticated: boolean;
 }
 
 export const loadSession = async (request: Request): Promise<SessionInfo> => {
-  const cookie = getCookieHeader(request);
-  if (!cookie) return empty();
   try {
+    const cookie = getCookieHeader(request);
     const { player } = await api<{ player: Player }>("/auth/me", {}, cookie);
     return {
       player,
       isAdmin: player.role === "admin",
       isCaptain: player.role === "captain",
+      isAuthenticated: true,
     };
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 401) return empty();
-    throw err;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) {
+      return { player: null, isAdmin: false, isCaptain: false, isAuthenticated: false };
+    }
+    throw e;
   }
 };
 
-const empty = (): SessionInfo => ({
-  player: null, isAdmin: false, isCaptain: false,
-});
-
 export const requireAuth = async (request: Request) => {
   const session = await loadSession(request);
-  if (!session.player) {
-    return { session, redirect: "/login" as const };
+  if (!session.isAuthenticated) {
+    return { redirect: "/login", session };
   }
-  return { session, redirect: null };
+  return { redirect: null, session };
+};
+
+export const requireRole = async (request: Request, role: "admin" | "captain" | "player") => {
+  const { redirect, session } = await requireAuth(request);
+  if (redirect) return { redirect, session };
+  if (session.player?.role !== role) {
+    return { redirect: "/dashboard/" + (session.player?.role ?? "player"), session };
+  }
+  return { redirect: null, session };
 };

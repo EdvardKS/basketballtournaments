@@ -1,5 +1,11 @@
-// React island: login form. Posts to /api/auth/login, then navigates.
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import { api, ApiError } from "../lib/api.js";
+
+const ROLE_REDIRECT: Record<string, string> = {
+  admin: "/dashboard/admin",
+  captain: "/dashboard/captain",
+  player: "/dashboard/player",
+};
 
 export default function LoginForm() {
   const [identifier, setIdentifier] = useState("");
@@ -7,52 +13,65 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const submit = async (e: FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null); setLoading(true);
+    setError(null);
+    setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ identifier, password }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error === "INVALID_CREDENTIALS"
-          ? "Usuario o contraseña incorrectos."
-          : `Error: ${body.error ?? res.status}`);
-        return;
-      }
-      const { player } = await res.json();
-      const target = player.role === "admin" ? "/dashboard/admin"
-        : player.role === "captain" ? "/dashboard/captain"
-        : "/dashboard/player";
-      window.location.href = target;
+      const { player } = await api<{ player: { role: string } }>(
+        "/auth/login",
+        { method: "POST", body: JSON.stringify({ identifier, password }) },
+      );
+      window.location.href = ROLE_REDIRECT[player.role] ?? "/";
     } catch (err) {
-      setError("No se pudo conectar con el servidor.");
-    } finally { setLoading(false); }
+      const code = err instanceof ApiError ? err.code : "ERROR";
+      setError(code === "INVALID_CREDENTIALS" ? "Credenciales incorrectas" : "Error al iniciar sesión");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <form onSubmit={submit} className="space-y-4 max-w-sm">
-      <label className="block">
-        <span className="text-sm text-slate-300">Usuario o móvil</span>
-        <input value={identifier} onChange={(e) => setIdentifier(e.target.value)}
-          required autoFocus className="mt-1 w-full"
-          placeholder="base1 o 600000001" />
-      </label>
-      <label className="block">
-        <span className="text-sm text-slate-300">Contraseña</span>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-          required className="mt-1 w-full" />
-      </label>
-      {error && <p className="text-court-danger text-sm">{error}</p>}
-      <button type="submit" disabled={loading} className="btn-primary w-full">
-        {loading ? "Entrando…" : "Entrar"}
+    <form onSubmit={submit} className="card max-w-sm mx-auto space-y-4">
+      <h2 className="font-display text-3xl text-white">Iniciar sesión</h2>
+      <p className="text-sm text-court-muted">Jugadores y capitanes: usa tu número de teléfono.<br />Admin: usa tu nombre de usuario.</p>
+
+      <div>
+        <label className="label-text">Teléfono o usuario</label>
+        <input
+          className="input-field"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
+          placeholder="600123456 / admin1"
+          required autoFocus
+        />
+      </div>
+
+      <div>
+        <label className="label-text">Contraseña</label>
+        <input
+          className="input-field"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          required
+        />
+      </div>
+
+      {error && (
+        <div className="chip bg-court-danger/20 text-court-danger w-full justify-center py-2 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      <button type="submit" className="btn-primary w-full justify-center" disabled={loading}>
+        {loading ? "Entrando…" : "Entrar →"}
       </button>
-      <p className="text-xs text-slate-500 text-center">
-        ¿Nuevo? <a href="/register" className="text-court-accent">Crea tu cuenta</a>
+
+      <p className="text-xs text-center text-court-muted">
+        ¿Sin cuenta?{" "}
+        <a href="/register" className="text-court-accent hover:underline">Regístrate aquí</a>
       </p>
     </form>
   );

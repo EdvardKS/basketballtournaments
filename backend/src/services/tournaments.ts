@@ -7,21 +7,31 @@ import { query, queryOne } from "../db/query.js";
 import { toTournament } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
 
-const STATUSES = ["open","draft","setup","scheduled","active","completed"] as const;
-const LIVE_STATUSES = ["open","draft","setup","scheduled","active"] as const;
+const STATUSES = ["upcoming","open","draft","setup","scheduled","active","completed"] as const;
+const LIVE_STATUSES = ["upcoming","open","draft","setup","scheduled","active"] as const;
+const dateRx = /^\d{4}-\d{2}-\d{2}$/;
 
 export const tournamentSchema = z.object({
   name: z.string().min(2).max(100),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().regex(dateRx).optional(),
   status: z.enum(STATUSES).default("open"),
   location: z.string().min(2).max(200),
   description: z.string().min(1).max(2000),
-  rules: z.string().max(2000).optional().nullable(),
+  rules: z.string().max(5000).optional().nullable(),
   maxTeams: z.coerce.number().int().min(2).max(32).default(8),
+  inscriptionStart: z.string().regex(dateRx).optional().nullable(),
+  inscriptionEnd: z.string().regex(dateRx).optional().nullable(),
+  draftStart: z.string().regex(dateRx).optional().nullable(),
+  draftEnd: z.string().regex(dateRx).optional().nullable(),
+  matchDate: z.string().regex(dateRx).optional().nullable(),
+  courtCount: z.coerce.number().int().min(1).max(10).default(1),
+  halfCourt: z.boolean().default(true),
+  gameDurationMinutes: z.coerce.number().int().min(5).max(60).default(20),
 });
 
 export const updateSchema = tournamentSchema.partial().extend({
   winnerId: z.string().optional().nullable(),
+  hoursConfirmed: z.boolean().optional(),
 });
 
 const assertSingleLive = async (nextStatus: string, excludeId?: string) => {
@@ -51,10 +61,16 @@ export const createTournament = async (raw: unknown) => {
   const data = tournamentSchema.parse(raw);
   await assertSingleLive(data.status);
   const row = await queryOne(
-    `INSERT INTO tournaments (name, date, status, location, description, rules, max_teams)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [data.name, data.date, data.status, data.location,
-     data.description, data.rules ?? null, data.maxTeams],
+    `INSERT INTO tournaments
+       (name, date, status, location, description, rules, max_teams,
+        inscription_start, inscription_end, draft_start, draft_end, match_date,
+        court_count, half_court, game_duration_minutes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+    [data.name, data.matchDate ?? data.date ?? null, data.status, data.location,
+     data.description, data.rules ?? null, data.maxTeams,
+     data.inscriptionStart ?? null, data.inscriptionEnd ?? null,
+     data.draftStart ?? null, data.draftEnd ?? null, data.matchDate ?? null,
+     data.courtCount, data.halfCourt, data.gameDurationMinutes],
   );
   return toTournament(row!);
 };
@@ -68,12 +84,22 @@ export const patchTournament = async (id: string, raw: unknown) => {
   }
   const row = await queryOne(
     `UPDATE tournaments SET
-       name=$2, date=$3, status=$4, location=$5,
-       description=$6, rules=$7, max_teams=$8, winner_id=$9
+       name=$2, date=COALESCE($3, date), status=$4, location=$5,
+       description=$6, rules=$7, max_teams=$8, winner_id=$9,
+       inscription_start=COALESCE($10, inscription_start),
+       inscription_end=COALESCE($11, inscription_end),
+       draft_start=COALESCE($12, draft_start),
+       draft_end=COALESCE($13, draft_end),
+       match_date=COALESCE($14, match_date),
+       court_count=$15, half_court=$16, game_duration_minutes=$17,
+       hours_confirmed=COALESCE($18, hours_confirmed)
      WHERE id=$1 RETURNING *`,
-    [id, merged.name, merged.date, merged.status, merged.location,
-     merged.description, merged.rules ?? null, merged.maxTeams,
-     merged.winnerId ?? null],
+    [id, merged.name, merged.matchDate ?? null, merged.status, merged.location,
+     merged.description, merged.rules ?? null, merged.maxTeams, merged.winnerId ?? null,
+     merged.inscriptionStart ?? null, merged.inscriptionEnd ?? null,
+     merged.draftStart ?? null, merged.draftEnd ?? null, merged.matchDate ?? null,
+     merged.courtCount, merged.halfCourt, merged.gameDurationMinutes,
+     (data as { hoursConfirmed?: boolean }).hoursConfirmed ?? null],
   );
   return toTournament(row!);
 };

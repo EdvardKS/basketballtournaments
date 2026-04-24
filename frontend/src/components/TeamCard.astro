@@ -1,0 +1,53 @@
+---
+import type { TeamWithPlayers, Player } from "../lib/types.js";
+
+interface Props {
+  team: TeamWithPlayers;
+  authenticated?: boolean;
+  captainPlayer?: Pick<Player, "id" | "name"> | null;
+}
+const { team, authenticated = false, captainPlayer } = Astro.props;
+---
+<div class="card flex flex-col gap-3 animate-slide-in hover:border-court-accent/40 transition-colors">
+  <!-- Header: logo + name -->
+  <div class="flex items-center gap-3">
+    {team.logo ? (
+      <img src={team.logo} alt={team.name} class="w-12 h-12 rounded-lg object-cover border border-court-border" />
+    ) : (
+      <div class="w-12 h-12 rounded-lg bg-court-border flex items-center justify-center text-2xl font-display text-court-muted">
+        {team.name.charAt(0).toUpperCase()}
+      </div>
+    )}
+    <div class="min-w-0">
+      <h3 class="font-display text-xl text-white truncate">{team.name}</h3>
+      {captainPlayer && (
+        <p class="text-xs text-court-muted truncate">
+          Cap: {authenticated ? captainPlayer.name : "***"}
+        </p>
+      )}
+    </div>
+  </div>
+
+  {team.description && (
+    <p class="text-xs text-court-muted line-clamp-2">{team.description}</p>
+  )}
+
+  <!-- Players (names only if authenticated) -->
+  {team.players.length > 0 && (
+    <div class="flex flex-wrap gap-1">
+      {team.players.map((p) => (
+        <span class="chip bg-court-border/50 text-court-muted text-[11px]">
+          {authenticated && p.name ? p.name.split(" ")[0] : `J${p.overall}`}
+        </span>
+      ))}
+    </div>
+  )}
+
+  <div class="flex items-center justify-between pt-2 border-t border-court-border">
+    <span class="text-xs text-court-muted">{team.players.length} jugadores</span>
+    {team.whatsappLink && authenticated && (
+      <a href={team.whatsappLink} target="_blank" rel="noopener"
+         class="text-xs text-court-ok hover:underline">WhatsApp →</a>
+    )}
+  </div>
+</div>

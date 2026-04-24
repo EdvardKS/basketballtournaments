@@ -1,42 +1,65 @@
 ---
-interface Row {
-  teamId: string; teamName: string;
-  points: number; gamesPlayed: number; gamesWon: number;
-  gamesLost: number; pointsFor: number; pointsAgainst: number;
-}
-interface Group { id: string; name: string; table: Row[] | null; }
-interface Props { groups: Group[]; }
+import type { GroupWithMembers } from "../lib/types.js";
+
+interface Props { groups: GroupWithMembers[] }
 const { groups } = Astro.props;
 ---
-
-{groups.length === 0 ? (
-  <p class="text-slate-500 text-sm">Los grupos aún no se han generado.</p>
-) : (
-  <div class="grid md:grid-cols-2 gap-6">
-    {groups.map((g) => (
-      <section class="card">
-        <h3 class="text-2xl mb-3">{g.name}</h3>
-        <table class="w-full text-sm">
-          <thead class="text-xs text-slate-500 uppercase">
-            <tr><th class="text-left py-1">Equipo</th>
-              <th>J</th><th>G</th><th>P</th>
-              <th>PF</th><th>PC</th><th>Pts</th></tr>
-          </thead>
-          <tbody>
-            {(g.table ?? []).map((r, i) => (
-              <tr class={`border-t border-slate-800 ${i < 2 ? "bg-court-accent/5" : ""}`}>
-                <td class="py-1">{r.teamName}</td>
-                <td class="text-center">{r.gamesPlayed}</td>
-                <td class="text-center">{r.gamesWon}</td>
-                <td class="text-center">{r.gamesLost}</td>
-                <td class="text-center">{r.pointsFor}</td>
-                <td class="text-center">{r.pointsAgainst}</td>
-                <td class="text-center font-semibold text-court-accent">{r.points}</td>
+{groups.length > 0 ? (
+  <div class="space-y-6">
+    {groups.map(({ group, members }) => (
+      <div class="card animate-slide-in">
+        <h3 class="font-display text-xl text-white mb-3">{group.name}</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-court-muted text-xs uppercase tracking-wider border-b border-court-border">
+                <th class="pb-2 pr-2">#</th>
+                <th class="pb-2 pr-2">Equipo</th>
+                <th class="pb-2 pr-2 text-center">PJ</th>
+                <th class="pb-2 pr-2 text-center">G</th>
+                <th class="pb-2 pr-2 text-center">P</th>
+                <th class="pb-2 pr-2 text-center">PF</th>
+                <th class="pb-2 pr-2 text-center">PC</th>
+                <th class="pb-2 text-center font-bold text-white">Pts</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody class="divide-y divide-court-border">
+              {members.map((m, i) => (
+                <tr class:list={["transition-colors", i === 0 && "bg-court-ok/5"]}>
+                  <td class="py-2 pr-2">
+                    <span class:list={[
+                      "font-display text-lg",
+                      i === 0 ? "text-court-ok" : "text-court-muted"
+                    ]}>{i + 1}</span>
+                  </td>
+                  <td class="py-2 pr-2">
+                    <div class="flex items-center gap-2">
+                      {m.teamLogo ? (
+                        <img src={m.teamLogo} class="w-6 h-6 rounded object-cover" alt="" />
+                      ) : (
+                        <div class="w-6 h-6 rounded bg-court-border flex items-center justify-center text-xs text-court-muted">
+                          {m.teamName?.charAt(0) ?? "?"}
+                        </div>
+                      )}
+                      <span class="font-semibold text-white text-sm">{m.teamName ?? "—"}</span>
+                    </div>
+                  </td>
+                  <td class="py-2 pr-2 text-center text-court-muted">{m.gamesPlayed}</td>
+                  <td class="py-2 pr-2 text-center text-court-ok">{m.gamesWon}</td>
+                  <td class="py-2 pr-2 text-center text-court-danger">{m.gamesLost}</td>
+                  <td class="py-2 pr-2 text-center text-court-muted">{m.pointsFor}</td>
+                  <td class="py-2 pr-2 text-center text-court-muted">{m.pointsAgainst}</td>
+                  <td class="py-2 text-center font-bold text-court-accent font-display text-lg">{m.points}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     ))}
+  </div>
+) : (
+  <div class="card text-center py-8">
+    <p class="text-court-muted text-sm">Los grupos se publicarán al finalizar el draft</p>
   </div>
 )}

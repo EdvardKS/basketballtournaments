@@ -7,6 +7,9 @@ import { HttpError } from "../middleware/error.js";
 export const teamPatchSchema = z.object({
   name: z.string().min(1).max(60).optional(),
   nameConfirmed: z.boolean().optional(),
+  logo: z.string().max(600_000).optional().nullable(),
+  description: z.string().max(500).optional().nullable(),
+  whatsappLink: z.string().max(300).optional().nullable(),
   whatsappGroupName: z.string().max(120).optional().nullable(),
   whatsappGroupLink: z.string().max(300).optional().nullable(),
 });
@@ -30,7 +33,7 @@ export const listTeamsForTournament = async (tournamentId: string) => {
   const teams = await query(
     `SELECT t.*, json_agg(
         jsonb_build_object('id', p.id, 'name', p.name, 'overall', p.overall,
-                           'position', p.position)
+                           'position', p.position, 'avatar', p.avatar)
         ORDER BY tp.drafted_at
       ) FILTER (WHERE p.id IS NOT NULL) AS players
      FROM teams t
@@ -50,9 +53,11 @@ export const patchTeam = async (id: string, raw: unknown) => {
   const merged = { ...current, ...data };
   const row = await queryOne(
     `UPDATE teams SET name=$2, name_confirmed=$3,
-       whatsapp_group_name=$4, whatsapp_group_link=$5
+       logo=$4, description=$5, whatsapp_link=$6,
+       whatsapp_group_name=$7, whatsapp_group_link=$8
      WHERE id=$1 RETURNING *`,
     [id, merged.name, merged.nameConfirmed,
+     merged.logo ?? null, merged.description ?? null, merged.whatsappLink ?? null,
      merged.whatsappGroupName ?? null, merged.whatsappGroupLink ?? null]);
   return toTeam(row!);
 };

@@ -1,0 +1,85 @@
+import { useState } from "react";
+import { api, ApiError } from "../lib/api.js";
+import type { Tournament } from "../lib/types.js";
+
+interface Props { tournament?: Tournament | null; onSaved: (t: Tournament) => void; onCancel: () => void }
+
+export default function TournamentForm({ tournament: init, onSaved, onCancel }: Props) {
+  const [form, setForm] = useState({
+    name: init?.name ?? "",
+    location: init?.location ?? "Polideportivo Norte",
+    description: init?.description ?? "",
+    rules: init?.rules ?? "Formato 5v5 Media Cancha\nPartidos de 20 minutos\nReglas FIBA adaptadas",
+    maxTeams: String(init?.maxTeams ?? 8),
+    inscriptionStart: init?.inscriptionStart?.slice(0,10) ?? "",
+    inscriptionEnd: init?.inscriptionEnd?.slice(0,10) ?? "",
+    draftStart: init?.draftStart?.slice(0,10) ?? "",
+    draftEnd: init?.draftEnd?.slice(0,10) ?? "",
+    matchDate: init?.matchDate?.slice(0,10) ?? "",
+    gameDurationMinutes: String(init?.gameDurationMinutes ?? 20),
+    halfCourt: init?.halfCourt ?? true,
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? (e.target as HTMLInputElement).checked : e.target.value }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(null); setLoading(true);
+    const body = { ...form, maxTeams: Number(form.maxTeams), gameDurationMinutes: Number(form.gameDurationMinutes) };
+    try {
+      const saved = await api<Tournament>(
+        init ? `/tournaments/${init.id}` : "/tournaments",
+        { method: init ? "PATCH" : "POST", body: JSON.stringify(body) },
+      );
+      onSaved(saved);
+    } catch (e) {
+      setError(e instanceof ApiError ? (e.code === "ONE_ACTIVE_ONLY" ? "Ya existe un torneo activo" : e.code) : "Error");
+    } finally { setLoading(false); }
+  };
+
+  const row = (label: string, key: keyof typeof form, type = "text", placeholder = "") => (
+    <div>
+      <label className="label-text">{label}</label>
+      <input className="input-field" type={type} value={String(form[key])} onChange={set(key)} placeholder={placeholder} required={type === "date"} />
+    </div>
+  );
+
+  return (
+    <form onSubmit={submit} className="card space-y-4 max-w-lg">
+      <h3 className="font-display text-2xl text-white">{init ? "Editar torneo" : "Nuevo torneo"}</h3>
+      {row("Nombre del torneo *", "name", "text", "Liga Primavera 2026")}
+      {row("Lugar *", "location", "text", "Polideportivo Norte")}
+      <div>
+        <label className="label-text">Descripción *</label>
+        <textarea className="input-field resize-none" rows={2} value={form.description} onChange={set("description")} placeholder="Descripción del torneo…" required />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {row("Equipos máx", "maxTeams", "number")}
+        {row("Duración partido (min)", "gameDurationMinutes", "number")}
+      </div>
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" checked={form.halfCourt} onChange={set("halfCourt")} className="accent-court-accent" />
+        <span className="text-sm text-court-muted">Media cancha (2 partidos simultáneos)</span>
+      </label>
+      <p className="label-text pt-2">Fechas del torneo *</p>
+      <div className="grid grid-cols-2 gap-3">
+        {row("Inicio inscripciones", "inscriptionStart", "date")}
+        {row("Fin inscripciones", "inscriptionEnd", "date")}
+        {row("Inicio draft", "draftStart", "date")}
+        {row("Fin draft", "draftEnd", "date")}
+        <div className="col-span-2">{row("Día del torneo", "matchDate", "date")}</div>
+      </div>
+      <div>
+        <label className="label-text">Bases y reglas</label>
+        <textarea className="input-field resize-none" rows={4} value={form.rules} onChange={set("rules")} />
+      </div>
+      {error && <p className="text-court-danger text-sm">{error}</p>}
+      <div className="flex gap-3">
+        <button type="button" className="btn-ghost flex-1 justify-center" onClick={onCancel}>Cancelar</button>
+        <button type="submit" className="btn-primary flex-1 justify-center" disabled={loading}>{loading ? "Guardando…" : "Guardar"}</button>
+      </div>
+    </form>
+  );
+}

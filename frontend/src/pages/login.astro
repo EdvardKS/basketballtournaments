@@ -1,25 +1,16 @@
 ---
 import Main from "../layouts/Main.astro";
-import LoginForm from "../islands/LoginForm.tsx";
+import LoginForm from "../islands/LoginForm.js";
+import { loadSession } from "../lib/session.js";
+
+const session = await loadSession(Astro.request);
+if (session.isAuthenticated) {
+  const role = session.player?.role;
+  return Astro.redirect(role === "admin" ? "/dashboard/admin" : role === "captain" ? "/dashboard/captain" : "/dashboard/player");
+}
 ---
-<Main title="Entrar — Villena Basket">
-  <section class="max-w-md mx-auto">
-    <h1 class="text-5xl text-court-accent mb-2">ENTRAR</h1>
-    <p class="text-slate-400 mb-6 text-sm">
-      Los capitanes y jugadores entran con su móvil; los administradores con
-      usuario. En modo desarrollo, todas las contraseñas son
-      <code class="text-court-accent">123123123</code>.
-    </p>
-    <div class="card">
-      <LoginForm client:load />
-    </div>
-    <aside class="mt-6 text-xs text-slate-500">
-      <strong class="text-slate-300">Ejemplos:</strong>
-      <ul class="mt-2 space-y-1">
-        <li>admin: <code>base1</code></li>
-        <li>capitán: <code>600000001</code> (Lucas Gil)</li>
-        <li>jugador: <code>600000004</code> (Adrian Lopez)</li>
-      </ul>
-    </aside>
-  </section>
+<Main title="Iniciar sesión" player={null}>
+  <div class="max-w-7xl mx-auto px-4 py-16">
+    <LoginForm client:load />
+  </div>
 </Main>

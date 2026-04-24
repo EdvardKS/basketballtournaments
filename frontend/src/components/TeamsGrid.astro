@@ -1,39 +1,27 @@
 ---
-import type { TeamWithPlayers } from "../lib/types.ts";
-import { displayName } from "../lib/display.ts";
-interface Props { teams: TeamWithPlayers[]; loggedIn: boolean; }
-const { teams, loggedIn } = Astro.props;
+import type { TeamWithPlayers, Player } from "../lib/types.js";
+import TeamCard from "./TeamCard.astro";
+
+interface Props {
+  teams: TeamWithPlayers[];
+  authenticated?: boolean;
+  captains?: Record<string, Pick<Player, "id" | "name">>;
+}
+const { teams, authenticated = false, captains = {} } = Astro.props;
 ---
-{teams.length === 0 ? (
-  <p class="text-slate-500 text-sm">Aún no hay equipos. Se crearán al promover capitanes.</p>
-) : (
-  <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+{teams.length > 0 ? (
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
     {teams.map((team) => (
-      <article class="card">
-        <header class="flex justify-between items-start mb-3">
-          <div>
-            <h3 class="text-2xl">{team.name}</h3>
-            {!team.nameConfirmed && (
-              <span class="chip mt-1">Nombre provisional</span>
-            )}
-          </div>
-          {team.whatsappGroupLink && (
-            <a href={team.whatsappGroupLink} target="_blank" rel="noreferrer noopener"
-              class="chip hover:bg-court-ok/20">WhatsApp</a>
-          )}
-        </header>
-        <ul class="space-y-1 text-sm">
-          {team.players.map((p) => (
-            <li class="flex justify-between items-center py-1 border-b border-slate-800 last:border-0">
-              <span>{displayName(p.name, loggedIn)}</span>
-              <span class="flex gap-2 items-center text-xs text-slate-500">
-                <span class="uppercase">{p.position}</span>
-                <span class="font-display text-lg text-court-accent">{p.overall}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </article>
+      <TeamCard
+        team={team}
+        authenticated={authenticated}
+        captainPlayer={captains[team.captainId] ?? null}
+      />
     ))}
+  </div>
+) : (
+  <div class="card text-center py-12">
+    <p class="text-4xl mb-3">🏀</p>
+    <p class="text-court-muted">No hay equipos formados todavía</p>
   </div>
 )}

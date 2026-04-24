@@ -1,81 +1,59 @@
-// Admin start/end draft + promote captain.
 import { useState } from "react";
-import type { TournamentDetail } from "../lib/types.js";
+import { api, ApiError } from "../lib/api.js";
 
-interface Props { detail: TournamentDetail; }
+interface Props { tournamentId: string; draftActive: boolean }
 
-export default function AdminDraftControls({ detail }: Props) {
-  const [busy, setBusy] = useState(false);
+export default function AdminDraftControls({ tournamentId, draftActive }: Props) {
+  const [active, setActive] = useState(draftActive);
+  const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const t = detail.tournament;
 
-  const run = async (label: string, fn: () => Promise<Response>) => {
-    setBusy(true); setMsg(null);
-    const res = await fn();
-    if (res.ok) { setMsg(`${label}: OK`); window.location.reload(); }
-    else { const b = await res.json().catch(() => ({})); setMsg(`${label}: ${b.error ?? res.status}`); }
-    setBusy(false);
+  const act = async (endpoint: string, label: string) => {
+    if (!confirm(`¿${label}?`)) return;
+    setLoading(true); setMsg(null);
+    try {
+      await api(`/draft/${tournamentId}/${endpoint}`, { method: "POST" });
+      setMsg(`${label} completado`);
+      if (endpoint === "start") setActive(true);
+      if (endpoint === "end") { setActive(false); window.location.reload(); }
+    } catch (e) {
+      setMsg(e instanceof ApiError ? e.code : "Error");
+    } finally { setLoading(false); }
   };
-
-  const start = () => run("Arrancar draft", () =>
-    fetch(`/api/draft/${t.id}/start`, { method: "POST", credentials: "include" }));
-  const end = () => run("Cerrar draft", () =>
-    fetch(`/api/draft/${t.id}/end`, { method: "POST", credentials: "include" }));
-  const genGroups = () => run("Generar grupos", () =>
-    fetch(`/api/matches/tournament/${t.id}/generate-groups`, { method: "POST", credentials: "include" }));
-
-  const promote = async (playerId: string, teamName: string) => {
-    setBusy(true);
-    await fetch(`/api/tournaments/${t.id}/captains`, {
-      method: "POST", credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ playerId, isCaptain: true, teamName }),
-    });
-    setBusy(false); window.location.reload();
-  };
-
-  const captains = detail.registrations.filter((r) => r.is_captain);
-  const nonCaptains = detail.registrations.filter((r) => !r.is_captain);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {t.status === "draft" && (
-          <>
-            <button onClick={start} disabled={busy} className="btn-primary">Arrancar draft</button>
-            <button onClick={end} disabled={busy} className="btn-ghost">Cerrar draft</button>
-          </>
-        )}
-        {t.status === "setup" && (
-          <button onClick={genGroups} disabled={busy} className="btn-primary">Generar grupos</button>
-        )}
-      </div>
-      {msg && <p className="text-xs text-slate-400">{msg}</p>}
+    <div className="card space-y-3 max-w-sm">
+      <h3 className="font-display text-xl text-white">Control del draft</h3>
 
-      <div className="card">
-        <h4 className="text-xl mb-2">Capitanes actuales ({captains.length})</h4>
-        <ul className="text-sm space-y-1">
-          {captains.map((c) => (
-            <li key={c.player_id} className="flex justify-between">
-              <span>{c.name}</span>
-              <span className="text-slate-500 text-xs">{c.team_name ?? "—"}</span>
-            </li>
-          ))}
-          {captains.length === 0 && <li className="text-slate-500">Ninguno.</li>}
-        </ul>
+      <div className="flex items-center gap-2">
+        <div className={`w-2.5 h-2.5 rounded-full ${active ? "bg-court-ok animate-pulse" : "bg-court-muted"}`} />
+        <span className="text-sm text-court-muted">{active ? "Draft en curso" : "Draft inactivo"}</span>
       </div>
 
-      <div className="card">
-        <h4 className="text-xl mb-2">Promover jugador a capitán</h4>
-        <ul className="text-sm space-y-1 max-h-64 overflow-auto">
-          {nonCaptains.map((p) => (
-            <li key={p.player_id} className="flex justify-between items-center py-1">
-              <span>{p.name} <span className="text-slate-500">({p.overall})</span></span>
-              <button onClick={() => promote(p.player_id, `Equipo ${p.name}`)}
-                disabled={busy} className="chip hover:bg-court-accent/20">Promover</button>
-            </li>
-          ))}
-        </ul>
+      <div className="flex gap-2">
+        {!active ? (
+          <button className="btn-primary" onClick={() => act("start", "Iniciar draft")} disabled={loading}>
+            ▶ Iniciar draft
+          </button>
+        ) : (
+          <button className="btn-danger" onClick={() => act("end", "Finalizar draft")} disabled={loading}>
+            ⏹ Finalizar draft
+          </button>
+        )}
+      </div>
+
+      {msg && <p className="text-xs text-court-muted">{msg}</p>}
+
+      <div className="pt-2 border-t border-court-border space-y-2">
+        <p className="text-xs text-court-muted font-semibold uppercase tracking-wider">Horarios</p>
+        <button className="btn-ghost text-xs"
+          onClick={() => api(`/matches/tournament/${tournamentId}/schedule`, { method: "POST" }).then(() => setMsg("Horario generado")).catch((e: ApiError) => setMsg(e.code))}>
+          Generar horario automático
+        </button>
+        <button className="btn-ok text-xs"
+          onClick={() => api(`/matches/tournament/${tournamentId}/confirm-schedule`, { method: "POST" }).then(() => { setMsg("Horarios confirmados y publicados"); window.location.reload(); }).catch((e: ApiError) => setMsg(e.code))}>
+          ✓ Publicar horas
+        </button>
       </div>
     </div>
   );
