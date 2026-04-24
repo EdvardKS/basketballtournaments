@@ -37,7 +37,31 @@ Diferencias con el stack de desarrollo:
 | Volúmenes      | Código montado del host    | Ninguno — imagen autosuficiente        |
 | Healthchecks   | Sólo `db`                  | `db` + `backend` + `frontend`         |
 
-**Pendientes para producción real** (no incluidos todavía):
+### Trampa clásica al cambiar la password de la DB
+
+`POSTGRES_PASSWORD` solo se aplica en el **primer arranque** del volumen
+(`basket_pgdata_prod`). Si editas `db/.env.prod` después de que el volumen
+ya exista, el servidor sigue con la password vieja y verás:
+
+```
+FATAL: password authentication failed for user "basket"
+```
+
+Soluciones:
+
+```bash
+# A — recrear el volumen (destructivo, sólo si no hay datos reales)
+docker compose -f docker-compose.prod.yml down
+docker volume rm basketballtournaments_basket_pgdata_prod
+docker compose -f docker-compose.prod.yml up -d --build
+
+# B — cambiar la password dentro de la DB (conserva los datos)
+docker compose -f docker-compose.prod.yml exec db \
+  psql -U basket -d basket -c "ALTER USER basket WITH PASSWORD 'nueva';"
+# y luego actualiza backend/.env.prod con la misma password.
+```
+
+### Pendientes para producción real (no incluidos todavía)
 
 - Hash de contraseñas con bcrypt (hoy están en claro en la DB).
 - Session store persistente (`connect-pg-simple`) en lugar de `MemoryStore`.
