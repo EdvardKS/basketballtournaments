@@ -23,6 +23,7 @@ export interface Tournament {
   draftStart: string | null; draftEnd: string | null; matchDate: string | null;
   courtCount: number; halfCourt: boolean;
   gameDurationMinutes: number; hoursConfirmed: boolean;
+  teamSize: number;
 }
 
 export interface Team {

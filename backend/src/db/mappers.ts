@@ -54,6 +54,7 @@ export const toTournament = (r: Row): Tournament => ({
   halfCourt: Boolean(r.half_court ?? true),
   gameDurationMinutes: Number(r.game_duration_minutes ?? 20),
   hoursConfirmed: Boolean(r.hours_confirmed),
+  teamSize: Number(r.team_size ?? 3),
 });
 
 export const toTeam = (r: Row): Team => ({

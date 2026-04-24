@@ -27,6 +27,7 @@ export const tournamentSchema = z.object({
   courtCount: z.coerce.number().int().min(1).max(10).default(1),
   halfCourt: z.boolean().default(true),
   gameDurationMinutes: z.coerce.number().int().min(5).max(60).default(20),
+  teamSize: z.coerce.number().int().min(2).max(7).default(3),
 });
 
 export const updateSchema = tournamentSchema.partial().extend({
@@ -64,13 +65,13 @@ export const createTournament = async (raw: unknown) => {
     `INSERT INTO tournaments
        (name, date, status, location, description, rules, max_teams,
         inscription_start, inscription_end, draft_start, draft_end, match_date,
-        court_count, half_court, game_duration_minutes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+        court_count, half_court, game_duration_minutes, team_size)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
     [data.name, data.matchDate ?? data.date ?? null, data.status, data.location,
      data.description, data.rules ?? null, data.maxTeams,
      data.inscriptionStart ?? null, data.inscriptionEnd ?? null,
      data.draftStart ?? null, data.draftEnd ?? null, data.matchDate ?? null,
-     data.courtCount, data.halfCourt, data.gameDurationMinutes],
+     data.courtCount, data.halfCourt, data.gameDurationMinutes, data.teamSize],
   );
   return toTournament(row!);
 };
@@ -92,14 +93,16 @@ export const patchTournament = async (id: string, raw: unknown) => {
        draft_end=COALESCE($13, draft_end),
        match_date=COALESCE($14, match_date),
        court_count=$15, half_court=$16, game_duration_minutes=$17,
-       hours_confirmed=COALESCE($18, hours_confirmed)
+       hours_confirmed=COALESCE($18, hours_confirmed),
+       team_size=$19
      WHERE id=$1 RETURNING *`,
     [id, merged.name, merged.matchDate ?? null, merged.status, merged.location,
      merged.description, merged.rules ?? null, merged.maxTeams, merged.winnerId ?? null,
      merged.inscriptionStart ?? null, merged.inscriptionEnd ?? null,
      merged.draftStart ?? null, merged.draftEnd ?? null, merged.matchDate ?? null,
      merged.courtCount, merged.halfCourt, merged.gameDurationMinutes,
-     (data as { hoursConfirmed?: boolean }).hoursConfirmed ?? null],
+     (data as { hoursConfirmed?: boolean }).hoursConfirmed ?? null,
+     merged.teamSize],
   );
   return toTournament(row!);
 };
