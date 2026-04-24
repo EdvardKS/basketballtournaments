@@ -80,7 +80,10 @@ export const getStatus = async (kind: "migration" | "seed"): Promise<FileStatus[
   });
 };
 
-const applyDir = async (dir: string, table: string, label: string): Promise<void> => {
+const applyDir = async (
+  dir: string, table: string, label: string,
+  opts: { failOnError: boolean },
+): Promise<void> => {
   if (!fs.existsSync(dir)) {
     console.log(`[${label}] ${dir} not mounted — skipping`);
     return;
@@ -99,6 +102,7 @@ const applyDir = async (dir: string, table: string, label: string): Promise<void
   const applied = new Map(rows.map((r) => [r.filename, r.checksum]));
 
   let newlyApplied = 0;
+  let failed = 0;
   for (const { filename, sql, checksum } of files) {
     const prev = applied.get(filename);
     if (prev === checksum) continue;
@@ -122,19 +126,41 @@ const applyDir = async (dir: string, table: string, label: string): Promise<void
       newlyApplied++;
     } catch (err) {
       await client.query("ROLLBACK");
-      console.error(`[${label}] FAILED on ${filename}:`, err);
-      throw err;
+      failed++;
+      if (opts.failOnError) {
+        console.error(`[${label}] FAILED on ${filename}:`, err);
+        throw err;
+      }
+      // Soft failure (seeds): the backend must still come up. Log the
+      // conflict but continue to the next file; demo data can be loaded
+      // manually later via `npm run seed`.
+      const msg = (err as { detail?: string; message?: string }).detail
+        ?? (err as Error).message
+        ?? String(err);
+      console.warn(`[${label}] SKIP ${filename} (${msg}). Continuing — ` +
+        `wipe the DB volume or fix the conflict and run \`npm run ${label}\`.`);
     } finally {
       client.release();
     }
   }
 
-  if (newlyApplied === 0) {
+  const summary = [
+    newlyApplied ? `${newlyApplied} applied` : null,
+    failed ? `${failed} failed` : null,
+    `${files.length} total`,
+  ].filter(Boolean).join(" · ");
+  if (newlyApplied === 0 && failed === 0) {
     console.log(`[${label}] up to date (${files.length} file${files.length === 1 ? "" : "s"} tracked)`);
   } else {
-    console.log(`[${label}] applied ${newlyApplied} new / ${files.length} total`);
+    console.log(`[${label}] ${summary}`);
   }
 };
 
-export const runMigrations = () => applyDir(MIGRATIONS_DIR, "schema_migrations", "migrate");
-export const runSeeds      = () => applyDir(SEEDS_DIR,      "schema_seeds",      "seed");
+// Migrations are critical: any failure must stop the boot.
+export const runMigrations = () =>
+  applyDir(MIGRATIONS_DIR, "schema_migrations", "migrate", { failOnError: true });
+
+// Seeds are demo data: a conflict with existing rows should log + skip,
+// not crash the backend.
+export const runSeeds = () =>
+  applyDir(SEEDS_DIR, "schema_seeds", "seed", { failOnError: false });
