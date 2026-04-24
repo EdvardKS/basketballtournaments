@@ -39,6 +39,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./db/init:/app/migrations:ro
     ports:
       - "4010:4000"
     networks:
