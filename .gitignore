@@ -1,9 +1,16 @@
-node_modules
-dist
+node_modules/
+dist/
+build/
+.astro/
+.cache/
 .DS_Store
-server/public
-vite.config.ts.*
-*.tar.gz
-Dockerfile
-docker-compose.yml
-.dockerignore
+.env.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local test scripts, not part of the build
+/test/
+
+# Docker volumes mount points when used outside compose
+pgdata/

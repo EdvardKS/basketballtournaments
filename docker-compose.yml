@@ -1,0 +1,68 @@
+services:
+  db:
+    build: ./db
+    container_name: basket_db
+    restart: unless-stopped
+    env_file: ./db/.env
+    volumes:
+      - basket_pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - basket_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d basket"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: basket_backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      NODE_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/tsconfig.json:/app/tsconfig.json
+      - backend_node_modules:/app/node_modules
+    ports:
+      - "4000:4000"
+    networks:
+      - basket_net
+    command: npm run dev
+
+  frontend:
+    build: ./frontend
+    container_name: basket_frontend
+    restart: unless-stopped
+    env_file: ./frontend/.env
+    environment:
+      NODE_ENV: development
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/astro.config.mjs:/app/astro.config.mjs
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "4321:4321"
+    networks:
+      - basket_net
+    command: npm run dev
+
+networks:
+  basket_net:
+    driver: bridge
+
+volumes:
+  basket_pgdata:
+  backend_node_modules:
+  frontend_node_modules:
