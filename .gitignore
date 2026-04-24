@@ -22,3 +22,4 @@ yarn-error.log*
 
 # Docker volumes mount points when used outside compose
 pgdata/
+test/*
