@@ -1,0 +1,78 @@
+---
+import Main from "../../layouts/Main.astro";
+import { requireAuth } from "../../lib/session.ts";
+import { api, getCookieHeader } from "../../lib/api.ts";
+import type { Tournament, TournamentDetail } from "../../lib/types.ts";
+import DraftBoard from "../../islands/DraftBoard.tsx";
+import TeamSettings from "../../islands/TeamSettings.tsx";
+
+const { session, redirect } = await requireAuth(Astro.request);
+if (redirect) return Astro.redirect(redirect);
+if (!session.isCaptain && !session.isAdmin) return Astro.redirect("/dashboard/player");
+const me = session.player!;
+const cookie = getCookieHeader(Astro.request);
+
+const all = await api<Tournament[]>("/tournaments", {}, cookie);
+const activeT = all.find((t) => ["draft","setup","scheduled","active"].includes(t.status)
+  // captain must own a team in it
+);
+let detail: TournamentDetail | null = null;
+let myTeam = null as TournamentDetail["teams"][number] | null;
+if (activeT) {
+  detail = await api<TournamentDetail>(`/tournaments/${activeT.id}`, {}, cookie);
+  myTeam = detail.teams.find((t) => t.captainId === me.id) ?? null;
+}
+
+const availablePlayers = detail
+  ? detail.registrations.filter((r) => !r.is_captain).map((r) => ({
+      id: r.player_id, name: r.name, overall: r.overall, position: "",
+    }))
+  : [];
+---
+<Main title="Panel capitán — Villena Basket">
+  <h1 class="text-5xl text-court-accent">PANEL CAPITÁN</h1>
+  {!activeT && <p class="text-slate-400 mt-4">No tienes ningún torneo en curso.</p>}
+
+  {activeT && (
+    <section class="mt-6">
+      <header class="flex justify-between items-baseline mb-3">
+        <h2 class="text-3xl">{activeT.name}</h2>
+        <a href={`/tournaments/${activeT.id}`} class="text-sm">Ver ficha pública →</a>
+      </header>
+
+      {activeT.status === "draft" && (
+        <DraftBoard client:load tournamentId={activeT.id}
+          teams={detail!.teams as never}
+          availablePlayers={availablePlayers as never}
+          myTeamId={myTeam?.id ?? null}
+          isAdmin={session.isAdmin} />
+      )}
+
+      {myTeam && ["setup","scheduled","active"].includes(activeT.status) && (
+        <div class="card mt-6">
+          <h3 class="text-2xl mb-3">Configuración de {myTeam.name}</h3>
+          <TeamSettings client:load teamId={myTeam.id} name={myTeam.name}
+            nameConfirmed={myTeam.nameConfirmed}
+            whatsappGroupName={myTeam.whatsappGroupName}
+            whatsappGroupLink={myTeam.whatsappGroupLink} />
+        </div>
+      )}
+
+      {myTeam && (
+        <section class="card mt-6">
+          <h3 class="text-2xl mb-3">Plantilla ({myTeam.players.length} jugadores)</h3>
+          <ul class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {myTeam.players.map((p) => (
+              <li class="card py-3">
+                <div class="flex items-baseline gap-2">
+                  <span class="font-display text-3xl text-court-accent">{p.overall}</span>
+                  <span class="text-sm">{p.name}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </section>
+  )}
+</Main>
