@@ -10,11 +10,11 @@ import { generateGroups } from "../services/groups.js";
 
 export const matchesRouter = Router();
 
-matchesRouter.get("/tournament/:id", requireAuth, asyncRoute(async (req, res) => {
+matchesRouter.get("/tournament/:id", asyncRoute(async (req, res) => {
   res.json(await matchesForTournament(req.params.id));
 }));
 
-matchesRouter.get("/tournament/:id/groups", requireAuth, asyncRoute(async (req, res) => {
+matchesRouter.get("/tournament/:id/groups", asyncRoute(async (req, res) => {
   res.json(await groupsForTournament(req.params.id));
 }));
 

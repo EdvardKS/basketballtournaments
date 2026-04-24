@@ -1,0 +1,78 @@
+---
+import Main from "../layouts/Main.astro";
+---
+<Main title="Cómo funciona — Villena Basket">
+  <h1 class="text-5xl text-court-accent mb-2">CÓMO FUNCIONA</h1>
+  <p class="text-slate-400 mb-8 max-w-2xl text-sm">
+    Esta página resume la arquitectura, los flujos de negocio y la API.
+    Toda la documentación completa vive en <code>/docs</code> dentro del
+    repositorio.
+  </p>
+
+  <section id="arquitectura" class="card mb-6">
+    <h2 class="text-3xl mb-2">Arquitectura</h2>
+    <p class="text-slate-300 text-sm">
+      Tres servicios en una red Docker interna <code>basket_net</code>:
+    </p>
+    <ul class="text-sm mt-3 space-y-2">
+      <li><strong>frontend</strong> — Astro 5 SSR con islas React
+        (<code>:4322</code>).</li>
+      <li><strong>backend</strong> — Express + TypeScript + pg
+        (<code>:4010</code>). Endpoints bajo <code>/api</code>.</li>
+      <li><strong>db</strong> — Postgres 16 con <code>pgcrypto</code>
+        (<code>:5434</code>).</li>
+    </ul>
+    <p class="text-slate-400 text-xs mt-3">
+      Las sesiones viajan por cookie <code>basket_sid</code> firmada.
+      El frontend Astro hace <code>fetch('/api/...')</code> y Vite lo
+      proxea al backend dentro del mismo stack.
+    </p>
+  </section>
+
+  <section id="flujos" class="card mb-6">
+    <h2 class="text-3xl mb-2">Flujo de un torneo</h2>
+    <ol class="list-decimal pl-6 space-y-2 text-sm text-slate-300">
+      <li>Admin crea el torneo en estado <code>open</code>.</li>
+      <li>Jugadores se inscriben con sus cartas (6 stats + overall).</li>
+      <li>Admin cambia a <code>draft</code> y marca capitanes.</li>
+      <li>Sistema asigna orden aleatorio; cada capitán elige por turnos.</li>
+      <li>Al cerrar el draft → estado <code>setup</code>: equipos confirman
+        nombre y WhatsApp.</li>
+      <li>Admin genera grupos y calendario (<code>scheduled</code>).</li>
+      <li>Empieza la liga (<code>active</code>). Partidos con marcador live.</li>
+      <li>Al acabar, se guardan snapshots de stats y el torneo queda
+        <code>completed</code> con su campeón.</li>
+    </ol>
+  </section>
+
+  <section id="api" class="card mb-6">
+    <h2 class="text-3xl mb-2">API en dos líneas</h2>
+    <p class="text-sm text-slate-300">
+      REST bajo <code>/api</code>. Respuestas JSON. Autenticación por cookie.
+      Errores de validación Zod → <code>400</code> con detalle.
+    </p>
+    <ul class="mt-3 text-sm grid md:grid-cols-2 gap-y-1 gap-x-8">
+      <li><code>POST /api/auth/login</code></li>
+      <li><code>GET /api/tournaments</code></li>
+      <li><code>POST /api/tournaments/:id/register</code></li>
+      <li><code>POST /api/draft/:id/pick</code></li>
+      <li><code>POST /api/matches/:id/complete</code></li>
+      <li><code>POST /api/trades</code></li>
+    </ul>
+    <p class="text-slate-400 text-xs mt-3">
+      Más detalle en <code>docs/03-api.md</code>.
+    </p>
+  </section>
+
+  <section id="errores" class="card">
+    <h2 class="text-3xl mb-2">Errores conocidos</h2>
+    <ul class="text-sm text-slate-300 list-disc pl-6 space-y-1">
+      <li>Avatares base64 pesados pueden inflar el tamaño de fila — limitar
+        a 300KB en el cliente.</li>
+      <li>El draft reshuffla el orden por ronda (no snake): decisión
+        explícita para más equidad.</li>
+      <li>El <code>MemoryStore</code> pierde sesiones al reiniciar — en dev es
+        aceptable. Swap a <code>connect-pg-simple</code> en prod.</li>
+    </ul>
+  </section>
+</Main>

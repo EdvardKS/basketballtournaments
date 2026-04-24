@@ -1,0 +1,89 @@
+---
+import Main from "../../layouts/Main.astro";
+import { api, getCookieHeader, ApiError } from "../../lib/api.ts";
+import { loadSession } from "../../lib/session.ts";
+import type { TournamentDetail, TournamentStatus } from "../../lib/types.ts";
+import TournamentHeader from "../../components/TournamentHeader.astro";
+import TeamsGrid from "../../components/TeamsGrid.astro";
+import GroupsTable from "../../components/GroupsTable.astro";
+import MatchesList from "../../components/MatchesList.astro";
+import PlayerCard from "../../components/PlayerCard.astro";
+import RegisterButton from "../../islands/RegisterButton.tsx";
+
+const { id } = Astro.params;
+const cookie = getCookieHeader(Astro.request);
+const session = await loadSession(Astro.request);
+
+let detail: TournamentDetail;
+try {
+  detail = await api<TournamentDetail>(`/tournaments/${id}`, {}, cookie);
+} catch (err) {
+  if (err instanceof ApiError && err.status === 404) return Astro.redirect("/404");
+  throw err;
+}
+const { tournament, registrations, teams } = detail;
+
+const showRegister = session.player && ["open","draft"].includes(tournament.status as TournamentStatus);
+const isRegistered = session.player
+  ? registrations.some((r) => r.player_id === session.player!.id) : false;
+
+const groups = ["active","completed"].includes(tournament.status)
+  ? await api<Array<{ id: string; name: string; table: unknown[] | null }>>(
+      `/matches/tournament/${id}/groups`, {}, cookie).catch(() => [])
+  : [];
+const matches = ["active","completed"].includes(tournament.status)
+  ? await api<Array<{ id: string; stage: string; status: string;
+      homeTeamId: string | null; awayTeamId: string | null;
+      homeScore: number | null; awayScore: number | null;
+      winnerId: string | null }>>(
+      `/matches/tournament/${id}`, {}, cookie).catch(() => [])
+  : [];
+---
+<Main title={`${tournament.name} — Villena Basket`}>
+  <TournamentHeader tournament={tournament} />
+
+  {showRegister && (
+    <div class="card mb-8 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h3 class="text-xl">¿Quieres jugar?</h3>
+        <p class="text-sm text-slate-400">
+          Inscripciones abiertas hasta el día del torneo.
+        </p>
+      </div>
+      <RegisterButton client:load tournamentId={tournament.id} initiallyRegistered={isRegistered} />
+    </div>
+  )}
+
+  <section class="mb-10">
+    <h2 class="text-3xl mb-4">Equipos</h2>
+    <TeamsGrid teams={teams as never} />
+  </section>
+
+  {groups.length > 0 && (
+    <section class="mb-10">
+      <h2 class="text-3xl mb-4">Clasificación</h2>
+      <GroupsTable groups={groups as never} />
+    </section>
+  )}
+
+  {matches.length > 0 && (
+    <section class="mb-10">
+      <h2 class="text-3xl mb-4">Partidos</h2>
+      <MatchesList matches={matches as never} teams={teams as never} />
+    </section>
+  )}
+
+  {registrations.length > 0 && (
+    <section class="mb-10">
+      <h2 class="text-3xl mb-4">Inscritos ({registrations.length})</h2>
+      <div class="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        {registrations.map((r) => (
+          <PlayerCard name={r.name} overall={r.overall} position={""}
+            pace={r.pace} shooting={r.shooting} passing={r.passing}
+            dribbling={r.dribbling} defense={r.defense} physical={r.physical}
+            size="sm" />
+        ))}
+      </div>
+    </section>
+  )}
+</Main>
