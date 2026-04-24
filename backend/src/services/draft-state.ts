@@ -1,6 +1,6 @@
 // Draft state reads: current turn, history, available players.
 import { query, queryOne } from "../db/query.js";
-import { toDraftState, toDraftHistory, toPlayer } from "../db/mappers.js";
+import { toDraftState, toDraftHistory, toPlayer, toTeam } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
 
 export const getDraftState = async (tournamentId: string) => {
@@ -41,7 +41,10 @@ export const getDraftState = async (tournamentId: string) => {
   return {
     state,
     availablePlayers: available.map(toPlayer),
-    teams,
+    teams: teams.map((r) => ({
+      ...toTeam(r),
+      players: (r as { players: unknown[] | null }).players ?? [],
+    })),
     currentTeamId: state.isActive ? state.teamOrder[state.currentTeamIndex] ?? null : null,
   };
 };

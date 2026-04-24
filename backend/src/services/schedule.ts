@@ -14,7 +14,7 @@ export const generateSchedule = async (tournamentId: string) => {
   if (!tRow) throw new HttpError(404, "TOURNAMENT_NOT_FOUND");
 
   const t = tRow as {
-    match_date: string | null;
+    match_date: string | Date | null;
     court_count: number;
     half_court: boolean;
     game_duration_minutes: number;
@@ -23,9 +23,11 @@ export const generateSchedule = async (tournamentId: string) => {
   if (!t.match_date) throw new HttpError(400, "NO_MATCH_DATE");
 
   const slotDuration = Number(t.game_duration_minutes) + BUFFER_MINUTES;
-  // Number of simultaneous games: half_court means 2 per time slot
   const concurrent = t.half_court ? 2 : 1;
-  const baseDate = new Date(t.match_date + "T00:00:00Z");
+  const matchDateStr = t.match_date instanceof Date
+    ? t.match_date.toISOString().slice(0, 10)
+    : String(t.match_date).slice(0, 10);
+  const baseDate = new Date(matchDateStr + "T00:00:00Z");
   baseDate.setUTCHours(DEFAULT_START_HOUR, 0, 0, 0);
 
   // Fetch all pending group matches, ordered by group then pair

@@ -6,6 +6,20 @@ import type {
 
 type Row = Record<string, unknown>;
 
+// Postgres DATE columns come back as JS Date objects; normalize to "YYYY-MM-DD".
+const toDateStr = (v: unknown): string | null => {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
+};
+
+// Postgres TIMESTAMP columns → ISO-8601 string.
+const toIso = (v: unknown): string => {
+  if (v == null) return "";
+  if (v instanceof Date) return v.toISOString();
+  return String(v);
+};
+
 export const toPlayer = (r: Row): Player => ({
   id: r.id as string, name: r.name as string, mobile: r.mobile as string,
   username: (r.username as string | null) ?? null,
@@ -15,12 +29,12 @@ export const toPlayer = (r: Row): Player => ({
   isPublic: Boolean(r.is_public),
   age: r.age == null ? null : Number(r.age),
   gdprAccepted: Boolean(r.gdpr_accepted),
-  gdprAcceptedAt: r.gdpr_accepted_at == null ? null : String(r.gdpr_accepted_at),
+  gdprAcceptedAt: r.gdpr_accepted_at == null ? null : toIso(r.gdpr_accepted_at),
   pace: Number(r.pace), shooting: Number(r.shooting),
   passing: Number(r.passing), dribbling: Number(r.dribbling),
   defense: Number(r.defense), physical: Number(r.physical),
   overall: Number(r.overall),
-  createdAt: String(r.created_at),
+  createdAt: toIso(r.created_at),
 });
 
 export const toTournament = (r: Row): Tournament => ({
@@ -30,12 +44,12 @@ export const toTournament = (r: Row): Tournament => ({
   rules: (r.rules as string | null) ?? null,
   maxTeams: Number(r.max_teams),
   winnerId: (r.winner_id as string | null) ?? null,
-  createdAt: String(r.created_at),
-  inscriptionStart: r.inscription_start == null ? null : String(r.inscription_start),
-  inscriptionEnd: r.inscription_end == null ? null : String(r.inscription_end),
-  draftStart: r.draft_start == null ? null : String(r.draft_start),
-  draftEnd: r.draft_end == null ? null : String(r.draft_end),
-  matchDate: r.match_date == null ? null : String(r.match_date),
+  createdAt: toIso(r.created_at),
+  inscriptionStart: toDateStr(r.inscription_start),
+  inscriptionEnd: toDateStr(r.inscription_end),
+  draftStart: toDateStr(r.draft_start),
+  draftEnd: toDateStr(r.draft_end),
+  matchDate: toDateStr(r.match_date),
   courtCount: Number(r.court_count ?? 1),
   halfCourt: Boolean(r.half_court ?? true),
   gameDurationMinutes: Number(r.game_duration_minutes ?? 20),
@@ -51,7 +65,7 @@ export const toTeam = (r: Row): Team => ({
   whatsappLink: (r.whatsapp_link as string | null) ?? null,
   whatsappGroupName: (r.whatsapp_group_name as string | null) ?? null,
   whatsappGroupLink: (r.whatsapp_group_link as string | null) ?? null,
-  createdAt: String(r.created_at),
+  createdAt: toIso(r.created_at),
 });
 
 export const toMatch = (r: Row): Match => ({
@@ -66,10 +80,10 @@ export const toMatch = (r: Row): Match => ({
   winnerId: (r.winner_id as string | null) ?? null,
   status: r.status as Match["status"],
   durationMinutes: r.duration_minutes == null ? null : Number(r.duration_minutes),
-  startedAt: r.started_at == null ? null : String(r.started_at),
-  scheduledAt: r.scheduled_at == null ? null : String(r.scheduled_at),
-  completedAt: r.completed_at == null ? null : String(r.completed_at),
-  createdAt: String(r.created_at),
+  startedAt: r.started_at == null ? null : toIso(r.started_at),
+  scheduledAt: r.scheduled_at == null ? null : toIso(r.scheduled_at),
+  completedAt: r.completed_at == null ? null : toIso(r.completed_at),
+  createdAt: toIso(r.created_at),
 });
 
 export const toDraftState = (r: Row): DraftState => ({
@@ -80,19 +94,19 @@ export const toDraftState = (r: Row): DraftState => ({
   maxRounds: Number(r.max_rounds),
   isActive: r.is_active === "true" || r.is_active === true,
   roundOrderHistory: (r.round_order_history as { round: number; order: string[] }[] | null) ?? [],
-  createdAt: String(r.created_at),
+  createdAt: toIso(r.created_at),
 });
 
 export const toDraftHistory = (r: Row): DraftHistoryEntry => ({
   id: r.id as string, tournamentId: r.tournament_id as string,
   teamId: r.team_id as string, playerId: r.player_id as string,
   round: Number(r.round), pickOrder: Number(r.pick_order),
-  pickedAt: String(r.picked_at),
+  pickedAt: toIso(r.picked_at),
 });
 
 export const toGroup = (r: Row): Group => ({
   id: r.id as string, tournamentId: r.tournament_id as string,
-  name: r.name as string, createdAt: String(r.created_at),
+  name: r.name as string, createdAt: toIso(r.created_at),
 });
 
 export const toGroupMember = (r: Row): GroupMember => ({

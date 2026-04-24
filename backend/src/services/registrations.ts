@@ -58,6 +58,9 @@ export const setCaptain = async (
       [isCaptain, teamName ?? null, tournamentId, playerId]);
     if (reg.length === 0) throw new HttpError(404, "NOT_REGISTERED");
     if (isCaptain) {
+      await q(
+        "UPDATE players SET role='captain' WHERE id=$1 AND role='player'",
+        [playerId]);
       const existing = await q(
         "SELECT id FROM teams WHERE tournament_id=$1 AND captain_id=$2",
         [tournamentId, playerId]);

@@ -20,9 +20,9 @@ draftRouter.post("/:tournamentId/end", requireRole("admin"),
 
 draftRouter.get("/:tournamentId/state", requireAuth,
   asyncRoute(async (req, res) => {
-    const state = await getDraftState(req.params.tournamentId);
+    const data = await getDraftState(req.params.tournamentId);
     const history = await listDraftHistory(req.params.tournamentId);
-    res.json({ state, history });
+    res.json({ ...data, history });
   }));
 
 const pickSchema = z.object({
