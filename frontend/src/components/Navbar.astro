@@ -1,0 +1,35 @@
+---
+import type { SessionInfo } from "../lib/session.ts";
+interface Props { session: SessionInfo; }
+const { session } = Astro.props;
+const dashHref = session.isAdmin ? "/dashboard/admin"
+  : session.isCaptain ? "/dashboard/captain"
+  : "/dashboard/player";
+---
+
+<nav class="bg-court-card/80 border-b border-slate-800 backdrop-blur">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <a href="/" class="text-2xl font-display tracking-widest text-court-accent">
+      🏀 VILLENA BASKET
+    </a>
+    <div class="flex items-center gap-4 text-sm">
+      <a href="/" class="hover:text-court-accent">Torneos</a>
+      <a href="/docs" class="hover:text-court-accent">Cómo funciona</a>
+      {session.player && (
+        <a href={dashHref} class="hover:text-court-accent">Mi panel</a>
+      )}
+      {session.player ? (
+        <form method="POST" action="/api/auth/logout" class="inline">
+          <button type="submit" class="chip hover:bg-court-danger/30">
+            {session.player.name} · Salir
+          </button>
+        </form>
+      ) : (
+        <div class="flex gap-2">
+          <a href="/login" class="btn-ghost text-xs py-1 px-3">Entrar</a>
+          <a href="/register" class="btn-primary text-xs py-1 px-3">Crear cuenta</a>
+        </div>
+      )}
+    </div>
+  </div>
+</nav>
