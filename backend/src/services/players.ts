@@ -6,8 +6,10 @@ import { toPlayer } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
 
 export const STAT_KEYS = ["pace","shooting","passing","dribbling","defense","physical"] as const;
+type StatKey = typeof STAT_KEYS[number];
+type WithStats = Partial<Record<StatKey, number>>;
 
-export const computeOverall = (s: Record<string, number>) => {
+export const computeOverall = (s: WithStats): number => {
   const sum = STAT_KEYS.reduce((a, k) => a + (s[k] ?? 50), 0);
   return Math.round(sum / STAT_KEYS.length);
 };

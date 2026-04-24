@@ -3,6 +3,8 @@ import react from "@astrojs/react";
 import tailwind from "@tailwindcss/vite";
 import node from "@astrojs/node";
 
+// /api/* is proxied by src/middleware.ts, which runs in both dev and
+// production, so no Vite proxy is needed.
 export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
@@ -12,12 +14,6 @@ export default defineConfig({
     plugins: [tailwind()],
     server: {
       watch: { usePolling: true, interval: 300 },
-      proxy: {
-        "/api": {
-          target: process.env.PUBLIC_API_BASE || "http://backend:4000",
-          changeOrigin: true,
-        },
-      },
     },
   },
 });

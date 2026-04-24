@@ -16,6 +16,9 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET ?? "dev-secret-change-in-prod",
   cookieName: process.env.COOKIE_NAME ?? "basket_sid",
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:4322",
+  // Explicit so prod-on-plain-HTTP (e.g. localhost) still works.
+  // Set COOKIE_SECURE=true only when serving over HTTPS.
+  cookieSecure: process.env.COOKIE_SECURE === "true",
   isDev: (process.env.NODE_ENV ?? "development") !== "production",
 };
 

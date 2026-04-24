@@ -1,0 +1,8 @@
+# Production image: non-alpine postgres for better glibc perf and
+# wider locale support. Same schema/seed mounted via compose.
+FROM postgres:16
+
+ENV LANG=en_US.utf8
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=10 \
+  CMD pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" || exit 1
