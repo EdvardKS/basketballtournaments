@@ -17,8 +17,9 @@ services:
     env_file: ./db/.env.prod
     volumes:
       - basket_pgdata_prod:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro
-      - ./db/seeds:/seeds:ro
+      # Schema + seed SQL are applied by the backend on boot (see
+      # backend/src/db/migrate.ts). No docker-entrypoint-initdb.d mount:
+      # that path only runs on *first* DB init, which breaks upgrades.
     ports:
       - "5434:5432"
     networks:
@@ -41,6 +42,7 @@ services:
         condition: service_healthy
     volumes:
       - ./db/init:/app/migrations:ro
+      - ./db/seeds:/app/seeds:ro
     ports:
       - "4010:4000"
     networks:
