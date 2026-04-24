@@ -9,6 +9,7 @@ import GroupsTable from "../../components/GroupsTable.astro";
 import MatchesList from "../../components/MatchesList.astro";
 import PlayerCard from "../../components/PlayerCard.astro";
 import RegisterButton from "../../islands/RegisterButton.tsx";
+import { displayName } from "../../lib/display.ts";
 
 const { id } = Astro.params;
 const cookie = getCookieHeader(Astro.request);
@@ -23,7 +24,8 @@ try {
 }
 const { tournament, registrations, teams } = detail;
 
-const showRegister = session.player && ["open","draft"].includes(tournament.status as TournamentStatus);
+const loggedIn = !!session.player;
+const showRegister = loggedIn && ["open","draft"].includes(tournament.status as TournamentStatus);
 const isRegistered = session.player
   ? registrations.some((r) => r.player_id === session.player!.id) : false;
 
@@ -56,7 +58,7 @@ const matches = ["active","completed"].includes(tournament.status)
 
   <section class="mb-10">
     <h2 class="text-3xl mb-4">Equipos</h2>
-    <TeamsGrid teams={teams as never} />
+    <TeamsGrid teams={teams as never} loggedIn={loggedIn} />
   </section>
 
   {groups.length > 0 && (
@@ -78,7 +80,8 @@ const matches = ["active","completed"].includes(tournament.status)
       <h2 class="text-3xl mb-4">Inscritos ({registrations.length})</h2>
       <div class="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         {registrations.map((r) => (
-          <PlayerCard name={r.name} overall={r.overall} position={""}
+          <PlayerCard name={displayName(r.name, loggedIn)} overall={r.overall}
+            position={""}
             pace={r.pace} shooting={r.shooting} passing={r.passing}
             dribbling={r.dribbling} defense={r.defense} physical={r.physical}
             size="sm" />
