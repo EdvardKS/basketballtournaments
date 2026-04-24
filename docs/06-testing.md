@@ -3,15 +3,19 @@
 ## Smoke tests por sprint
 
 Cada sprint añade un script `test/sprintN.sh` que golpea los endpoints
-que acaba de introducir. Todos los scripts usan `curl` y `jq` y
+que acaba de introducir. Todos los scripts usan `curl` (sin `jq`) y
 imprimen `[OK]` / `[FAIL]`.
 
 Ejecutar manualmente:
 
 ```bash
-./test/smoke.sh        # corre todos los sprints secuencialmente
-./test/sprint3.sh      # sólo el sprint 3
+bash test/smoke.sh        # corre todos los sprints + lint + e2e
+bash test/sprint4.sh      # sólo sprint 4 (auth + players)
+bash test/e2e.sh          # flujo completo end-to-end
+bash test/lint-file-size.sh  # verifica el límite de 130/150 líneas
 ```
+
+Suma actual: **84 checks** pasando (lint + 7 sprints + e2e).
 
 La carpeta `test/` está **gitignored** a propósito: no forman parte
 de la build de producción, son utilidades locales.
