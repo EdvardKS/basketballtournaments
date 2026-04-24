@@ -1,0 +1,94 @@
+---
+import Main from "../layouts/Main.astro";
+const today = new Date().toISOString().slice(0, 10);
+---
+<Main title="Avisos legales — Villena Basket">
+  <nav class="flex flex-wrap gap-2 mb-8 text-xs">
+    <a href="#aviso" class="chip">Aviso legal</a>
+    <a href="#privacidad" class="chip">Privacidad (RGPD)</a>
+    <a href="#cookies" class="chip">Cookies</a>
+    <a href="#derechos" class="chip">Tus derechos</a>
+  </nav>
+
+  <h1 class="text-5xl text-court-accent mb-2">AVISOS LEGALES</h1>
+  <p class="text-slate-400 mb-10 text-sm">
+    Última actualización: <time>{today}</time>. Si algo no está claro, escríbenos a
+    <a href="mailto:privacidad@villena.test">privacidad@villena.test</a>.
+  </p>
+
+  <section id="aviso" class="card mb-6">
+    <h2 class="text-3xl mb-3">1. Aviso legal</h2>
+    <p class="text-sm text-slate-300">
+      Este sitio web lo gestiona la <strong>Liga Amateur Villena Basket</strong>
+      (asociación sin ánimo de lucro), con sede en Villena (Alicante, España).
+      Contacto: <a href="mailto:info@villena.test">info@villena.test</a>.
+    </p>
+    <p class="text-sm text-slate-300 mt-3">
+      El acceso y uso del sitio implica la aceptación de estas condiciones.
+      Los contenidos son orientativos; la organización puede modificar los
+      calendarios, reglas o plantillas según necesidad deportiva.
+    </p>
+  </section>
+
+  <section id="privacidad" class="card mb-6">
+    <h2 class="text-3xl mb-3">2. Política de privacidad (RGPD)</h2>
+    <p class="text-sm text-slate-300">
+      Tratamos tus datos según el Reglamento (UE) 2016/679 (RGPD) y la LOPDGDD
+      3/2018. <strong>Responsable del tratamiento:</strong> Liga Amateur Villena Basket.
+    </p>
+    <h3 class="mt-4 font-semibold text-slate-100">Qué datos guardamos</h3>
+    <ul class="text-sm text-slate-300 list-disc pl-5 space-y-1">
+      <li>Nombre, móvil y email (para login e inscripción en torneos).</li>
+      <li>Estadísticas deportivas (pace, tiro, pase, defensa…).</li>
+      <li>Historial de partidos y equipos a los que has pertenecido.</li>
+      <li>Datos técnicos de sesión (cookie de autenticación, dirección IP temporal).</li>
+    </ul>
+    <h3 class="mt-4 font-semibold text-slate-100">Finalidad y base legal</h3>
+    <p class="text-sm text-slate-300">
+      Gestión deportiva de la liga (ejecución de contrato/inscripción — art. 6.1.b
+      RGPD) y comunicaciones operativas puntuales (interés legítimo — art. 6.1.f).
+      No cedemos datos a terceros ni los usamos para publicidad.
+    </p>
+    <h3 class="mt-4 font-semibold text-slate-100">Plazo de conservación</h3>
+    <p class="text-sm text-slate-300">
+      Mientras formes parte de la liga + 4 años por posible reclamación.
+      Después eliminamos o anonimizamos la información.
+    </p>
+  </section>
+
+  <section id="cookies" class="card mb-6">
+    <h2 class="text-3xl mb-3">3. Política de cookies</h2>
+    <p class="text-sm text-slate-300">
+      Usamos <strong>únicamente cookies técnicas estrictamente necesarias</strong>:
+    </p>
+    <table class="w-full text-sm mt-3">
+      <thead class="text-xs text-slate-500 uppercase">
+        <tr><th class="text-left py-1">Nombre</th><th>Finalidad</th><th>Duración</th></tr>
+      </thead>
+      <tbody class="text-slate-300">
+        <tr class="border-t border-slate-800">
+          <td class="py-1"><code>basket_sid</code></td>
+          <td class="text-center">Mantener tu sesión iniciada</td>
+          <td class="text-center">7 días</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-sm text-slate-300 mt-3">
+      No usamos cookies analíticas, publicitarias ni de redes sociales. No
+      necesitamos, por tanto, banner de consentimiento adicional según los
+      criterios de la AEPD para cookies exceptuadas.
+    </p>
+  </section>
+
+  <section id="derechos" class="card">
+    <h2 class="text-3xl mb-3">4. Tus derechos</h2>
+    <p class="text-sm text-slate-300">
+      Puedes ejercer en cualquier momento los derechos de acceso, rectificación,
+      supresión, oposición, limitación y portabilidad escribiendo a
+      <a href="mailto:privacidad@villena.test">privacidad@villena.test</a>.
+      Si consideras que no hemos atendido bien tu solicitud puedes reclamar
+      ante la <a href="https://www.aepd.es" target="_blank" rel="noopener">
+      Agencia Española de Protección de Datos (aepd.es)</a>.
+    </p>
+  </section>
+</Main>

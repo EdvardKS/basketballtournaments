@@ -1,39 +1,41 @@
 ---
 import Main from "../layouts/Main.astro";
 import { api } from "../lib/api.ts";
-import { STATUS_LABEL, STATUS_COLOR, type Tournament } from "../lib/types.ts";
+import type { Tournament, TournamentDetail } from "../lib/types.ts";
+import HeroBanner from "../components/HeroBanner.astro";
+import CurrentTournamentCard from "../components/CurrentTournamentCard.astro";
+import PastTournamentsTimeline from "../components/PastTournamentsTimeline.astro";
+
+const LIVE = ["open","draft","setup","scheduled","active"];
 
 const tournaments = await api<Tournament[]>("/tournaments");
----
-<Main title="Torneos — Villena Basket League">
-  <section slot="hero" class="mb-10">
-    <h1 class="text-5xl md:text-6xl text-court-accent">TORNEOS EN VILLENA</h1>
-    <p class="text-slate-300 mt-2 max-w-2xl">
-      Inscríbete, únete como capitán, sigue los drafts en vivo y consulta la
-      clasificación. Todo el flujo — desde la lista de jugadores hasta los
-      playoffs — en un único panel.
-    </p>
-  </section>
+const active = tournaments.find((t) => LIVE.includes(t.status)) ?? null;
+const past = tournaments.filter((t) => t.status === "completed");
 
-  <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-    {tournaments.map((t) => (
-      <a href={`/tournaments/${t.id}`} class="card hover:border-court-accent transition">
-        <header class="flex justify-between items-start gap-2 mb-3">
-          <h3 class="text-2xl">{t.name}</h3>
-          <span class={`chip ${STATUS_COLOR[t.status]}`}>{STATUS_LABEL[t.status]}</span>
-        </header>
-        <p class="text-slate-400 text-sm mb-3 line-clamp-2">{t.description}</p>
-        <dl class="grid grid-cols-2 gap-2 text-xs text-slate-500">
-          <div><dt>Fecha</dt><dd class="text-slate-200">{t.date}</dd></div>
-          <div><dt>Sede</dt><dd class="text-slate-200">{t.location}</dd></div>
-          <div><dt>Plazas</dt><dd class="text-slate-200">{t.maxTeams} equipos</dd></div>
-        </dl>
-      </a>
-    ))}
-    {tournaments.length === 0 && (
-      <div class="card col-span-full text-center text-slate-400">
-        No hay torneos. Pide a un administrador que cree uno.
-      </div>
-    )}
-  </div>
+let activeDetail: TournamentDetail | null = null;
+if (active) {
+  activeDetail = await api<TournamentDetail>(`/tournaments/${active.id}`)
+    .catch(() => null);
+}
+---
+<Main title="Villena Basket League">
+  <HeroBanner hasActive={!!active} activeName={active?.name} />
+
+  {active && activeDetail && (
+    <CurrentTournamentCard
+      tournament={active}
+      registrations={activeDetail.registrations.length}
+      teams={activeDetail.teams.length} />
+  )}
+
+  {!active && (
+    <section class="card mb-14 text-center">
+      <h2 class="text-3xl">Sin torneos en curso</h2>
+      <p class="text-slate-400 mt-2 text-sm">
+        Cuando un administrador abra el próximo torneo aparecerá aquí.
+      </p>
+    </section>
+  )}
+
+  <PastTournamentsTimeline tournaments={past} />
 </Main>
