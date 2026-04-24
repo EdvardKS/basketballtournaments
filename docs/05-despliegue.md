@@ -7,7 +7,12 @@
 
 ## Arranque
 
+Los `.env` están gitignoreados. Copia los ejemplos antes del primer build:
+
 ```bash
+cp db/.env.example db/.env
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 docker compose up -d --build
 ```
 

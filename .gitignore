@@ -4,7 +4,11 @@ build/
 .astro/
 .cache/
 .DS_Store
+
+# Env files — each service has its own; never commit the real one
+.env
 .env.local
+!.env.example
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
