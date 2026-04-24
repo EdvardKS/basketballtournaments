@@ -14,41 +14,52 @@ docker compose up -d --build
 # abre http://localhost:4322
 ```
 
-## Migraciones de base de datos
+## Base de datos: migraciones + seeds auto-aplicados
 
-Los archivos `db/init/*.sql` son **migraciones versionadas**. Se aplican
-automáticamente:
+El **backend** es la única fuente que toca la DB al arrancar. Al boot:
 
-- **Primera inicialización** (volumen vacío) → Postgres las ejecuta por
-  `docker-entrypoint-initdb.d`.
-- **Arranques posteriores** → el backend las aplica él mismo antes de
-  empezar a escuchar, registrando cada una en la tabla
-  `schema_migrations` (filename + sha256 + timestamp).
+1. Espera a que Postgres esté disponible.
+2. Aplica las **migraciones** pendientes de `db/init/*.sql`
+   (tabla `schema_migrations`).
+3. Si `EXAMPLE_DATA=true`, aplica los **seeds** pendientes de
+   `db/seeds/*.sql` (tabla `schema_seeds`).
+4. Empieza a escuchar.
 
-Sólo se corren las que no están ya en la tabla; las ya aplicadas se
-ignoran sin volver a ejecutarse. Si una migración aplicada se edita
-después, el runner detecta **drift** y lo avisa en el log, pero **no
-la re-ejecuta** — las migraciones son *forward-only*.
+Cada tabla registra `(filename, sha256, applied_at)` — los ficheros ya
+aplicados se saltan, los nuevos entran en una transacción propia.
+Si editas un fichero aplicado se detecta **drift** y se avisa en log
+(pero no se re-ejecuta — el sistema es *forward-only*).
 
-### Añadir una nueva migración
+> Nota: el `docker-entrypoint-initdb.d` de Postgres ya **no** se usa para
+> bootstrap del schema. Es una fuente de bugs porque sólo corre en la
+> *primera* inicialización del volumen, dejando DBs existentes desactualizadas
+> al añadir nuevas columnas. Todo se delega al backend.
 
-1. Crea un nuevo fichero en `db/init/` con prefijo numérico creciente:
-   `09_add_mvp_field.sql`, `10_drop_legacy_col.sql`, etc.
-2. Escribe SQL **idempotente**: `CREATE TABLE IF NOT EXISTS`,
-   `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, etc. Así es seguro si el
-   runner intenta aplicarla contra una DB que ya la tenía.
-3. Commit + deploy (`docker compose -f docker-compose.prod.yml up -d --build`).
-4. En el siguiente arranque del backend se aplica automáticamente.
+### Añadir una nueva migración o seed
 
-### Comandos CLI
+**Migración (schema):**
 
-Dentro del contenedor backend (dev o prod):
+1. Nuevo fichero en `db/init/` con prefijo numérico creciente:
+   `09_add_mvp_field.sql`. SQL **idempotente**
+   (`CREATE TABLE IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
+2. Commit + deploy. Se aplica en el siguiente arranque del backend.
 
-| Comando                          | Qué hace                                   |
-|----------------------------------|--------------------------------------------|
-| `npm run migrate`                | Aplica migraciones pendientes              |
-| `npm run migrate:status`         | Muestra `APPLIED`/`PENDING`/`DRIFT` de cada|
-| `npm run migrate:mark <fichero>` | Marca una migración como aplicada sin ejecutarla (rescate para DBs legadas) |
+**Seed (datos demo):**
+
+1. Nuevo fichero en `db/seeds/` con prefijo numérico creciente:
+   `05_mas_jugadores.sql`. Usa `ON CONFLICT (id) DO NOTHING` para
+   que sea idempotente.
+2. Commit + deploy. Se aplica si `EXAMPLE_DATA=true`.
+
+### Comandos CLI (dentro del contenedor backend)
+
+| Comando                       | Qué hace                                              |
+|-------------------------------|-------------------------------------------------------|
+| `npm run migrate`             | Aplica migraciones pendientes                         |
+| `npm run seed`                | Aplica seeds pendientes                               |
+| `npm run migrate:status`      | Muestra `APPLIED`/`PENDING`/`DRIFT` de **ambos**      |
+| `npm run migrate:mark <f>`    | Marca una migración como aplicada sin ejecutarla      |
+| `npm run seed:mark <f>`       | Marca un seed como aplicado sin ejecutarlo            |
 
 Ejemplo:
 
@@ -59,38 +70,41 @@ docker exec basket_backend_prod npm run migrate:status
 Salida:
 
 ```
-  Status    Filename                          Applied at
-  APPLIED   01_schema_core.sql                2026-04-24 20:45:38
-  APPLIED   02_schema_teams.sql               2026-04-24 20:45:38
-  APPLIED   08_migration_v2.sql               2026-04-24 20:45:38
+  Migrations (db/init/)
+  APPLIED   01_schema_core.sql          2026-04-24 20:45:38
+  APPLIED   08_migration_v2.sql         2026-04-24 20:45:38
   PENDING   09_add_mvp_field.sql
+  3 total · 1 pending · 0 drift
+
+  Seeds (db/seeds/)
+  APPLIED   01_players.sql              2026-04-24 20:45:38
+  APPLIED   02_tournaments.sql          2026-04-24 20:45:38
+  4 total · 0 pending · 0 drift
 ```
 
 ### Regla de oro
 
-**No editar una migración una vez aplicada en producción.** Si necesitas
-cambiar algo, crea una nueva migración que lo corrija. El checksum de la
-ya aplicada se queda registrado como prueba de integridad.
+**No editar un fichero una vez aplicado en producción.** Si necesitas
+cambiar algo, añade un nuevo fichero. El checksum del ya aplicado
+se queda registrado como prueba de integridad.
 
 ## Datos de ejemplo — `EXAMPLE_DATA`
 
-El stack soporta dos modos de arranque controlados por el env var
-`EXAMPLE_DATA` dentro de `db/.env` (dev) y `db/.env.prod` (prod).
+Env var en `backend/.env` (dev) y `backend/.env.prod` (prod):
 
-| Valor   | Qué hace                                                         |
-|---------|------------------------------------------------------------------|
-| `true`  | Crea schema **y** carga demo (jugadores, torneos, partidos)       |
-| `false` | Crea schema solamente (DB vacía de datos de negocio)              |
+| Valor   | Qué hace                                                          |
+|---------|-------------------------------------------------------------------|
+| `true`  | Backend aplica seeds demo al arrancar (jugadores, torneos, partidos) |
+| `false` | Backend sólo aplica schema — DB vacía de datos de negocio          |
 
-Las tablas/columnas se crean **siempre** (idempotente via
-`CREATE TABLE IF NOT EXISTS` y `ALTER TABLE ADD COLUMN IF NOT EXISTS`).
-Los seeds viven en `db/seeds/` y sólo se cargan cuando
-`EXAMPLE_DATA=true` (script de arranque `db/init/99_maybe_seed.sh`).
+Como el sistema trackea los seeds aplicados, cambiar la variable entre
+arranques es seguro: pasar de `false → true` carga los que falten; pasar
+de `true → false` deja los ya cargados donde están (no borra nada).
 
 Defaults recomendados:
 
-- `db/.env` → `EXAMPLE_DATA=true` (desarrollo, demo útil)
-- `db/.env.prod` → `EXAMPLE_DATA=false` (producción, arrancar limpio)
+- `backend/.env` → `EXAMPLE_DATA=true` (desarrollo, demo útil)
+- `backend/.env.prod` → `EXAMPLE_DATA=false` (producción, arrancar limpio)
 
 ## Usuarios de ejemplo (cuando `EXAMPLE_DATA=true`)
 
