@@ -14,6 +14,64 @@ docker compose up -d --build
 # abre http://localhost:4322
 ```
 
+## Migraciones de base de datos
+
+Los archivos `db/init/*.sql` son **migraciones versionadas**. Se aplican
+automáticamente:
+
+- **Primera inicialización** (volumen vacío) → Postgres las ejecuta por
+  `docker-entrypoint-initdb.d`.
+- **Arranques posteriores** → el backend las aplica él mismo antes de
+  empezar a escuchar, registrando cada una en la tabla
+  `schema_migrations` (filename + sha256 + timestamp).
+
+Sólo se corren las que no están ya en la tabla; las ya aplicadas se
+ignoran sin volver a ejecutarse. Si una migración aplicada se edita
+después, el runner detecta **drift** y lo avisa en el log, pero **no
+la re-ejecuta** — las migraciones son *forward-only*.
+
+### Añadir una nueva migración
+
+1. Crea un nuevo fichero en `db/init/` con prefijo numérico creciente:
+   `09_add_mvp_field.sql`, `10_drop_legacy_col.sql`, etc.
+2. Escribe SQL **idempotente**: `CREATE TABLE IF NOT EXISTS`,
+   `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, etc. Así es seguro si el
+   runner intenta aplicarla contra una DB que ya la tenía.
+3. Commit + deploy (`docker compose -f docker-compose.prod.yml up -d --build`).
+4. En el siguiente arranque del backend se aplica automáticamente.
+
+### Comandos CLI
+
+Dentro del contenedor backend (dev o prod):
+
+| Comando                          | Qué hace                                   |
+|----------------------------------|--------------------------------------------|
+| `npm run migrate`                | Aplica migraciones pendientes              |
+| `npm run migrate:status`         | Muestra `APPLIED`/`PENDING`/`DRIFT` de cada|
+| `npm run migrate:mark <fichero>` | Marca una migración como aplicada sin ejecutarla (rescate para DBs legadas) |
+
+Ejemplo:
+
+```bash
+docker exec basket_backend_prod npm run migrate:status
+```
+
+Salida:
+
+```
+  Status    Filename                          Applied at
+  APPLIED   01_schema_core.sql                2026-04-24 20:45:38
+  APPLIED   02_schema_teams.sql               2026-04-24 20:45:38
+  APPLIED   08_migration_v2.sql               2026-04-24 20:45:38
+  PENDING   09_add_mvp_field.sql
+```
+
+### Regla de oro
+
+**No editar una migración una vez aplicada en producción.** Si necesitas
+cambiar algo, crea una nueva migración que lo corrija. El checksum de la
+ya aplicada se queda registrado como prueba de integridad.
+
 ## Datos de ejemplo — `EXAMPLE_DATA`
 
 El stack soporta dos modos de arranque controlados por el env var
