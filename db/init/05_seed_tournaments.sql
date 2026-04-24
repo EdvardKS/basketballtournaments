@@ -1,0 +1,45 @@
+-- Seed: tournaments covering all lifecycle states
+INSERT INTO public.tournaments (id, name, date, status, location, description, rules, max_teams) VALUES
+  ('tournament-open-1', 'Torneo Villena Open', '2026-06-30', 'open',
+   'Pistas Municipales Villena', 'Inscripciones abiertas',
+   E'Formato 5v5 Cancha Completa\nEliminacion Doble\nDos partes de 20 minutos\nSeleccion por Draft de Capitanes\nReglas FIBA', 8),
+  ('tournament-draft-1', 'Draft Primavera', '2026-05-10', 'draft',
+   'Pabellon Centro', 'Draft en curso',
+   E'Formato 5v5 Cancha Completa\nEliminacion Doble\nSeleccion por Draft de Capitanes\nReglas FIBA', 8),
+  ('tournament-active-1', 'Liga Otono', '2026-04-15', 'active',
+   'Polideportivo Norte', 'Fase de grupos en juego',
+   E'Formato 5v5 Cancha Completa\nFase de grupos y eliminatorias\nReglas FIBA', 8),
+  ('tournament-completed-1', 'Copa Invierno', '2026-02-20', 'completed',
+   'Pabellon Sur', 'Torneo finalizado',
+   E'Formato 5v5 Cancha Completa\nEliminacion directa\nReglas FIBA', 8)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.tournament_registrations (id, player_id, tournament_id, is_captain, team_name) VALUES
+  ('reg-open-1', 'player-04', 'tournament-open-1', false, NULL),
+  ('reg-open-2', 'player-05', 'tournament-open-1', false, NULL),
+  ('reg-open-3', 'player-06', 'tournament-open-1', false, NULL),
+  ('reg-open-4', 'player-09', 'tournament-open-1', false, NULL),
+  ('reg-open-5', 'player-10', 'tournament-open-1', false, NULL),
+  ('reg-draft-1', 'player-01', 'tournament-draft-1', true, NULL),
+  ('reg-draft-2', 'player-02', 'tournament-draft-1', true, NULL),
+  ('reg-draft-3', 'player-04', 'tournament-draft-1', false, NULL),
+  ('reg-draft-4', 'player-05', 'tournament-draft-1', false, NULL),
+  ('reg-draft-5', 'player-06', 'tournament-draft-1', false, NULL),
+  ('reg-draft-6', 'player-07', 'tournament-draft-1', false, NULL),
+  ('reg-draft-7', 'player-08', 'tournament-draft-1', false, NULL),
+  ('reg-draft-8', 'player-09', 'tournament-draft-1', false, NULL),
+  ('reg-active-1', 'player-03', 'tournament-active-1', true, 'Raptors Norte'),
+  ('reg-active-2', 'player-04', 'tournament-active-1', true, 'Halcones Sur'),
+  ('reg-active-3', 'player-05', 'tournament-active-1', true, 'Titanes City'),
+  ('reg-active-4', 'player-06', 'tournament-active-1', true, 'Cometas Azul'),
+  ('reg-active-5', 'player-07', 'tournament-active-1', false, NULL),
+  ('reg-active-6', 'player-08', 'tournament-active-1', false, NULL),
+  ('reg-active-7', 'player-09', 'tournament-active-1', false, NULL),
+  ('reg-active-8', 'player-10', 'tournament-active-1', false, NULL),
+  ('reg-completed-1', 'player-07', 'tournament-completed-1', true, 'Gladiadores'),
+  ('reg-completed-2', 'player-08', 'tournament-completed-1', true, 'Fenix'),
+  ('reg-completed-3', 'player-09', 'tournament-completed-1', false, NULL),
+  ('reg-completed-4', 'player-10', 'tournament-completed-1', false, NULL),
+  ('reg-completed-5', 'player-11', 'tournament-completed-1', false, NULL),
+  ('reg-completed-6', 'player-12', 'tournament-completed-1', false, NULL)
+ON CONFLICT (id) DO NOTHING;

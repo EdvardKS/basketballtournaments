@@ -3,7 +3,7 @@
 ## Requisitos
 
 - Docker Desktop (Windows → con WSL2).
-- Puertos libres: `4321`, `4000`, `5433`.
+- Puertos libres: `4322`, `4010`, `5434`.
 
 ## Arranque
 
@@ -13,9 +13,9 @@ docker compose up -d --build
 
 Al primer arranque:
 
-1. `db` aplica `db/init.sql` (schema + seed).
-2. `backend` espera a que `db` esté healthy y arranca en `:4000`.
-3. `frontend` (Astro) arranca en `:4321` con HMR.
+1. `db` aplica los `db/init/*.sql` en orden alfabético (schema + seed).
+2. `backend` espera a que `db` esté healthy y arranca en `:4010`.
+3. `frontend` (Astro) arranca en `:4322` con HMR.
 
 ## Dev loop
 

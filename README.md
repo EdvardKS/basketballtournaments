@@ -2,15 +2,15 @@
 
 Gestor de torneos de basket amateur. Tres servicios Docker:
 
-- **db** → Postgres 16 (puerto host `5433`)
-- **backend** → Express + TypeScript (puerto host `4000`)
-- **frontend** → Astro 5 + React islands (puerto host `4321`)
+- **db** → Postgres 16 (puerto host `5434`)
+- **backend** → Express + TypeScript (puerto host `4010`)
+- **frontend** → Astro 5 + React islands (puerto host `4322`)
 
 ## Arranque rápido
 
 ```bash
 docker compose up -d --build
-# abre http://localhost:4321
+# abre http://localhost:4322
 ```
 
 Seed automático: ver `docs/00-README.md` para credenciales.

@@ -6,9 +6,9 @@ services:
     env_file: ./db/.env
     volumes:
       - basket_pgdata:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     ports:
-      - "5433:5432"
+      - "5434:5432"
     networks:
       - basket_net
     healthcheck:
@@ -32,7 +32,7 @@ services:
       - ./backend/tsconfig.json:/app/tsconfig.json
       - backend_node_modules:/app/node_modules
     ports:
-      - "4000:4000"
+      - "4010:4000"
     networks:
       - basket_net
     command: npm run dev
@@ -53,7 +53,7 @@ services:
       - ./frontend/tsconfig.json:/app/tsconfig.json
       - frontend_node_modules:/app/node_modules
     ports:
-      - "4321:4321"
+      - "4322:4321"
     networks:
       - basket_net
     command: npm run dev

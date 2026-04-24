@@ -1,6 +1,6 @@
 # API REST
 
-Base URL: `http://localhost:4000/api` (o `/api` si usas el proxy del frontend).
+Base URL: `http://localhost:4010/api` (o `/api` si usas el proxy del frontend).
 
 Todas las respuestas son JSON. Los endpoints que requieren sesión
 devuelven `401` si no hay login. Los que requieren rol `admin`

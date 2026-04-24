@@ -16,9 +16,9 @@ Tres servicios Docker conectados en una red interna `basket_net`:
 
 | Servicio | Stack                               | Puerto host |
 |----------|-------------------------------------|-------------|
-| `db`     | Postgres 16 + pgcrypto              | `5433`      |
-| `backend`| Node 20 + Express + `pg`            | `4000`      |
-| `frontend`| Node 20 + Astro 5 + React islands  | `4321`      |
+| `db`     | Postgres 16 + pgcrypto              | `5434`      |
+| `backend`| Node 20 + Express + `pg`            | `4010`      |
+| `frontend`| Node 20 + Astro 5 + React islands  | `4322`      |
 
 Todo corre en **modo desarrollo** con hot-reload por volúmenes montados.
 

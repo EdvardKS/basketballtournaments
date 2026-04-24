@@ -11,7 +11,7 @@
 │                                                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────┘
         ▲                                    ▲                                ▲
-        │localhost:4321                      │localhost:4000                  │localhost:5433
+        │localhost:4322                      │localhost:4010                  │localhost:5434
 ```
 
 ## Carpetas del repo
