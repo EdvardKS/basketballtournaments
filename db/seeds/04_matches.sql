@@ -14,7 +14,7 @@
 INSERT INTO public.tournament_groups (id, tournament_id, name) VALUES
   ('g8-a', 't-past-8', 'Grupo A'),
   ('g8-b', 't-past-8', 'Grupo B')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Group A: team-1, team-2, team-3, team-4
 -- Match results (G=games, W=wins, L=loss, PF=points for, PC=points against, pts):
@@ -58,7 +58,7 @@ INSERT INTO public.matches (id, tournament_id, group_id, stage, home_team_id, aw
   ('m8-gb-4','t-past-8','g8-b','group','t8-team-6','t8-team-8',17,20,'t8-team-8','completed','2026-02-20 10:40'::timestamp, '2026-02-20 10:42'::timestamp, '2026-02-20 11:02'::timestamp),
   ('m8-gb-5','t-past-8','g8-b','group','t8-team-5','t8-team-8',22,19,'t8-team-5','completed','2026-02-20 11:05'::timestamp, '2026-02-20 11:07'::timestamp, '2026-02-20 11:27'::timestamp),
   ('m8-gb-6','t-past-8','g8-b','group','t8-team-6','t8-team-7',19,21,'t8-team-7','completed','2026-02-20 11:05'::timestamp, '2026-02-20 11:07'::timestamp, '2026-02-20 11:27'::timestamp)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Knockout: top 2 per group → semis (4 teams). Winners to final, losers to 3rd place.
 -- Semis: t1 (A1) vs t8 (B2); t5 (B1) vs t3 (A2)
@@ -69,7 +69,7 @@ INSERT INTO public.matches (id, tournament_id, stage, round_number, home_team_id
   ('m8-sf-2', 't-past-8','semifinal',2,'t8-team-5','t8-team-3',22,19,'t8-team-5','completed','2026-02-20 12:00'::timestamp, '2026-02-20 12:02'::timestamp, '2026-02-20 12:25'::timestamp),
   ('m8-3rd',  't-past-8','third_place',1,'t8-team-8','t8-team-3',19,17,'t8-team-8','completed','2026-02-20 13:00'::timestamp, '2026-02-20 13:02'::timestamp, '2026-02-20 13:25'::timestamp),
   ('m8-fin',  't-past-8','final',1,'t8-team-1','t8-team-5',21,19,'t8-team-1','completed','2026-02-20 13:30'::timestamp, '2026-02-20 13:32'::timestamp, '2026-02-20 13:55'::timestamp)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- ============================================================
 -- t-past-6: 6 teams, 2 groups of 3
@@ -78,7 +78,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.tournament_groups (id, tournament_id, name) VALUES
   ('g6-a', 't-past-6', 'Grupo A'),
   ('g6-b', 't-past-6', 'Grupo B')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Group A: team-1 (Lobos), team-2 (Titanes), team-3 (Raptors)
 --   t6-team-4 NOT here. Group A = t6-team-1, t6-team-2, t6-team-3.
@@ -109,7 +109,7 @@ INSERT INTO public.matches (id, tournament_id, group_id, stage, home_team_id, aw
   ('m6-gb-1','t-past-6','g6-b','group','t6-team-4','t6-team-5',22,18,'t6-team-4','completed','2025-12-22 10:15'::timestamp, '2025-12-22 10:17'::timestamp, '2025-12-22 10:37'::timestamp),
   ('m6-gb-2','t-past-6','g6-b','group','t6-team-5','t6-team-6',19,21,'t6-team-6','completed','2025-12-22 10:40'::timestamp, '2025-12-22 10:42'::timestamp, '2025-12-22 11:02'::timestamp),
   ('m6-gb-3','t-past-6','g6-b','group','t6-team-4','t6-team-6',23,20,'t6-team-4','completed','2025-12-22 11:05'::timestamp, '2025-12-22 11:07'::timestamp, '2025-12-22 11:27'::timestamp)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Knockout: top 2 per group = 4 teams (t1, t3, t4, t6)
 -- Semis: t1 (A1) vs t6 (B2); t4 (B1) vs t3 (A2)
@@ -121,7 +121,7 @@ INSERT INTO public.matches (id, tournament_id, stage, round_number, home_team_id
   ('m6-sf-2', 't-past-6','semifinal',2,'t6-team-4','t6-team-3',22,16,'t6-team-4','completed','2025-12-22 12:00'::timestamp, '2025-12-22 12:02'::timestamp, '2025-12-22 12:25'::timestamp),
   ('m6-3rd',  't-past-6','third_place',1,'t6-team-1','t6-team-3',23,19,'t6-team-1','completed','2025-12-22 13:00'::timestamp, '2025-12-22 13:02'::timestamp, '2025-12-22 13:25'::timestamp),
   ('m6-fin',  't-past-6','final',1,'t6-team-4','t6-team-6',24,21,'t6-team-4','completed','2025-12-22 13:30'::timestamp, '2025-12-22 13:32'::timestamp, '2025-12-22 13:55'::timestamp)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- ============================================================
 -- t-past-4: 4 teams, 1 group, round-robin + 4-team bracket
@@ -129,7 +129,7 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.tournament_groups (id, tournament_id, name) VALUES
   ('g4-a', 't-past-4', 'Grupo Único')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- All 4 teams round-robin (6 matches):
 --   t4-team-2: W vs t1 (21-18), W vs t3 (22-19), W vs t4 (20-17) → 3W 0L = 6pts, 63/54 ← champion
@@ -151,7 +151,7 @@ INSERT INTO public.matches (id, tournament_id, group_id, stage, home_team_id, aw
   ('m4-g-4','t-past-4','g4-a','group','t4-team-1','t4-team-4',20,18,'t4-team-1','completed','2025-07-10 09:25'::timestamp, '2025-07-10 09:27'::timestamp, '2025-07-10 09:47'::timestamp),
   ('m4-g-5','t-past-4','g4-a','group','t4-team-2','t4-team-4',20,17,'t4-team-2','completed','2025-07-10 09:50'::timestamp, '2025-07-10 09:52'::timestamp, '2025-07-10 10:12'::timestamp),
   ('m4-g-6','t-past-4','g4-a','group','t4-team-1','t4-team-3',19,16,'t4-team-1','completed','2025-07-10 09:50'::timestamp, '2025-07-10 09:52'::timestamp, '2025-07-10 10:12'::timestamp)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Knockout: 4 teams (all advance since 1 group) → semis + final + 3rd
 -- Semis: #1 (t2) vs #4 (t4); #2 (t1) vs #3 (t3)
@@ -163,4 +163,4 @@ INSERT INTO public.matches (id, tournament_id, stage, round_number, home_team_id
   ('m4-sf-2', 't-past-4','semifinal',2,'t4-team-1','t4-team-3',20,18,'t4-team-1','completed','2025-07-10 12:00'::timestamp, '2025-07-10 12:02'::timestamp, '2025-07-10 12:25'::timestamp),
   ('m4-3rd',  't-past-4','third_place',1,'t4-team-4','t4-team-3',17,19,'t4-team-3','completed','2025-07-10 13:00'::timestamp, '2025-07-10 13:02'::timestamp, '2025-07-10 13:25'::timestamp),
   ('m4-fin',  't-past-4','final',1,'t4-team-2','t4-team-1',23,19,'t4-team-2','completed','2025-07-10 13:30'::timestamp, '2025-07-10 13:32'::timestamp, '2025-07-10 13:55'::timestamp)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;

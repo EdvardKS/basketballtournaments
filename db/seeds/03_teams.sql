@@ -14,7 +14,7 @@ INSERT INTO public.teams (id, tournament_id, captain_id, name, name_confirmed, d
   ('td-team-4', 't-draft-now', 'player-04', 'Los Lobos',     true, 'Bloqueo y pick&roll'),
   ('td-team-5', 't-draft-now', 'player-05', 'Los Cometas',   true, 'Tiro exterior'),
   ('td-team-6', 't-draft-now', 'player-06', 'Los Raptors',   true, 'Contraataque rápido')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Captains auto-added to their own teams
 INSERT INTO public.team_players (team_id, player_id) VALUES
@@ -36,7 +36,7 @@ INSERT INTO public.draft_state (
   3, 1, 99, 'true',
   '[{"round":1,"order":["td-team-1","td-team-2","td-team-3","td-team-4","td-team-5","td-team-6"]}]',
   now() - interval '2 hours'
-) ON CONFLICT (id) DO NOTHING;
+) ON CONFLICT DO NOTHING;
 
 INSERT INTO public.draft_history (tournament_id, team_id, player_id, round, pick_order, picked_at) VALUES
   ('t-draft-now', 'td-team-1', 'player-13', 1, 1, now() - interval '2 hours'),
@@ -55,7 +55,7 @@ INSERT INTO public.teams (id, tournament_id, captain_id, name, name_confirmed) V
   ('t8-team-6', 't-past-8', 'player-09', 'Los Truenos',    true),
   ('t8-team-7', 't-past-8', 'player-10', 'Los Cometas',    true),
   ('t8-team-8', 't-past-8', 'player-12', 'Los Tiburones',  true)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO public.team_players (team_id, player_id) VALUES
   ('t8-team-1','player-01'),('t8-team-1','player-13'),('t8-team-1','player-25'),
@@ -81,7 +81,7 @@ INSERT INTO public.teams (id, tournament_id, captain_id, name, name_confirmed) V
   ('t6-team-4', 't-past-6', 'player-10', 'Los Cometas',    true),
   ('t6-team-5', 't-past-6', 'player-11', 'Los Gigantes',   true),
   ('t6-team-6', 't-past-6', 'player-12', 'Los Tiburones',  true)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO public.team_players (team_id, player_id) VALUES
   ('t6-team-1','player-04'),('t6-team-1','player-19'),('t6-team-1','player-35'),
@@ -103,7 +103,7 @@ INSERT INTO public.teams (id, tournament_id, captain_id, name, name_confirmed) V
   ('t4-team-2', 't-past-4', 'player-02', 'Los Dragones',   true),
   ('t4-team-3', 't-past-4', 'player-06', 'Los Raptors',    true),
   ('t4-team-4', 't-past-4', 'player-08', 'Los Pumas',      true)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 INSERT INTO public.team_players (team_id, player_id) VALUES
   ('t4-team-1','player-01'),('t4-team-1','player-13'),('t4-team-1','player-25'),

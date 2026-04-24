@@ -50,7 +50,7 @@ INSERT INTO public.tournaments (
    E'Formato 3x3\nGrupo único + final directa\nReglas FIBA 3x3', 4,
    '2025-05-01', '2025-06-30', '2025-07-01', '2025-07-09', '2025-07-10',
    1, true, 20, true, 3)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Registrations — many players, all tournaments
 INSERT INTO public.tournament_registrations (id, player_id, tournament_id, is_captain, team_name) VALUES
@@ -133,4 +133,4 @@ INSERT INTO public.tournament_registrations (id, player_id, tournament_id, is_ca
   ('reg-4-10','player-26','t-past-4',false,null),
   ('reg-4-11','player-27','t-past-4',false,null),
   ('reg-4-12','player-28','t-past-4',false,null)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;

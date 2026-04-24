@@ -56,4 +56,4 @@ INSERT INTO public.players (
   ('player-38', 'Sergi Verdu',     '600000038', 'sergiv',   'sergi@villena.test',  'player',  '123123123', true,  'ala-pivot',  28, true, now() - interval '110 days', 66, 66, 68, 64, 78, 82, 70),
   ('player-39', 'Miquel Grau',     '600000039', 'miquelg',  'miquel@villena.test', 'player',  '123123123', false, 'pivot',      31, true, now() - interval '110 days', 50, 54, 60, 52, 80, 90, 64),
   ('player-40', 'Saul Cano',       '600000040', 'saulc',    'saul@villena.test',   'player',  '123123123', true,  'base',       22, true, now() - interval '110 days', 86, 72, 76, 84, 58, 68, 74)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
