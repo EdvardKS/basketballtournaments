@@ -1,0 +1,34 @@
+---
+import CountUpStat from "../../islands/landing/CountUpStat.js";
+
+interface Props {
+  tournamentsPlayed: number;
+  teamsTotal: number;
+  playersTotal: number;
+}
+const { tournamentsPlayed, teamsTotal, playersTotal } = Astro.props;
+---
+<section class="relative overflow-hidden">
+  <div
+    class="absolute inset-0 animate-gradient-shift"
+    style="background: linear-gradient(120deg, #0b0f1a 0%, #1a0a00 35%, #001028 70%, #0b0f1a 100%);"
+    aria-hidden="true"
+  />
+  <div class="absolute inset-0" aria-hidden="true">
+    <div class="absolute -top-1/2 left-1/4 w-96 h-96 rounded-full opacity-25 blur-3xl" style="background:#ff6b00;" />
+    <div class="absolute -bottom-1/2 right-1/4 w-96 h-96 rounded-full opacity-25 blur-3xl" style="background:#0066ff;" />
+  </div>
+
+  <div class="relative max-w-7xl mx-auto px-4 py-20 sm:py-28">
+    <p class="text-center text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-orange)] font-semibold mb-3">La liga en números</p>
+    <h2 class="text-center font-hero text-4xl sm:text-6xl text-white leading-none mb-16">
+      ESTO YA <span class="text-neon-orange">ES UNA COMUNIDAD</span>
+    </h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-12 sm:gap-6">
+      <CountUpStat client:visible value={tournamentsPlayed} label="Torneos jugados"        color="orange" />
+      <CountUpStat client:visible value={teamsTotal}        label="Equipos en cancha"      color="blue" />
+      <CountUpStat client:visible value={playersTotal}      label="Jugadores registrados"  color="red" />
+    </div>
+  </div>
+</section>

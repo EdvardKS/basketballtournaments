@@ -1,0 +1,129 @@
+---
+import type { Tournament, TournamentStatus } from "../../lib/types.js";
+import { computeEffectiveStatus, formatDate } from "../../lib/display.js";
+import PhaseProgressBar from "./PhaseProgressBar.astro";
+import Countdown from "../../islands/landing/Countdown.js";
+
+interface Props {
+  tournament: Tournament;
+  teamsCount: number;
+  primaryCtaHref: string;
+}
+const { tournament: t, teamsCount, primaryCtaHref } = Astro.props;
+
+const effective: TournamentStatus = computeEffectiveStatus(t);
+const spotsLeft = Math.max(0, t.maxTeams - teamsCount);
+const urgent = spotsLeft > 0 && spotsLeft <= 2;
+
+// Pick countdown target by phase
+const countdownTarget =
+  effective === "open" && t.inscriptionEnd ? t.inscriptionEnd :
+  effective === "draft" && t.draftEnd ? t.draftEnd :
+  t.matchDate ?? t.date;
+
+const countdownLabel =
+  effective === "open" ? "Cierre de inscripción" :
+  effective === "draft" ? "Fin del draft" :
+  effective === "completed" ? "Finalizado" :
+  "Empieza en";
+
+const STATUS_CHIP: Partial<Record<TournamentStatus, { label: string; cls: string }>> = {
+  upcoming:  { label: "Próximamente",         cls: "bg-white/10 text-white" },
+  open:      { label: "Inscripciones abiertas", cls: "bg-[var(--color-neon-orange)]/20 text-[var(--color-neon-orange)]" },
+  draft:     { label: "Draft en curso",       cls: "bg-court-warn/20 text-court-warn" },
+  setup:     { label: "Preparando torneo",    cls: "bg-blue-400/20 text-blue-300" },
+  scheduled: { label: "Programado",           cls: "bg-blue-500/20 text-blue-300" },
+  active:    { label: "Torneo en juego",      cls: "bg-[var(--color-neon-red)]/20 text-[var(--color-neon-red)]" },
+  completed: { label: "Finalizado",           cls: "bg-white/10 text-court-muted" },
+};
+const chip = STATUS_CHIP[effective];
+const dateLabel = formatDate(t.matchDate ?? t.date).toUpperCase();
+---
+<section class="relative max-w-5xl mx-auto px-4 -mt-16 sm:-mt-24 z-20" id="torneo">
+  <div class="glass p-6 sm:p-10 animate-slide-up">
+    <!-- Top row: status chip + name -->
+    <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
+      <div>
+        {chip && (
+          <span class={`chip uppercase tracking-wider ${chip.cls}`}>{chip.label}</span>
+        )}
+        <h2 class="font-hero text-3xl sm:text-4xl text-white mt-2 leading-none">{t.name}</h2>
+      </div>
+      <a href={`/tournaments/${t.id}`} class="text-xs uppercase tracking-widest text-court-muted hover:text-white transition-colors">
+        Ver detalle →
+      </a>
+    </div>
+
+    <!-- Date + Location row -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 items-end">
+      <div>
+        <p class="text-[10px] uppercase tracking-[0.25em] text-court-muted mb-1">Fecha del torneo</p>
+        <p class="font-hero text-neon-orange leading-none" style="font-size: clamp(2.5rem, 7vw, 5rem);">
+          {dateLabel}
+        </p>
+      </div>
+      <div class="md:text-right">
+        <p class="text-[10px] uppercase tracking-[0.25em] text-court-muted mb-1">Ubicación</p>
+        <p class="text-white text-lg sm:text-xl font-semibold flex items-center md:justify-end gap-2">
+          <svg class="w-5 h-5 text-[var(--color-neon-orange)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z" />
+            <circle cx="12" cy="10" r="3" />
+          </svg>
+          {t.location}
+        </p>
+      </div>
+    </div>
+
+    <!-- Spots row -->
+    <div class="grid grid-cols-2 gap-4 sm:gap-6 mb-8">
+      <div class="bg-black/30 border border-white/5 rounded-xl p-4">
+        <p class="text-[10px] uppercase tracking-[0.25em] text-court-muted mb-1">Equipos inscritos</p>
+        <p class="font-hero text-4xl sm:text-5xl text-white leading-none tabular-nums">
+          {teamsCount}<span class="text-court-muted">/{t.maxTeams}</span>
+        </p>
+      </div>
+      <div class:list={[
+        "bg-black/30 border rounded-xl p-4 transition-all",
+        urgent ? "border-[var(--color-neon-orange)]/50 animate-glow" : "border-white/5",
+      ]}>
+        <p class="text-[10px] uppercase tracking-[0.25em] text-court-muted mb-1">Plazas libres</p>
+        <p class:list={[
+          "font-hero text-4xl sm:text-5xl leading-none tabular-nums",
+          spotsLeft === 0 ? "text-court-muted" : "text-neon-orange",
+        ]}>
+          {spotsLeft}
+        </p>
+      </div>
+    </div>
+
+    <!-- Phase progress -->
+    <div class="mb-8">
+      <p class="text-[10px] uppercase tracking-[0.25em] text-court-muted mb-3">Estado del torneo</p>
+      <PhaseProgressBar status={effective} />
+    </div>
+
+    <!-- Countdown + CTA -->
+    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 pt-6 border-t border-white/5">
+      {countdownTarget && effective !== "completed" ? (
+        <Countdown
+          client:visible
+          targetIso={countdownTarget}
+          label={countdownLabel}
+          variant={urgent ? "red" : "orange"}
+        />
+      ) : (
+        <div />
+      )}
+      {spotsLeft > 0 && effective !== "completed" && effective !== "active" ? (
+        <a href={primaryCtaHref} class="btn-neon w-full sm:w-auto">
+          Apuntarse ahora
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14M13 5l7 7-7 7" />
+          </svg>
+        </a>
+      ) : (
+        <a href={`/tournaments/${t.id}`} class="btn-neon-blue w-full sm:w-auto">Ver torneo</a>
+      )}
+    </div>
+  </div>
+</section>

@@ -1,11 +1,15 @@
 ---
 import Main from "../layouts/Main.astro";
-import HeroBanner from "../components/HeroBanner.astro";
-import TournamentCard from "../components/TournamentCard.astro";
-import PastTournamentsTimeline from "../components/PastTournamentsTimeline.astro";
+import LandingHero from "../components/landing/LandingHero.astro";
+import TournamentStatusCard from "../components/landing/TournamentStatusCard.astro";
+import HowItWorks from "../components/landing/HowItWorks.astro";
+import UrgencyStrip from "../components/landing/UrgencyStrip.astro";
+import StatsSection from "../components/landing/StatsSection.astro";
+import HistorySection from "../components/landing/HistorySection.astro";
 import { loadSession } from "../lib/session.js";
 import { api, getCookieHeader } from "../lib/api.js";
-import type { Tournament } from "../lib/types.js";
+import { computeEffectiveStatus } from "../lib/display.js";
+import type { Tournament, TournamentDetail, TournamentStatus } from "../lib/types.js";
 
 const session = await loadSession(Astro.request);
 const cookie = getCookieHeader(Astro.request);
@@ -13,31 +17,83 @@ const cookie = getCookieHeader(Astro.request);
 let tournaments: Tournament[] = [];
 try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
 
-const active = tournaments.find((t) => !["completed","upcoming"].includes(t.status)) ?? null;
-const upcoming = tournaments.find((t) => t.status === "upcoming") ?? null;
+// Effective status by date
+const enriched = tournaments.map((t) => ({ t, eff: computeEffectiveStatus(t) }));
+
+const ACTIVE_STATES: TournamentStatus[] = ["open", "draft", "setup", "scheduled", "active"];
+const activeEntry =
+  enriched.find((e) => ACTIVE_STATES.includes(e.eff)) ??
+  enriched.find((e) => e.eff === "upcoming") ??
+  null;
+const active: Tournament | null = activeEntry?.t ?? null;
+const activeEffective: TournamentStatus | null = activeEntry?.eff ?? null;
+
+// Detail for spots/teams count (best-effort)
+let activeDetail: TournamentDetail | null = null;
+if (active) {
+  try { activeDetail = await api<TournamentDetail>(`/tournaments/${active.id}`, {}, cookie); }
+  catch { /* fallback */ }
+}
+
+const teamsCount = activeDetail?.teams.length ?? 0;
+const spotsLeft = active ? Math.max(0, active.maxTeams - teamsCount) : 0;
+
+// Dynamic primary CTA: if open inscriptions → tournament page, else → register
+const primaryCtaHref = active && activeEffective === "open"
+  ? `/tournaments/${active.id}`
+  : "/register";
+
+const primaryCtaLabel = active && activeEffective === "open"
+  ? "INSCRIBIRSE"
+  : "ÚNETE A LA LIGA";
+
+const secondaryCtaHref = active ? `/tournaments/${active.id}` : "#torneo";
+
+const badgeLabel =
+  activeEffective === "open"   ? "INSCRIPCIONES ABIERTAS" :
+  activeEffective === "draft"  ? "DRAFT EN CURSO" :
+  activeEffective === "active" ? "TORNEO EN JUEGO" :
+  activeEffective === "upcoming" ? "PRÓXIMO TORNEO" :
+  null;
+
+// Aggregated stats (derived from list, no extra requests)
+const completed = tournaments.filter((t) => t.status === "completed");
+const tournamentsPlayed = completed.length;
+const teamsTotal = completed.reduce((acc, t) => acc + (t.maxTeams ?? 0), 0);
+const playersTotal = completed.reduce((acc, t) => acc + (t.maxTeams ?? 0) * (t.teamSize ?? 3), 0);
 ---
-<Main title="Villena Basket League" player={session.player}>
-  <HeroBanner active={active ?? upcoming} />
+<Main title="Villena Basket League · 3×3" player={session.player}>
+  <LandingHero
+    active={active}
+    primaryCtaHref={primaryCtaHref}
+    primaryCtaLabel={primaryCtaLabel}
+    secondaryCtaHref={secondaryCtaHref}
+    badgeLabel={badgeLabel}
+  />
 
-  <section class="max-w-7xl mx-auto px-4 py-10">
-    {active && (
-      <div class="mb-10">
-        <h2 class="font-display text-3xl text-white mb-4">Torneo activo</h2>
-        <TournamentCard tournament={active} />
-      </div>
-    )}
+  {active && (
+    <TournamentStatusCard
+      tournament={active}
+      teamsCount={teamsCount}
+      primaryCtaHref={primaryCtaHref}
+    />
+  )}
 
-    {!active && tournaments.filter((t) => !["completed"].includes(t.status)).length > 0 && (
-      <div class="mb-10">
-        <h2 class="font-display text-3xl text-white mb-4">Próximos torneos</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {tournaments
-            .filter((t) => !["completed"].includes(t.status))
-            .map((t) => <TournamentCard tournament={t} />)}
-        </div>
-      </div>
-    )}
-  </section>
+  <HowItWorks />
 
-  <PastTournamentsTimeline tournaments={tournaments} />
+  <UrgencyStrip
+    active={active}
+    spotsLeft={spotsLeft}
+    primaryCtaHref={primaryCtaHref}
+  />
+
+  {tournamentsPlayed > 0 && (
+    <StatsSection
+      tournamentsPlayed={tournamentsPlayed}
+      teamsTotal={teamsTotal}
+      playersTotal={playersTotal}
+    />
+  )}
+
+  <HistorySection tournaments={tournaments} />
 </Main>

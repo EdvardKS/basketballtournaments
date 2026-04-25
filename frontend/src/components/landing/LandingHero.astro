@@ -1,0 +1,117 @@
+---
+import type { Tournament } from "../../lib/types.js";
+
+interface Props {
+  active: Tournament | null;
+  primaryCtaHref: string;
+  primaryCtaLabel: string;
+  secondaryCtaHref: string;
+  badgeLabel: string | null;
+}
+
+const { active, primaryCtaHref, primaryCtaLabel, secondaryCtaHref, badgeLabel } = Astro.props;
+
+// Deterministic particle positions so SSR output is stable
+const particles = Array.from({ length: 18 }, (_, i) => {
+  const left = (i * 53 + 7) % 100;
+  const delay = (i * 0.7) % 6;
+  const dur = 6 + ((i * 1.3) % 5);
+  const variant = i % 3 === 0 ? "blue" : i % 5 === 0 ? "red" : "";
+  return { left, delay, dur, variant };
+});
+---
+<section class="relative min-h-screen flex items-center overflow-hidden">
+  <!-- Layer 1: animated diagonal gradient -->
+  <div
+    class="absolute inset-0 animate-gradient-shift -z-10"
+    style="background: linear-gradient(135deg, #000 0%, #0b0f1a 45%, #1a0500 100%);"
+    aria-hidden="true"
+  />
+
+  <!-- Layer 2: court SVG (subtle) -->
+  <div class="absolute inset-0 pointer-events-none select-none opacity-[0.07] -z-10" aria-hidden="true">
+    <svg class="w-full h-full" viewBox="0 0 800 480" preserveAspectRatio="xMidYMid slice">
+      <line x1="400" y1="0" x2="400" y2="480" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <circle cx="400" cy="240" r="80" fill="none" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <rect x="80" y="140" width="160" height="200" fill="none" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <rect x="560" y="140" width="160" height="200" fill="none" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <rect x="20" y="60" width="760" height="360" fill="none" stroke="#ff6b00" stroke-width="1.5" class="court-line" />
+    </svg>
+  </div>
+
+  <!-- Layer 3: particles -->
+  <div class="absolute inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
+    {particles.map((p) => (
+      <span
+        class:list={["particle", p.variant]}
+        style={`left:${p.left}%; bottom:-10px; animation-delay:${p.delay}s; animation-duration:${p.dur}s;`}
+      />
+    ))}
+  </div>
+
+  <!-- Layer 4: vignette -->
+  <div
+    class="absolute inset-0 pointer-events-none -z-10"
+    style="background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.85) 100%);"
+    aria-hidden="true"
+  />
+
+  <!-- Content -->
+  <div class="relative z-10 max-w-6xl mx-auto px-4 py-24 w-full text-center">
+    {badgeLabel && (
+      <div class="inline-flex animate-slide-up" style="animation-delay: 0ms;">
+        <span class="glass animate-glow inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-bold uppercase tracking-[0.25em] text-white">
+          <span class="inline-block w-2 h-2 rounded-full bg-[var(--color-neon-orange)] animate-pulse" />
+          {badgeLabel}
+        </span>
+      </div>
+    )}
+
+    <h1
+      class="font-hero text-neon-orange animate-flicker mt-6 leading-[0.85] tracking-tight"
+      style="animation-delay: 150ms; font-size: clamp(3.5rem, 13vw, 11rem);"
+    >
+      <span class="block animate-slide-up" style="animation-delay: 150ms;">COMPITE.</span>
+      <span class="block animate-slide-up" style="animation-delay: 280ms;">DOMINA.</span>
+      <span class="block animate-slide-up text-neon-red" style="animation-delay: 410ms;">GANA.</span>
+    </h1>
+
+    <p
+      class="mt-8 text-court-muted text-lg sm:text-xl max-w-2xl mx-auto animate-slide-up"
+      style="animation-delay: 540ms;"
+    >
+      Liga 3×3 con draft, grupos y eliminatorias en <span class="text-white font-semibold">Villena</span>
+    </p>
+
+    <div
+      class="mt-10 flex flex-col sm:flex-row gap-4 justify-center items-center animate-slide-up"
+      style="animation-delay: 670ms;"
+    >
+      <a href={primaryCtaHref} class="btn-neon w-full sm:w-auto min-w-[220px]">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14M13 5l7 7-7 7" />
+        </svg>
+        {primaryCtaLabel}
+      </a>
+      <a href={secondaryCtaHref} class="btn-neon-blue w-full sm:w-auto min-w-[220px]">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18M12 3a13 13 0 010 18M12 3a13 13 0 000 18" />
+        </svg>
+        VER TORNEO
+      </a>
+    </div>
+
+    {active && (
+      <p class="mt-8 text-xs text-court-muted uppercase tracking-[0.3em] animate-slide-up" style="animation-delay: 800ms;">
+        {active.name}
+      </p>
+    )}
+  </div>
+
+  <!-- Scroll cue -->
+  <div class="absolute bottom-6 left-1/2 -translate-x-1/2 text-court-muted/60 text-xs uppercase tracking-widest flex flex-col items-center gap-2" aria-hidden="true">
+    <span>scroll</span>
+    <span class="w-px h-8 bg-gradient-to-b from-court-muted/60 to-transparent" />
+  </div>
+</section>

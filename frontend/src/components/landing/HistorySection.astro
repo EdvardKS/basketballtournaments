@@ -1,0 +1,70 @@
+---
+import type { Tournament } from "../../lib/types.js";
+import { formatDate } from "../../lib/display.js";
+
+interface Props { tournaments: Tournament[] }
+const { tournaments } = Astro.props;
+const completed = tournaments
+  .filter((t) => t.status === "completed")
+  .sort((a, b) => new Date(b.matchDate ?? b.date).getTime() - new Date(a.matchDate ?? a.date).getTime());
+---
+{completed.length > 0 && (
+  <section class="relative max-w-7xl mx-auto px-4 py-24 sm:py-32">
+    <div class="flex items-end justify-between flex-wrap gap-4 mb-12">
+      <div>
+        <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-orange)] font-semibold mb-3">Historial</p>
+        <h2 class="font-hero text-5xl sm:text-7xl text-white leading-none">
+          CAMPEONES <span class="text-neon-orange">VBL</span>
+        </h2>
+      </div>
+      <p class="text-court-muted max-w-md text-sm">
+        Cada torneo deja un campeón en la pared. Estos son los que ya entraron en la historia de Villena.
+      </p>
+    </div>
+
+    <ol class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      {completed.map((t, i) => (
+        <li class="animate-slide-up" style={`animation-delay: ${Math.min(i, 5) * 100}ms;`}>
+          <a
+            href={`/tournaments/${t.id}`}
+            class="group relative block rounded-2xl overflow-hidden border border-white/5 bg-court-card transition-all duration-300 hover:-translate-y-1 hover:border-court-gold/40 hover:shadow-[0_0_40px_rgba(245,197,24,0.25)]"
+          >
+            <!-- Decorative gradient bg -->
+            <div
+              class="absolute inset-0 opacity-60 group-hover:opacity-90 transition-opacity"
+              style="background: linear-gradient(135deg, rgba(255,107,0,0.18) 0%, rgba(0,102,255,0.12) 50%, rgba(245,197,24,0.18) 100%);"
+              aria-hidden="true"
+            />
+            <div class="absolute inset-0" aria-hidden="true">
+              <svg class="w-full h-full opacity-10" viewBox="0 0 200 200" preserveAspectRatio="none">
+                <circle cx="100" cy="100" r="60" fill="none" stroke="#fff" stroke-width="0.5" />
+                <line x1="100" y1="0" x2="100" y2="200" stroke="#fff" stroke-width="0.5" />
+              </svg>
+            </div>
+
+            <div class="relative p-6 flex flex-col gap-4 min-h-[200px]">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-[10px] uppercase tracking-[0.25em] text-white/60 mb-1">{formatDate(t.matchDate ?? t.date)}</p>
+                  <h3 class="font-hero text-2xl sm:text-3xl text-white leading-none group-hover:text-neon-orange transition-colors">{t.name}</h3>
+                </div>
+                {t.winnerId && (
+                  <span class="shrink-0 chip uppercase tracking-wider bg-court-gold/20 text-court-gold border border-court-gold/30">
+                    🏆 Champion
+                  </span>
+                )}
+              </div>
+
+              <p class="text-sm text-court-muted line-clamp-2 mt-auto">{t.description || t.location}</p>
+
+              <div class="flex items-center justify-between text-xs text-white/50 group-hover:text-white transition-colors">
+                <span class="uppercase tracking-widest">{t.location}</span>
+                <span class="opacity-0 group-hover:opacity-100 transition-opacity">Ver →</span>
+              </div>
+            </div>
+          </a>
+        </li>
+      ))}
+    </ol>
+  </section>
+)}

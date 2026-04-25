@@ -1,0 +1,79 @@
+---
+import type { TournamentStatus } from "../../lib/types.js";
+
+interface Props { status: TournamentStatus }
+const { status } = Astro.props;
+
+const PHASES: { key: TournamentStatus[]; label: string; icon: string }[] = [
+  { key: ["open"],                label: "Inscripción",   icon: "M12 5v14M5 12h14" },
+  { key: ["draft"],               label: "Draft",         icon: "M3 6h18M3 12h12M3 18h18" },
+  { key: ["setup", "scheduled"],  label: "Grupos",        icon: "M4 6h6v6H4zM14 6h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
+  { key: ["active"],              label: "Eliminatorias", icon: "M6 4v16M18 4v16M6 12h12" },
+  { key: ["completed"],           label: "Final",         icon: "M8 21h8M12 17v4M7 4h10v6a5 5 0 01-10 0V4z" },
+];
+
+const ORDER: TournamentStatus[] = ["upcoming","open","draft","setup","scheduled","active","completed"];
+const currentIdx = ORDER.indexOf(status);
+
+const phaseState = (keys: TournamentStatus[]): "done" | "active" | "pending" => {
+  const phaseIdxs = keys.map((k) => ORDER.indexOf(k));
+  const minIdx = Math.min(...phaseIdxs);
+  const maxIdx = Math.max(...phaseIdxs);
+  if (currentIdx > maxIdx) return "done";
+  if (currentIdx >= minIdx && currentIdx <= maxIdx) return "active";
+  return "pending";
+};
+
+// Progress fill: 0 → 100 across the dots
+const activeIdx = PHASES.findIndex((p) => phaseState(p.key) === "active");
+const doneCount = PHASES.filter((p) => phaseState(p.key) === "done").length;
+const fillRatio = activeIdx >= 0
+  ? doneCount / (PHASES.length - 1) + 0.5 / (PHASES.length - 1)
+  : doneCount / (PHASES.length - 1);
+const fillPct = Math.min(100, Math.max(0, Math.round(fillRatio * 100)));
+---
+<div class="w-full">
+  <div class="relative">
+    <!-- Background track -->
+    <div class="absolute top-5 left-5 right-5 h-1 bg-white/10 rounded-full" aria-hidden="true" />
+    <!-- Filled track -->
+    <div
+      class="absolute top-5 left-5 h-1 rounded-full"
+      style={`width: calc((100% - 2.5rem) * ${fillPct} / 100); background: linear-gradient(90deg, #ff6b00, #ff2d2d); box-shadow: 0 0 12px rgba(255,107,0,0.7); animation: progress-fill 1.4s cubic-bezier(.2,.8,.2,1) both; --progress: ${fillPct}%;`}
+      aria-hidden="true"
+    />
+
+    <ol class="relative flex items-start justify-between gap-1">
+      {PHASES.map((p, i) => {
+        const state = phaseState(p.key);
+        return (
+          <li class="flex flex-col items-center gap-2 flex-1 min-w-0">
+            <div
+              class:list={[
+                "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all relative z-10",
+                state === "done" && "bg-[var(--color-neon-orange)] border-[var(--color-neon-orange)] text-white",
+                state === "active" && "bg-court-dark border-[var(--color-neon-orange)] text-[var(--color-neon-orange)] animate-glow",
+                state === "pending" && "bg-court-dark border-white/15 text-white/30",
+              ]}
+              style={`animation-delay: ${i * 120}ms;`}
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d={p.icon} />
+              </svg>
+            </div>
+            <span
+              class:list={[
+                "text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-center",
+                state === "done" && "text-[var(--color-neon-orange)]",
+                state === "active" && "text-white",
+                state === "pending" && "text-white/30",
+              ]}
+            >
+              {p.label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  </div>
+</div>
