@@ -126,11 +126,13 @@ else
   _ok "no seeded active tournament to clean up"
 fi
 
-# 3.3 - Admin creates new tournament
+# 3.3 - Admin creates new tournament with draft window = today..tomorrow.
+#       Lazy lifecycle transition will auto-start the draft on the first
+#       GET /draft/state once captains are in place.
 TODAY=$(date -u +%Y-%m-%d)
 TOMORROW=$(date -u -d "+1 day" +%Y-%m-%d 2>/dev/null || date -u -v +1d +%Y-%m-%d)
 MATCH_DATE=$(date -u -d "+2 day" +%Y-%m-%d 2>/dev/null || date -u -v +2d +%Y-%m-%d)
-call POST /tournaments "$JAR_ADMIN" "{\"name\":\"E2E Test Cup\",\"location\":\"Polideportivo Test\",\"description\":\"E2E test tournament\",\"maxTeams\":4,\"status\":\"open\",\"inscriptionStart\":\"$TODAY\",\"inscriptionEnd\":\"$TODAY\",\"draftStart\":\"$TOMORROW\",\"draftEnd\":\"$TOMORROW\",\"matchDate\":\"$MATCH_DATE\",\"halfCourt\":true,\"gameDurationMinutes\":20}"
+call POST /tournaments "$JAR_ADMIN" "{\"name\":\"E2E Test Cup\",\"location\":\"Polideportivo Test\",\"description\":\"E2E test tournament\",\"maxTeams\":4,\"status\":\"open\",\"inscriptionStart\":\"$TODAY\",\"inscriptionEnd\":\"$TODAY\",\"draftStart\":\"$TODAY\",\"draftEnd\":\"$TOMORROW\",\"matchDate\":\"$MATCH_DATE\",\"halfCourt\":true,\"gameDurationMinutes\":20}"
 expect_status 201 "admin POST /tournaments"
 T_ID=$(json_field 'id')
 [ -n "$T_ID" ] && _ok "tournament id=$T_ID" || _err "no tournament id"
@@ -219,27 +221,30 @@ call PATCH /teams/$OTHER_TEAM "$JAR_CAP1" '{"name":"Hack"}'
 expect_status 403 "captain PATCH other team → 403"
 
 # =====================================================
-_log "6. Draft workflow simulation"
+_log "6. Draft workflow simulation (date-driven, no manual start/end)"
 
-# 6.1 - Non-admin cannot start draft
-call POST /draft/$T_ID/start "$JAR_CAP1"
-expect_status 403 "captain start draft → 403"
-
-# 6.2 - Admin starts draft
+# 6.1 - Manual /start endpoint no longer exists
 call POST /draft/$T_ID/start "$JAR_ADMIN"
-expect_status 201 "admin start draft"
+expect_status 404 "POST /draft/:id/start removed → 404"
 
-# 6.3 - Cannot start twice
-call POST /draft/$T_ID/start "$JAR_ADMIN"
-expect_status 409 "double start draft → 409"
+# 6.2 - First GET /draft/state by anyone with auth triggers the lazy
+#       lifecycle transition: today is in the draft window → auto-start.
+call GET /draft/$T_ID/state "$JAR_ADMIN"
+expect_status 200 "admin GET /draft/state auto-starts draft"
+ACTIVE_NOW=$(json_field 'state.isActive')
+[ "$ACTIVE_NOW" = "true" ] && _ok "draft auto-started by date" || _err "draft NOT active: $ACTIVE_NOW"
 
-# 6.4 - Get draft state (captain)
+# 6.3 - Captain also gets state (already started by previous read)
 call GET /draft/$T_ID/state "$JAR_CAP1"
 expect_status 200 "captain get draft state"
 
-# 6.5 - Anonymous cannot see draft state
+# 6.4 - Anonymous cannot see draft state
 call GET /draft/$T_ID/state "$JAR_ANON"
 expect_status 401 "anon draft state → 401"
+
+# 6.5 - Manual /end endpoint no longer exists
+call POST /draft/$T_ID/end "$JAR_ADMIN"
+expect_status 404 "POST /draft/:id/end removed → 404"
 
 # 6.6 - Simulate full draft: pick all 8 remaining players (4 teams × 2 picks)
 # Expected: 12 total players - 4 captains already in teams = 8 remaining
@@ -299,18 +304,14 @@ console.log(ms.filter(m => m.scheduledAt).length);
 ")
 [ "$SCHEDULED_MATCHES" -ge 1 ] && _ok "matches scheduled: $SCHEDULED_MATCHES" || _err "no scheduled matches"
 
-# 6.10 - hours_confirmed should be false initially
+# 6.10 - hours_confirmed should already be true (auto-published when draft ended)
 call GET /tournaments/$T_ID "$JAR_ANON"
 HRS_CONFIRMED=$(node -e "console.log(JSON.parse(require('fs').readFileSync('./vbl_resp.json','utf8')).tournament.hoursConfirmed)")
-[ "$HRS_CONFIRMED" = "false" ] && _ok "hoursConfirmed=false initially" || _err "hoursConfirmed=$HRS_CONFIRMED"
+[ "$HRS_CONFIRMED" = "true" ] && _ok "hoursConfirmed=true (auto-published)" || _err "hoursConfirmed=$HRS_CONFIRMED"
 
-# 6.11 - Admin confirms schedule
+# 6.11 - Manual confirm-schedule endpoint no longer exists
 call POST /matches/tournament/$T_ID/confirm-schedule "$JAR_ADMIN"
-expect_status 200 "admin confirm schedule"
-
-call GET /tournaments/$T_ID "$JAR_ANON"
-HRS_CONFIRMED2=$(node -e "console.log(JSON.parse(require('fs').readFileSync('./vbl_resp.json','utf8')).tournament.hoursConfirmed)")
-[ "$HRS_CONFIRMED2" = "true" ] && _ok "hoursConfirmed=true after confirm" || _err "hoursConfirmed not updated"
+expect_status 404 "POST /matches/tournament/:id/confirm-schedule removed → 404"
 
 # =====================================================
 _log "7. Match scoring + group standings"
@@ -376,9 +377,20 @@ call POST /tournaments/nonexistent/register "$JAR_CAP1"
 call POST /draft/$T_ID/pick "$JAR_ADMIN" "{\"teamId\":\"$TEAM1_ID\",\"playerId\":\"${PIDS[0]}\"}"
 [ "$STATUS" = "404" ] || [ "$STATUS" = "409" ] && _ok "pick after draft ends → $STATUS" || _err "got $STATUS"
 
-# 9.3 - End draft idempotent
-call POST /draft/$T_ID/end "$JAR_ADMIN"
-_log "  end-after-ended status: $STATUS (not critical if 200)"
+# 9.3 - Date-driven end: complete current then PATCH a new tournament with
+#       draft_end=yesterday and verify the lazy transition closes its draft.
+call PATCH /tournaments/$T_ID "$JAR_ADMIN" '{"status":"completed"}'
+[ "$STATUS" = "200" ] && _ok "marked E2E cup completed" || _err "complete failed: $STATUS"
+YESTERDAY=$(date -u -d "-1 day" +%Y-%m-%d 2>/dev/null || date -u -v -1d +%Y-%m-%d)
+call POST /tournaments "$JAR_ADMIN" "{\"name\":\"Date-end Cup\",\"location\":\"Pista X\",\"description\":\"date-end\",\"maxTeams\":3,\"status\":\"open\",\"inscriptionStart\":\"$YESTERDAY\",\"inscriptionEnd\":\"$YESTERDAY\",\"draftStart\":\"$YESTERDAY\",\"draftEnd\":\"$YESTERDAY\",\"matchDate\":\"$MATCH_DATE\"}"
+EXP_T_ID=$(json_field 'id')
+if [ -n "$EXP_T_ID" ]; then
+  # No teams added → ensureDraftStarted swallows NOT_ENOUGH_TEAMS, status
+  # transition still fires. Read should now show 'setup'.
+  call GET /tournaments/$EXP_T_ID "$JAR_ADMIN"
+  END_STATUS=$(json_field 'tournament.status')
+  [ "$END_STATUS" = "setup" ] && _ok "date-driven end → status=setup" || _err "expected setup, got $END_STATUS"
+fi
 
 # =====================================================
 echo ""

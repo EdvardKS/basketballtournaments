@@ -78,9 +78,13 @@ done
 _ok "6 captains set"
 
 # -----------------------------------------------------
-_log "Start draft and simulate all picks"
-call POST /draft/$T_ID/start ""
-[ "$STATUS" = "201" ] && _ok "draft started" || { _err "start: $STATUS $RESP"; exit 1; }
+_log "Simulate all picks (draft auto-starts on first GET via lifecycle)"
+# Tournament was created with draft_start = today (see line above creating it).
+# Just GET state — the lazy transition starts the draft.
+call GET /draft/$T_ID/state ""
+[ "$STATUS" = "200" ] && _ok "draft state available" || { _err "state: $STATUS $RESP"; exit 1; }
+IS_ACTIVE=$(node_get 'd.state.isActive')
+[ "$IS_ACTIVE" = "true" ] && _ok "draft auto-started by date" || _err "not active: $IS_ACTIVE"
 
 PICK_COUNT=0
 while [ "$PICK_COUNT" -lt 50 ]; do
@@ -110,9 +114,10 @@ GROUP_MATCHES=$(node_get 'd.filter(m=>m.stage==="group").length')
 _ok "matches total: $M_COUNT (group: $GROUP_MATCHES)"
 
 # -----------------------------------------------------
-_log "Confirm schedule"
-call POST /matches/tournament/$T_ID/confirm-schedule ""
-[ "$STATUS" = "200" ] && _ok "schedule confirmed" || _err "confirm: $STATUS"
+_log "Schedule + hours auto-published when draft ended"
+call GET /tournaments/$T_ID ""
+HRS=$(node_get 'd.tournament.hoursConfirmed')
+[ "$HRS" = "true" ] && _ok "hoursConfirmed=true (auto)" || _err "hoursConfirmed=$HRS"
 
 # -----------------------------------------------------
 _log "Play all group matches (scores random, complete each)"
