@@ -1,13 +1,10 @@
 ---
 import Main from "../../layouts/Main.astro";
-import AdminTournamentList from "../../islands/AdminTournamentList.js";
-import AdminPlayerManager from "../../islands/AdminPlayerManager.js";
-import AdminScoreUpdater from "../../islands/AdminScoreUpdater.js";
-import AdminScheduleConfirm from "../../islands/AdminScheduleConfirm.js";
-import DraftBoard from "../../islands/DraftBoard.js";
+import AdminPanel from "../../islands/admin/AdminPanel.js";
 import { requireRole } from "../../lib/session.js";
 import { api, getCookieHeader } from "../../lib/api.js";
-import type { Tournament, Player, Match } from "../../lib/types.js";
+import { computeEffectiveStatus } from "../../lib/display.js";
+import type { Tournament, Player, TournamentStatus } from "../../lib/types.js";
 
 const { redirect, session } = await requireRole(Astro.request, "admin");
 if (redirect) return Astro.redirect(redirect);
@@ -16,43 +13,26 @@ const cookie = getCookieHeader(Astro.request);
 
 let tournaments: Tournament[] = [];
 let allPlayers: Player[] = [];
-let activePlayers: Player[] = [];
-let matches: Match[] = [];
 
 try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
 try { allPlayers = await api<Player[]>("/players", {}, cookie); } catch { /* empty */ }
 
-const active = tournaments.find((t) => !["completed","upcoming"].includes(t.status)) ?? null;
-
-if (active) {
-  try {
-    const detail = await api<{ registrations: { player_id: string }[] }>(`/tournaments/${active.id}`, {}, cookie);
-    const ids = new Set(detail.registrations.map((r: { player_id: string }) => r.player_id));
-    activePlayers = allPlayers.filter((p) => ids.has(p.id));
-  } catch { /* empty */ }
-  try { matches = await api<Match[]>(`/matches/tournament/${active.id}`, {}, cookie); } catch { /* empty */ }
-}
+// Pick the most operationally-relevant tournament: anything live > upcoming > completed
+const ACTIVE: TournamentStatus[] = ["open", "draft", "setup", "scheduled", "active"];
+const enriched = tournaments.map((t) => ({ t, eff: computeEffectiveStatus(t) }));
+const initialActive =
+  enriched.find((e) => ACTIVE.includes(e.eff))?.t ??
+  enriched.find((e) => e.eff === "upcoming")?.t ??
+  tournaments[0] ??
+  null;
 ---
 <Main title="Panel admin" player={session.player}>
-  <div class="max-w-7xl mx-auto px-4 py-8 space-y-10">
-    <h1 class="font-display text-4xl text-white">Panel de administración</h1>
-
-    <AdminTournamentList tournaments={tournaments} client:load />
-
-    {active && (
-      <div class="space-y-6">
-        <h2 class="font-display text-2xl text-white border-t border-court-border pt-6">Torneo activo: {active.name}</h2>
-        <AdminPlayerManager tournamentId={active.id} players={activePlayers} allPlayers={allPlayers} teams={[]} client:load />
-        {active.status === "draft" && (
-          <DraftBoard tournamentId={active.id} myTeamId={null} teamSize={active.teamSize} isAdmin client:load />
-        )}
-        {matches.length > 0 && (
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <AdminScoreUpdater matches={matches} client:load />
-            <AdminScheduleConfirm tournamentId={active.id} matches={matches} client:load />
-          </div>
-        )}
-      </div>
-    )}
+  <div class="max-w-7xl mx-auto px-4 py-8">
+    <AdminPanel
+      tournaments={tournaments}
+      initialActiveId={initialActive?.id ?? null}
+      allPlayers={allPlayers}
+      client:load
+    />
   </div>
 </Main>
