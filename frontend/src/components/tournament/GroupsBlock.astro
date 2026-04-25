@@ -1,0 +1,48 @@
+---
+import type { GroupWithMembers, Match } from "../../lib/types.js";
+import GroupCard from "./GroupCard.astro";
+
+interface Props {
+  groups: GroupWithMembers[];
+  matches: Match[];
+  hoursConfirmed?: boolean;
+  collapsed?: boolean;             // when true, wraps content in <details>
+  variant?: "lead" | "secondary";  // visual emphasis
+}
+const { groups, matches, hoursConfirmed = false, collapsed = false, variant = "lead" } = Astro.props;
+
+if (groups.length === 0) return null;
+
+const headingColor = variant === "lead" ? "var(--color-neon-orange)" : "var(--color-neon-blue)";
+const eyebrow = variant === "lead" ? "Fase de grupos" : "Clasificación final de grupos";
+---
+<section>
+  {collapsed ? (
+    <details class="group" open={false}>
+      <summary class="cursor-pointer list-none mb-5 flex items-center justify-between gap-3">
+        <div>
+          <p class="text-[11px] uppercase tracking-[0.4em] font-bold mb-2" style={`color:${headingColor};`}>{eyebrow}</p>
+          <h2 class="font-hero text-2xl sm:text-3xl text-white leading-none">VER CLASIFICACIÓN DE GRUPOS</h2>
+        </div>
+        <svg class="w-6 h-6 text-court-muted transition-transform group-open:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </summary>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {groups.map((g) => <GroupCard group={g} matches={matches} hoursConfirmed={hoursConfirmed} />)}
+      </div>
+    </details>
+  ) : (
+    <>
+      <header class="mb-5">
+        <p class="text-[11px] uppercase tracking-[0.4em] font-bold mb-2" style={`color:${headingColor};`}>{eyebrow}</p>
+        <h2 class="font-hero text-3xl sm:text-4xl text-white leading-none">
+          {variant === "lead" ? <>CLASIFICACIÓN <span style={`color:${headingColor};`}>EN VIVO</span></> : "GRUPOS"}
+        </h2>
+      </header>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {groups.map((g) => <GroupCard group={g} matches={matches} hoursConfirmed={hoursConfirmed} />)}
+      </div>
+    </>
+  )}
+</section>

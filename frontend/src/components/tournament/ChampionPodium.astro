@@ -1,0 +1,111 @@
+---
+import type { Match, TeamWithPlayers } from "../../lib/types.js";
+
+interface Props {
+  finalMatch: Match | null;
+  thirdPlaceMatch: Match | null;
+  teams: TeamWithPlayers[];
+}
+const { finalMatch, thirdPlaceMatch, teams } = Astro.props;
+
+const teamById = (id: string | null | undefined): TeamWithPlayers | null =>
+  id ? (teams.find((t: TeamWithPlayers) => t.id === id) ?? null) : null;
+
+const champion = finalMatch?.winnerId ? teamById(finalMatch.winnerId) : null;
+const runnerUp = finalMatch && finalMatch.winnerId
+  ? teamById(finalMatch.winnerId === finalMatch.homeTeamId ? finalMatch.awayTeamId : finalMatch.homeTeamId)
+  : null;
+const bronze = thirdPlaceMatch?.winnerId ? teamById(thirdPlaceMatch.winnerId) : null;
+
+const finalSides = finalMatch ? { home: teamById(finalMatch.homeTeamId), away: teamById(finalMatch.awayTeamId) } : null;
+const thirdSides = thirdPlaceMatch ? { home: teamById(thirdPlaceMatch.homeTeamId), away: teamById(thirdPlaceMatch.awayTeamId) } : null;
+
+const PODIUM = [
+  { pos: 2 as const, name: runnerUp?.name ?? null,  placeholder: finalMatch ? "—" : "POR JUGAR", color: "#c0c0c0", height: "h-28 sm:h-36" },
+  { pos: 1 as const, name: champion?.name ?? null,  placeholder: "—",                            color: "#f5c518", height: "h-36 sm:h-48" },
+  { pos: 3 as const, name: bronze?.name ?? null,    placeholder: thirdPlaceMatch ? "POR JUGAR" : "—", color: "#cd7f32", height: "h-20 sm:h-28" },
+];
+---
+<section class="relative overflow-hidden rounded-3xl border p-6 sm:p-10 animate-slide-up"
+  style="background: linear-gradient(135deg, rgba(245,197,24,0.18) 0%, rgba(255,107,0,0.12) 50%, rgba(20,26,44,0.85) 100%); border-color: rgba(245,197,24,0.4); box-shadow: 0 0 60px rgba(245,197,24,0.25);">
+
+  <div class="absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full opacity-30 blur-3xl pointer-events-none" style="background:#f5c518;" aria-hidden="true" />
+  <div class="absolute -bottom-32 -right-32 w-[24rem] h-[24rem] rounded-full opacity-20 blur-3xl pointer-events-none" style="background:#ff6b00;" aria-hidden="true" />
+
+  <div class="relative">
+    <div class="text-center mb-10">
+      <p class="text-[11px] uppercase tracking-[0.5em] font-bold text-court-gold mb-3 animate-flicker">Campeón del torneo</p>
+      <div class="inline-flex items-center gap-4 flex-wrap justify-center">
+        <svg class="w-12 h-12 sm:w-16 sm:h-16 text-court-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+             style="filter: drop-shadow(0 0 18px rgba(245,197,24,0.85));">
+          <path d="M8 21h8M12 17v4M5 4h14v5a7 7 0 01-14 0V4z" />
+          <path d="M5 4H2v3a4 4 0 003 4M19 4h3v3a4 4 0 01-3 4" />
+        </svg>
+        <h1 class="font-hero text-white leading-[0.85]" style="font-size: clamp(2.5rem, 9vw, 6rem); text-shadow: 0 0 22px rgba(245,197,24,0.65), 0 0 48px rgba(245,197,24,0.45);">
+          {champion?.name ?? "—"}
+        </h1>
+      </div>
+      {finalMatch && finalSides && finalMatch.homeScore != null && finalMatch.awayScore != null && (
+        <p class="mt-4 text-court-muted text-sm">
+          Ganó la final ante <span class="text-white font-semibold">{runnerUp?.name ?? "—"}</span>
+          {" "}por
+          <span class="font-hero text-2xl text-white tabular-nums ml-1" style="text-shadow: 0 0 10px rgba(245,197,24,0.45);">
+            {Math.max(finalMatch.homeScore, finalMatch.awayScore)} — {Math.min(finalMatch.homeScore, finalMatch.awayScore)}
+          </span>
+        </p>
+      )}
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 sm:gap-6 items-end max-w-3xl mx-auto">
+      {PODIUM.map((step) => (
+        <div class="text-center">
+          <div class="mb-3 px-2 min-h-[2.75rem]">
+            <p class:list={["font-hero leading-none truncate", step.pos === 1 ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl", step.name ? "text-white" : "text-court-muted/60"]}
+               style={step.name ? `text-shadow: 0 0 14px ${step.color}99;` : undefined}>
+              {step.name ?? step.placeholder}
+            </p>
+          </div>
+          <div class:list={["relative rounded-t-xl border", step.height]}
+               style={`background: linear-gradient(180deg, ${step.color}40 0%, ${step.color}10 100%); border-color: ${step.color}80; box-shadow: 0 0 24px ${step.color}55, inset 0 1px 0 rgba(255,255,255,0.2);`}>
+            <span class="absolute inset-x-0 top-2 font-hero leading-none"
+                  style={`color: ${step.color}; text-shadow: 0 0 16px ${step.color}; font-size: clamp(2rem, 6vw, 3.5rem);`}>
+              {step.pos}
+            </span>
+            <span class="absolute bottom-2 inset-x-0 text-[9px] uppercase tracking-widest text-white/70">
+              {step.pos === 1 ? "Oro" : step.pos === 2 ? "Plata" : "Bronce"}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div class="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl mx-auto">
+      {finalMatch && finalSides && (
+        <div class="rounded-xl border border-court-gold/30 bg-court-gold/5 p-3 text-center">
+          <p class="text-[10px] uppercase tracking-widest text-court-gold mb-1">Final</p>
+          <p class="text-sm text-white">
+            <span class="font-semibold">{finalSides.home?.name ?? "?"}</span>
+            <span class="font-hero text-xl mx-2 text-white tabular-nums">{finalMatch.homeScore ?? "—"} — {finalMatch.awayScore ?? "—"}</span>
+            <span class="font-semibold">{finalSides.away?.name ?? "?"}</span>
+          </p>
+        </div>
+      )}
+      {thirdPlaceMatch && thirdSides && (
+        <div class="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-center">
+          <p class="text-[10px] uppercase tracking-widest text-court-muted mb-1">3er puesto</p>
+          {thirdPlaceMatch.status === "completed" ? (
+            <p class="text-sm text-white">
+              <span class="font-semibold">{thirdSides.home?.name ?? "?"}</span>
+              <span class="font-hero text-xl mx-2 text-white tabular-nums">{thirdPlaceMatch.homeScore ?? "—"} — {thirdPlaceMatch.awayScore ?? "—"}</span>
+              <span class="font-semibold">{thirdSides.away?.name ?? "?"}</span>
+            </p>
+          ) : (
+            <p class="text-sm text-court-muted">
+              {thirdSides.home?.name ?? "?"} <span class="text-white/30 mx-2">vs</span> {thirdSides.away?.name ?? "?"} · <span class="text-court-muted/70">por jugar</span>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+</section>
