@@ -2,26 +2,19 @@ import { useState } from "react";
 import { api, ApiError } from "../lib/api.js";
 import type { Match } from "../lib/types.js";
 
-interface Props { tournamentId: string; matches: Match[]; hoursConfirmed: boolean }
+// Inline editor for the auto-generated match schedule. Times are computed and
+// published automatically when the draft closes (lifecycle.ts → endDraft).
+// Admins still need a way to nudge a single match's start time, which is what
+// this island does. No "publish" button — that step is gone.
+interface Props { tournamentId: string; matches: Match[] }
 
-export default function AdminScheduleConfirm({ tournamentId, matches, hoursConfirmed: initConfirmed }: Props) {
-  const [confirmed, setConfirmed] = useState(initConfirmed);
+export default function AdminScheduleConfirm({ matches }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTime, setEditTime] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const groupMatches = matches.filter((m) => m.stage === "group" && m.scheduledAt);
-
-  const confirm = async () => {
-    if (!window.confirm("¿Publicar horas para todos los jugadores?")) return;
-    setLoading(true);
-    try {
-      await api(`/matches/tournament/${tournamentId}/confirm-schedule`, { method: "POST" });
-      setConfirmed(true); setMsg("Horas publicadas");
-    } catch (e) { setMsg(e instanceof ApiError ? e.code : "Error"); }
-    finally { setLoading(false); }
-  };
 
   const saveTime = async (matchId: string) => {
     setLoading(true);
@@ -36,14 +29,11 @@ export default function AdminScheduleConfirm({ tournamentId, matches, hoursConfi
     <div className="card space-y-4 max-w-lg">
       <div className="flex items-center justify-between">
         <h3 className="font-display text-xl text-white">Horario de partidos</h3>
-        {confirmed
-          ? <span className="chip bg-court-ok/20 text-court-ok">✓ Publicado</span>
-          : <span className="chip bg-court-warn/20 text-court-warn">Sin publicar</span>
-        }
+        <span className="chip bg-court-ok/20 text-court-ok">✓ Publicado automáticamente</span>
       </div>
 
       {groupMatches.length === 0 && (
-        <p className="text-court-muted text-sm">Genera el horario automático desde el panel del draft</p>
+        <p className="text-court-muted text-sm">El horario aparecerá cuando el draft termine.</p>
       )}
 
       <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -68,12 +58,6 @@ export default function AdminScheduleConfirm({ tournamentId, matches, hoursConfi
       </div>
 
       {msg && <p className="text-xs text-court-muted">{msg}</p>}
-
-      {!confirmed && (
-        <button className="btn-ok w-full justify-center" onClick={confirm} disabled={loading || groupMatches.length === 0}>
-          ✓ Publicar horas para jugadores
-        </button>
-      )}
     </div>
   );
 }
