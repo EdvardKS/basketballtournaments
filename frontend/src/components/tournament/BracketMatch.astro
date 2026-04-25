@@ -1,8 +1,9 @@
 ---
-// One match in the bracket, rendered as TWO independent team pills with a
-// small visible gap between them — Champions-League style. Each pill carries
-// its own logo + name + score. Eliminated team becomes grayscale + line-
-// through. Winning team gets a glow edge in its franchise accent color.
+// One match in the bracket as TWO independent team pills with a small visible
+// gap between them — Champions-League style. Each pill carries logo + name +
+// score. Eliminated team becomes grayscale + line-through. Winning team gets
+// a glow edge in its franchise accent color (CSS variable --accent set inline
+// so the hover path-highlight can reuse it).
 import type { Match } from "../../lib/types.js";
 import { teamAccent } from "../../lib/teamColors.js";
 import MatchEditOverlay from "../../islands/admin/MatchEditOverlay.js";
@@ -10,17 +11,18 @@ import MatchEditOverlay from "../../islands/admin/MatchEditOverlay.js";
 interface Props {
   match: Match | null;
   isAdmin?: boolean;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   byeLabel?: string | null;
 }
 const { match, isAdmin = false, size = "md", byeLabel = null } = Astro.props as Props;
 
-// Visual constants per size
-const sz = size === "sm"
-  ? { pill: "h-12 px-2.5 gap-2", logo: "w-8 h-8 text-xs", name: "text-xs", score: "text-base" }
-  : { pill: "h-14 px-3   gap-3", logo: "w-10 h-10 text-sm", name: "text-sm", score: "text-xl" };
+// Visual constants per size — Final uses "lg" (bigger pills + glow).
+const sz = size === "lg"
+  ? { pill: "h-16 px-4 gap-3", logo: "w-12 h-12 text-lg", name: "text-base font-bold", score: "text-3xl" }
+  : size === "sm"
+    ? { pill: "h-12 px-2.5 gap-2", logo: "w-8 h-8 text-xs", name: "text-xs", score: "text-base" }
+    : { pill: "h-14 px-3   gap-3", logo: "w-10 h-10 text-sm", name: "text-sm", score: "text-xl" };
 
-// ---- derived state for a real match ----
 const m = match;
 const status = m?.status ?? null;
 const isCompleted = status === "completed";
@@ -44,8 +46,7 @@ const awayScore = m?.awayScore ?? null;
 ) : !m ? (
   <div class={`rounded-xl border border-dashed border-white/5 bg-white/[0.01] ${sz.pill}`} />
 ) : (
-  <div class="relative flex flex-col gap-1.5">
-    {/* Admin click-to-edit covers both pills */}
+  <div class="bracket-match relative flex flex-col gap-1.5">
     {isAdmin && <MatchEditOverlay match={m} client:visible />}
 
     {/* HOME pill */}
@@ -56,11 +57,13 @@ const awayScore = m?.awayScore ?? null;
         homeWin && "team-pill--winner",
         homeLost && "team-pill--loser",
       ]}
-      style={homeWin
-        ? `background: linear-gradient(90deg, ${homeAccent}33, ${homeAccent}10); border-color: ${homeAccent}aa; box-shadow: 0 0 14px ${homeAccent}55, inset 0 1px 0 rgba(255,255,255,0.08);`
-        : homeLost
-          ? `background: rgba(20,26,44,0.55); border-color: rgba(255,255,255,0.06);`
-          : `background: rgba(20,26,44,0.85); border-color: rgba(255,255,255,0.10);`
+      data-team-id={m.homeTeamId ?? ""}
+      style={`--accent:${homeAccent};`
+        + (homeWin
+          ? `background: linear-gradient(90deg, ${homeAccent}33, ${homeAccent}10); border-color: ${homeAccent}aa; box-shadow: 0 0 14px ${homeAccent}55, inset 0 1px 0 rgba(255,255,255,0.08);`
+          : homeLost
+            ? `background: rgba(20,26,44,0.55); border-color: rgba(255,255,255,0.06);`
+            : `background: rgba(20,26,44,0.85); border-color: rgba(255,255,255,0.10);`)
       }
     >
       {homeName ? (
@@ -73,9 +76,9 @@ const awayScore = m?.awayScore ?? null;
             aria-hidden="true"
           >{homeName.charAt(0).toUpperCase()}</div>
           <span class:list={[
-            "flex-1 truncate font-semibold",
+            "flex-1 truncate",
             sz.name,
-            homeWin ? "text-white" : homeLost ? "text-white/40 line-through" : "text-white/90",
+            homeWin ? "text-white font-bold" : homeLost ? "text-white/40 line-through" : "text-white/90",
           ]}>{homeName}</span>
         </>
       ) : (
@@ -96,11 +99,13 @@ const awayScore = m?.awayScore ?? null;
         awayWin && "team-pill--winner",
         awayLost && "team-pill--loser",
       ]}
-      style={awayWin
-        ? `background: linear-gradient(90deg, ${awayAccent}33, ${awayAccent}10); border-color: ${awayAccent}aa; box-shadow: 0 0 14px ${awayAccent}55, inset 0 1px 0 rgba(255,255,255,0.08);`
-        : awayLost
-          ? `background: rgba(20,26,44,0.55); border-color: rgba(255,255,255,0.06);`
-          : `background: rgba(20,26,44,0.85); border-color: rgba(255,255,255,0.10);`
+      data-team-id={m.awayTeamId ?? ""}
+      style={`--accent:${awayAccent};`
+        + (awayWin
+          ? `background: linear-gradient(90deg, ${awayAccent}33, ${awayAccent}10); border-color: ${awayAccent}aa; box-shadow: 0 0 14px ${awayAccent}55, inset 0 1px 0 rgba(255,255,255,0.08);`
+          : awayLost
+            ? `background: rgba(20,26,44,0.55); border-color: rgba(255,255,255,0.06);`
+            : `background: rgba(20,26,44,0.85); border-color: rgba(255,255,255,0.10);`)
       }
     >
       {awayName ? (
@@ -113,9 +118,9 @@ const awayScore = m?.awayScore ?? null;
             aria-hidden="true"
           >{awayName.charAt(0).toUpperCase()}</div>
           <span class:list={[
-            "flex-1 truncate font-semibold",
+            "flex-1 truncate",
             sz.name,
-            awayWin ? "text-white" : awayLost ? "text-white/40 line-through" : "text-white/90",
+            awayWin ? "text-white font-bold" : awayLost ? "text-white/40 line-through" : "text-white/90",
           ]}>{awayName}</span>
         </>
       ) : (
