@@ -1,22 +1,14 @@
-// Draft routes.
+// Draft routes. Start/end are NOT exposed — the lifecycle service auto-starts
+// when today ≥ draft_start and auto-ends when today > draft_end (or when all
+// players are drafted, whichever comes first).
 import { Router } from "express";
 import { z } from "zod";
 import { asyncRoute, HttpError } from "../middleware/error.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireAuth } from "../middleware/auth.js";
 import { getDraftState, listDraftHistory } from "../services/draft-state.js";
-import { startDraft, endDraft, pickPlayer } from "../services/draft.js";
+import { pickPlayer } from "../services/draft.js";
 
 export const draftRouter = Router();
-
-draftRouter.post("/:tournamentId/start", requireRole("admin"),
-  asyncRoute(async (req, res) => {
-    res.status(201).json(await startDraft(req.params.tournamentId));
-  }));
-
-draftRouter.post("/:tournamentId/end", requireRole("admin"),
-  asyncRoute(async (req, res) => {
-    res.json(await endDraft(req.params.tournamentId));
-  }));
 
 draftRouter.get("/:tournamentId/state", requireAuth,
   asyncRoute(async (req, res) => {

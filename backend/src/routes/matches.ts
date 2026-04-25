@@ -1,14 +1,16 @@
-// Match + group routes.
+// Match + group routes. Schedule generation and hour publishing happen
+// automatically when the lifecycle service ends the draft — no admin action
+// required. The remaining write endpoints are per-match (admin can tweak a
+// time, start a match on the day, enter scores, complete it).
 import { Router } from "express";
 import { z } from "zod";
 import { asyncRoute } from "../middleware/error.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import { requireRole } from "../middleware/auth.js";
 import {
   matchesForTournament, groupsForTournament,
   startMatch, updateScore, completeMatch,
 } from "../services/matches.js";
-import { generateGroups } from "../services/groups.js";
-import { generateSchedule, confirmSchedule, updateMatchTime } from "../services/schedule.js";
+import { updateMatchTime } from "../services/schedule.js";
 
 export const matchesRouter = Router();
 
@@ -19,20 +21,6 @@ matchesRouter.get("/tournament/:id", asyncRoute(async (req, res) => {
 matchesRouter.get("/tournament/:id/groups", asyncRoute(async (req, res) => {
   res.json(await groupsForTournament(req.params.id));
 }));
-
-matchesRouter.post("/tournament/:id/generate-groups", requireRole("admin"),
-  asyncRoute(async (req, res) => {
-    res.status(201).json(await generateGroups(req.params.id));
-  }));
-
-matchesRouter.post("/tournament/:id/schedule", requireRole("admin"),
-  asyncRoute(async (req, res) => {
-    await generateSchedule(req.params.id);
-    res.json({ ok: true });
-  }));
-
-matchesRouter.post("/tournament/:id/confirm-schedule", requireRole("admin"),
-  asyncRoute(async (req, res) => res.json(await confirmSchedule(req.params.id))));
 
 const timeSchema = z.object({ scheduledAt: z.string().min(1) });
 
