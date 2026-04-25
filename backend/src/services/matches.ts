@@ -166,15 +166,13 @@ export const completeMatch = async (matchId: string) => {
     }
 
     // If the final just closed, mark the tournament completed and pin the
-    // winning team's captain as winner_id (consumed by PastTournamentsTimeline
-    // and the public ChampionPodium block). The 3rd-place match can land
-    // before or after — it doesn't gate completion.
+    // winning TEAM as winner_id. The FK fk_tournaments_winner references
+    // teams(id) — earlier code wrote the captain's player id, which crashed
+    // with a 23503 foreign-key violation when the user finalized the final.
     if (m.stage === "final" && winnerId) {
-      const cap = await q("SELECT captain_id FROM teams WHERE id=$1", [winnerId]);
-      const captainId = (cap[0] as { captain_id: string } | undefined)?.captain_id ?? null;
       await q(
         "UPDATE tournaments SET status='completed', winner_id=$1 WHERE id=$2",
-        [captainId, m.tournamentId],
+        [winnerId, m.tournamentId],
       );
     }
 
