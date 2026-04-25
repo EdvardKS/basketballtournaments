@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../../lib/api.js";
-import type { Match, MatchStatus } from "../../lib/types.js";
+import type { Match } from "../../lib/types.js";
 
 interface Props {
   matches: Match[];
@@ -82,22 +82,6 @@ export default function QuickScoreSheet({ matches, tournamentId }: Props) {
         [id]: { ...cur, [side]: nextVal, dirty: true } as LiveMatch,
       };
     });
-  };
-
-  const startMatch = async (id: string) => {
-    setBusyId(id);
-    try {
-      await api(`/matches/${id}/start`, { method: "POST" });
-      flash("ok", "Partido iniciado");
-      // Optimistic: flip status locally so the card shows "EN JUEGO" immediately.
-      setLive((prev) => {
-        const cur = prev[id];
-        if (!cur) return prev;
-        return { ...prev, [id]: { ...cur, match: { ...cur.match, status: "in_progress" as MatchStatus } } };
-      });
-    } catch (e) {
-      flash("err", e instanceof ApiError ? e.code : "Error al iniciar");
-    } finally { setBusyId(null); }
   };
 
   const saveScore = async (id: string) => {
@@ -273,18 +257,8 @@ export default function QuickScoreSheet({ matches, tournamentId }: Props) {
                 />
               </div>
 
-              {/* Action row */}
+              {/* Action row — score live se lleva por separado, aquí solo Guardar / Finalizar */}
               <div className="mt-4 flex flex-wrap gap-2">
-                {!inProgress && (
-                  <button
-                    type="button"
-                    onClick={() => startMatch(m.id)}
-                    disabled={busy}
-                    className="flex-1 min-w-[8rem] inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wider text-[var(--color-neon-blue)] border-2 border-[var(--color-neon-blue)]/40 hover:bg-[var(--color-neon-blue)]/10 hover:shadow-[0_0_18px_rgba(0,102,255,0.45)] transition-all disabled:opacity-50"
-                  >
-                    ▶ Iniciar
-                  </button>
-                )}
                 {ls.dirty && (
                   <button
                     type="button"

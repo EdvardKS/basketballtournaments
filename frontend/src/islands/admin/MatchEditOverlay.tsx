@@ -5,6 +5,9 @@ import Modal from "./Modal.js";
 
 interface Props { match: Match }
 
+// Quick edit modal: enter the final score and finalize the match.
+// Live scoring is tracked off-platform; we only need the closing number.
+
 const STAGE_LABEL: Record<string, string> = {
   group: "Grupo", quarterfinal: "Cuartos", semifinal: "Semis",
   third_place: "3er puesto", final: "FINAL",
@@ -17,17 +20,36 @@ const STATUS_TONE: Record<MatchStatus, string> = {
   pending: "#a0a7b8", in_progress: "#ff6b00", completed: "#3ecf8e",
 };
 
+const ERROR_MESSAGES: Record<string, string> = {
+  FORBIDDEN:                       "Tu sesión no tiene permisos de admin. Cierra sesión y vuelve a entrar como admin.",
+  UNAUTHENTICATED:                 "Tu sesión ha caducado. Vuelve a iniciar sesión.",
+  MATCH_NOT_FOUND:                 "Este partido ya no existe.",
+  MATCH_NOT_FOUND_OR_WRONG_STATUS: "El partido no está en un estado válido para esta acción.",
+  NO_SCORE:                        "Falta el marcador antes de finalizar.",
+  VALIDATION:                      "El marcador no es válido (revisa los números).",
+  INTERNAL:                        "Error interno del servidor. Mira los logs del backend.",
+};
+
+const formatError = (e: unknown, fallback: string): string => {
+  if (e instanceof ApiError) {
+    const human = ERROR_MESSAGES[e.code] ?? null;
+    if (human) return human;
+    // Surface raw status + code so the admin can copy/paste in a report.
+    return `${fallback} (HTTP ${e.status} · ${e.code})`;
+  }
+  return fallback;
+};
+
 export default function MatchEditOverlay({ match }: Props) {
   const [open, setOpen] = useState(false);
   const [home, setHome] = useState<number>(match.homeScore ?? 0);
   const [away, setAway] = useState<number>(match.awayScore ?? 0);
-  const [status, setStatus] = useState<MatchStatus>(match.status);
-  const [busy, setBusy] = useState<null | "score" | "start" | "complete" | "recompute">(null);
+  const [busy, setBusy] = useState<null | "complete" | "recompute">(null);
   const [feedback, setFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
 
   const flash = (kind: "ok" | "err", msg: string) => {
     setFeedback({ kind, msg });
-    setTimeout(() => setFeedback(null), 2500);
+    if (kind === "ok") setTimeout(() => setFeedback(null), 2500);
   };
 
   const close = () => {
@@ -38,47 +60,24 @@ export default function MatchEditOverlay({ match }: Props) {
   const wasCompleted = match.status === "completed";
   const dirtyScore = home !== (match.homeScore ?? 0) || away !== (match.awayScore ?? 0);
 
-  const saveScore = async (): Promise<boolean> => {
-    setBusy("score");
-    try {
-      await api(`/matches/${match.id}/score`, {
-        method: "POST",
-        body: JSON.stringify({ homeScore: home, awayScore: away }),
-      });
-      flash("ok", "Marcador guardado");
-      return true;
-    } catch (e) {
-      flash("err", e instanceof ApiError ? e.code : "Error al guardar");
-      return false;
-    } finally { setBusy(null); }
-  };
-
-  const startMatch = async () => {
-    setBusy("start");
-    try {
-      await api(`/matches/${match.id}/start`, { method: "POST" });
-      setStatus("in_progress");
-      flash("ok", "Partido iniciado");
-    } catch (e) {
-      flash("err", e instanceof ApiError ? e.code : "Error al iniciar");
-    } finally { setBusy(null); }
-  };
-
   const completeMatch = async () => {
     if (home === 0 && away === 0 && !confirm("Ambos marcadores están a 0. ¿Finalizar igualmente?")) return;
     setBusy("complete");
     try {
-      if (dirtyScore) {
-        await api(`/matches/${match.id}/score`, {
-          method: "POST",
-          body: JSON.stringify({ homeScore: home, awayScore: away }),
-        });
-      }
+      // Always persist the score first so /complete picks it up even if it
+      // hasn't been saved yet — and so the admin doesn't need a separate save.
+      await api(`/matches/${match.id}/score`, {
+        method: "POST",
+        body: JSON.stringify({ homeScore: home, awayScore: away }),
+      });
       await api(`/matches/${match.id}/complete`, { method: "POST" });
       flash("ok", "Partido finalizado");
       setTimeout(() => window.location.reload(), 600);
     } catch (e) {
-      flash("err", e instanceof ApiError ? e.code : "Error al finalizar");
+      // Surface the real error (HTTP status + code) so 403 / 401 / VALIDATION
+      // reach the admin instead of an opaque "UNKNOWN_ERROR".
+      console.error("[finalize match]", e);
+      flash("err", formatError(e, "Error al finalizar"));
       setBusy(null);
     }
   };
@@ -88,7 +87,6 @@ export default function MatchEditOverlay({ match }: Props) {
   const recompute = async () => {
     setBusy("recompute");
     try {
-      // First persist the new score, then rebuild the whole tournament's standings.
       if (dirtyScore) {
         await api(`/matches/${match.id}/score`, {
           method: "POST",
@@ -99,7 +97,8 @@ export default function MatchEditOverlay({ match }: Props) {
       flash("ok", "Marcador y clasificación actualizados");
       setTimeout(() => window.location.reload(), 700);
     } catch (e) {
-      flash("err", e instanceof ApiError ? e.code : "Error al recalcular");
+      console.error("[recompute standings]", e);
+      flash("err", formatError(e, "Error al recalcular"));
       setBusy(null);
     }
   };
@@ -113,7 +112,7 @@ export default function MatchEditOverlay({ match }: Props) {
       {/* Invisible click target covering the whole card */}
       <button
         type="button"
-        onClick={() => { setOpen(true); setHome(match.homeScore ?? 0); setAway(match.awayScore ?? 0); setStatus(match.status); }}
+        onClick={() => { setOpen(true); setHome(match.homeScore ?? 0); setAway(match.awayScore ?? 0); setFeedback(null); }}
         aria-label={`Editar partido ${homeName} vs ${awayName}`}
         className="absolute inset-0 z-10 rounded-xl cursor-pointer transition-all hover:bg-white/[0.03] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-neon-orange)]"
       />
@@ -131,34 +130,20 @@ export default function MatchEditOverlay({ match }: Props) {
       </span>
 
       <Modal open={open} title={`${homeName} vs ${awayName}`} subtitle={stageLabel} onClose={close} size="sm">
-        {/* Status chips */}
-        <div className="mb-5">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-court-muted font-bold mb-2">Estado</p>
-          <div className="flex gap-2 flex-wrap">
-            {(Object.keys(STATUS_LABEL) as MatchStatus[]).map((s) => {
-              const active = status === s;
-              const tone = STATUS_TONE[s];
-              return (
-                <span
-                  key={s}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] uppercase tracking-widest font-bold border ${active ? "" : "opacity-50"}`}
-                  style={{
-                    color: active ? "#fff" : tone,
-                    background: active ? `${tone}33` : "transparent",
-                    borderColor: `${tone}80`,
-                    boxShadow: active ? `0 0 14px ${tone}66` : "none",
-                  }}
-                >
-                  {STATUS_LABEL[s]}
-                </span>
-              );
-            })}
-          </div>
-          {match.status === "pending" && (
-            <button type="button" onClick={startMatch} disabled={busy !== null} className="mt-3 text-xs uppercase tracking-widest font-bold text-[var(--color-neon-blue)] border border-[var(--color-neon-blue)]/40 px-3 py-1.5 rounded-md hover:bg-[var(--color-neon-blue)]/10 transition-all disabled:opacity-50">
-              ▶ Iniciar partido
-            </button>
-          )}
+        {/* Status chip — read-only badge of the current state */}
+        <div className="mb-5 flex items-center gap-3">
+          <span className="text-[10px] uppercase tracking-[0.25em] text-court-muted font-bold">Estado</span>
+          <span
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-bold border"
+            style={{
+              color: "#fff",
+              background: `${STATUS_TONE[match.status]}26`,
+              borderColor: `${STATUS_TONE[match.status]}80`,
+              boxShadow: `0 0 12px ${STATUS_TONE[match.status]}55`,
+            }}
+          >
+            {STATUS_LABEL[match.status]}
+          </span>
         </div>
 
         {/* Score editor */}
@@ -200,19 +185,11 @@ export default function MatchEditOverlay({ match }: Props) {
               💾 Guardar y recalcular
             </button>
           ) : (
-            <>
-              {dirtyScore && (
-                <button type="button" onClick={saveScore} disabled={busy !== null}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold uppercase tracking-wider text-white border-2 border-white/15 hover:bg-white/5 transition-all disabled:opacity-50">
-                  💾 Guardar marcador
-                </button>
-              )}
-              <button type="button" onClick={completeMatch} disabled={busy !== null}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-xs font-bold uppercase tracking-wider text-white transition-all hover:scale-[1.03] disabled:opacity-50"
-                      style={{ background: "linear-gradient(135deg,#3ecf8e,#2da375)", boxShadow: "0 0 18px rgba(62,207,142,0.55), inset 0 1px 0 rgba(255,255,255,0.25)" }}>
-                ✓ Finalizar
-              </button>
-            </>
+            <button type="button" onClick={completeMatch} disabled={busy !== null}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-xs font-bold uppercase tracking-wider text-white transition-all hover:scale-[1.03] disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg,#3ecf8e,#2da375)", boxShadow: "0 0 18px rgba(62,207,142,0.55), inset 0 1px 0 rgba(255,255,255,0.25)" }}>
+              ✓ Finalizar
+            </button>
           )}
         </div>
       </Modal>

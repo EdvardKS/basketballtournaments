@@ -16,8 +16,14 @@ export const requireAuth = (
 export const requireRole = (...allowed: Role[]) =>
   (req: Request, _res: Response, next: NextFunction) => {
     const role = req.session?.role;
-    if (!role) throw new HttpError(401, "UNAUTHENTICATED");
-    if (!allowed.includes(role)) throw new HttpError(403, "FORBIDDEN");
+    if (!role) {
+      console.warn(`[auth] 401 ${req.method} ${req.originalUrl} — no session role (sid=${req.session?.id ?? "none"})`);
+      throw new HttpError(401, "UNAUTHENTICATED");
+    }
+    if (!allowed.includes(role)) {
+      console.warn(`[auth] 403 ${req.method} ${req.originalUrl} — role=${role} not in [${allowed.join(",")}] (playerId=${req.session?.playerId})`);
+      throw new HttpError(403, "FORBIDDEN");
+    }
     next();
   };
 
