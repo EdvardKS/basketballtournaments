@@ -106,33 +106,20 @@ export default function RegisterForm({ nextUrl, joinTournamentId }: Props) {
         }),
       });
 
-      // Verify the cookie round-trip actually established a session before
-      // navigating to a protected page (otherwise the next SSR auth guard
-      // bounces the user to /login with no clue why).
-      try {
-        await api("/auth/me");
-      } catch {
-        setError("No se pudo iniciar la sesión, vuelve a intentarlo.");
-        setShake((s) => s + 1);
-        setLoading(false);
-        return;
-      }
-
-      // Optional: auto-register in a tournament if the URL asked for it.
+      // Optional: auto-join a tournament if the URL asked for it.
       let joinedTournament = false;
       if (joinTournamentId) {
         try {
           await api(`/tournaments/${joinTournamentId}/register`, { method: "POST" });
           joinedTournament = true;
-        } catch { /* non-blocking — user is logged in either way */ }
+        } catch { /* non-blocking — the user is registered + logged in either way */ }
       }
 
-      // Build destination URL with welcome flags so the global Toast picks
-      // them up and shows the corporate confirmation alert.
       const dest = new URL(nextUrl || "/dashboard/player", window.location.origin);
       dest.searchParams.set("welcome", "registered");
       if (joinedTournament) dest.searchParams.set("joined", "1");
-      window.location.assign(dest.pathname + dest.search + dest.hash);
+      // Hard nav so the next SSR uses the freshly-set session cookie.
+      window.location.href = dest.pathname + dest.search + dest.hash;
     } catch (err) {
       const code = err instanceof ApiError ? err.code : "ERROR";
       const msgs: Record<string, string> = {

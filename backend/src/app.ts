@@ -27,7 +27,10 @@ export const createApp = () => {
     store: new PgSession({
       pool,
       tableName: "session",
-      createTableIfMissing: true,
+      // Table is provisioned by the migration `09_session_table.sql` so we
+      // don't race with the first request (auto-create silently swallows
+      // session writes if it hasn't finished yet).
+      createTableIfMissing: false,
       pruneSessionInterval: 60 * 15, // seconds; clean expired rows every 15 min
     }),
     name: config.cookieName,

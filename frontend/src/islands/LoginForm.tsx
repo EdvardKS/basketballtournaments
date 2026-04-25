@@ -52,21 +52,11 @@ export default function LoginForm({ nextUrl }: Props) {
         { method: "POST", body: JSON.stringify({ identifier, password }) },
       );
 
-      // Confirm the cookie round-trip succeeded before navigating to a
-      // protected page (avoids silent bounce to /login on session loss).
-      try {
-        await api("/auth/me");
-      } catch {
-        setError("No se pudo iniciar la sesión, vuelve a intentarlo.");
-        setShake((s) => s + 1);
-        setLoading(false);
-        return;
-      }
-
       const target = nextUrl || ROLE_REDIRECT[player.role] || "/";
       const dest = new URL(target, window.location.origin);
       dest.searchParams.set("welcome", "login");
-      window.location.assign(dest.pathname + dest.search + dest.hash);
+      // Hard nav so the next SSR uses the freshly-set session cookie.
+      window.location.href = dest.pathname + dest.search + dest.hash;
     } catch (err) {
       const code = err instanceof ApiError ? err.code : "ERROR";
       setError(code === "INVALID_CREDENTIALS" ? "Credenciales incorrectas" : "Error al iniciar sesión");
