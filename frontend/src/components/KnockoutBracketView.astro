@@ -1,16 +1,15 @@
 ---
-// Champions-League "Camino a la Final" mirror bracket.
+// "Camino a la Final" — mirror bracket Champions League style.
 //
-// Desktop (≥lg): 5 columns — QFL · SFL · CENTER · SFR · QFR.
-//                CENTER stacks: trofeo SVG → Final → 3er puesto.
-// Mobile  (<lg): 2 columns compact, ronda a ronda; Final + 3rd full-width.
+// Each team is its own pill (rendered by BracketMatch). A pair of QFs is
+// wrapped in a flex container distributed with `space-around`, so each
+// match's vertical center sits at 25% / 75% of the wrapper. From those
+// midpoints we draw L-shaped connector lines that meet at the wrapper's
+// midpoint and extend horizontally into the SF column. The SF cell
+// vertically aligns with that midpoint by virtue of being centered in its
+// own column.
 //
-// Bracket positions are read from match.round_number assigned by the backend
-// seeder (services/bracket.ts):
-//   QF round 1 → SFL.home, QF round 2 → SFL.away,
-//   QF round 3 → SFR.home, QF round 4 → SFR.away.
-//   SF round 1 → Final.home + 3rd_place.home (loser),
-//   SF round 2 → Final.away + 3rd_place.away (loser).
+// Mobile (<lg): compact 2-col grid, no connectors, Final + 3rd full width.
 import type { Match } from "../lib/types.js";
 import BracketMatch from "./tournament/BracketMatch.astro";
 
@@ -43,66 +42,74 @@ const hasQuarters = quarters.length > 0;
     <p class="text-court-muted text-sm">Las eliminatorias se generarán al acabar la fase de grupos</p>
   </div>
 ) : (
-  <div class="bracket">
-    <!-- ============ DESKTOP MIRROR ============ -->
+  <div class="bracket-root py-6">
+    {/* ============ DESKTOP MIRROR ============ */}
     <div class="hidden lg:block">
       <div
-        class="grid items-center gap-x-4 gap-y-3"
+        class="bracket-grid"
         style={hasQuarters
-          ? "grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr;"
-          : "grid-template-columns: 1.2fr 1.6fr 1.2fr;"}
+          ? "grid-template-columns: minmax(180px,1.1fr) 2.25rem minmax(180px,1.1fr) 2.5rem minmax(220px,1.4fr) 2.5rem minmax(180px,1.1fr) 2.25rem minmax(180px,1.1fr);"
+          : "grid-template-columns: minmax(220px,1.2fr) 2.5rem minmax(260px,1.4fr) 2.5rem minmax(220px,1.2fr);"}
       >
-        {/* ============ LEFT HALF ============ */}
+        {/* ============ LEFT HALF — QF + SF ============ */}
         {hasQuarters && (
-          <div class="bracket-col bracket-qfl">
-            <div class="bracket-cell"><BracketMatch match={qf1} isAdmin={isAdmin} size="sm" /></div>
-            <div class="bracket-cell"><BracketMatch match={qf2} isAdmin={isAdmin} size="sm" /></div>
-          </div>
+          <>
+            <div class="bracket-pair">
+              <div class="bracket-cell"><BracketMatch match={qf1} isAdmin={isAdmin} size="sm" /></div>
+              <div class="bracket-cell"><BracketMatch match={qf2} isAdmin={isAdmin} size="sm" /></div>
+            </div>
+            <div class="bracket-spacer bracket-spacer-l-1"></div>
+          </>
         )}
-        <div class="bracket-col bracket-sfl">
+        <div class="bracket-single">
           <div class="bracket-cell bracket-sf"><BracketMatch match={sf1} isAdmin={isAdmin} size="md" /></div>
         </div>
+        <div class="bracket-spacer bracket-spacer-l-2"></div>
 
-        {/* ============ CENTER (trophy + final + 3rd) ============ */}
+        {/* ============ CENTER — trophy + final + 3rd ============ */}
         <div class="bracket-center">
           <div class="text-center mb-3">
-            <svg class="mx-auto w-14 h-14 text-court-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
-                 style="filter: drop-shadow(0 0 14px rgba(245,197,24,0.7));">
+            <svg class="mx-auto w-16 h-16 text-court-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                 style="filter: drop-shadow(0 0 16px rgba(245,197,24,0.75));">
               <path d="M8 21h8M12 17v4M5 4h14v5a7 7 0 01-14 0V4z" />
               <path d="M5 4H2v3a4 4 0 003 4M19 4h3v3a4 4 0 01-3 4" />
             </svg>
-            <p class="font-hero text-court-gold tracking-[0.3em] text-sm mt-1">FINAL</p>
+            <p class="font-hero text-court-gold tracking-[0.4em] text-base mt-1">FINAL</p>
           </div>
-          <div class="rounded-2xl border border-court-gold/30 p-2 mb-3"
-               style="background: linear-gradient(135deg, rgba(245,197,24,0.08), rgba(20,26,44,0.6));">
+          <div class="rounded-2xl border border-court-gold/30 p-3 mb-6"
+               style="background: linear-gradient(135deg, rgba(245,197,24,0.10), rgba(20,26,44,0.6));">
             <BracketMatch match={finalMatch} isAdmin={isAdmin} size="md" />
           </div>
-          <p class="font-hero text-court-muted tracking-[0.3em] text-[10px] text-center mt-4 mb-2">3ER PUESTO</p>
-          <div class="rounded-xl border border-white/8 p-1.5"
+          <p class="font-hero text-court-muted tracking-[0.3em] text-[10px] text-center mb-2">3ER PUESTO</p>
+          <div class="rounded-xl border border-white/8 p-2"
                style="background: rgba(20,26,44,0.5);">
             <BracketMatch match={thirdMatch} isAdmin={isAdmin} size="sm" />
           </div>
         </div>
 
-        {/* ============ RIGHT HALF ============ */}
-        <div class="bracket-col bracket-sfr">
+        {/* ============ RIGHT HALF — SF + QF (mirrored) ============ */}
+        <div class="bracket-spacer bracket-spacer-r-2"></div>
+        <div class="bracket-single">
           <div class="bracket-cell bracket-sf"><BracketMatch match={sf2} isAdmin={isAdmin} size="md" /></div>
         </div>
         {hasQuarters && (
-          <div class="bracket-col bracket-qfr">
-            <div class="bracket-cell"><BracketMatch match={qf3} isAdmin={isAdmin} size="sm" /></div>
-            <div class="bracket-cell"><BracketMatch match={qf4} isAdmin={isAdmin} size="sm" /></div>
-          </div>
+          <>
+            <div class="bracket-spacer bracket-spacer-r-1"></div>
+            <div class="bracket-pair">
+              <div class="bracket-cell"><BracketMatch match={qf3} isAdmin={isAdmin} size="sm" /></div>
+              <div class="bracket-cell"><BracketMatch match={qf4} isAdmin={isAdmin} size="sm" /></div>
+            </div>
+          </>
         )}
       </div>
     </div>
 
-    <!-- ============ MOBILE COMPACT ============ -->
+    {/* ============ MOBILE COMPACT ============ */}
     <div class="lg:hidden space-y-5">
       {hasQuarters && (
         <section>
           <p class="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-2">Cuartos</p>
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-2 gap-3">
             <BracketMatch match={qf1} isAdmin={isAdmin} size="sm" />
             <BracketMatch match={qf3} isAdmin={isAdmin} size="sm" />
             <BracketMatch match={qf2} isAdmin={isAdmin} size="sm" />
@@ -112,13 +119,13 @@ const hasQuarters = quarters.length > 0;
       )}
       <section>
         <p class="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-2">Semifinales</p>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-2 gap-3">
           <BracketMatch match={sf1} isAdmin={isAdmin} size="sm" />
           <BracketMatch match={sf2} isAdmin={isAdmin} size="sm" />
         </div>
       </section>
       <section class="rounded-2xl border border-court-gold/30 p-3"
-               style="background: linear-gradient(135deg, rgba(245,197,24,0.08), rgba(20,26,44,0.6));">
+               style="background: linear-gradient(135deg, rgba(245,197,24,0.10), rgba(20,26,44,0.6));">
         <p class="text-[10px] uppercase tracking-[0.3em] text-court-gold font-bold mb-2 text-center">🏆 Final</p>
         <BracketMatch match={finalMatch} isAdmin={isAdmin} size="md" />
       </section>
@@ -133,77 +140,160 @@ const hasQuarters = quarters.length > 0;
 )}
 
 <style>
-  .bracket-col {
+  .bracket-grid {
+    display: grid;
+    align-items: center;
+    column-gap: 0;
+    row-gap: 0;
+    min-height: 32rem;
+  }
+
+  /* PAIRS (QF columns): two matches distributed top/bottom with big gap.
+     `space-around` puts each match's center at 25% / 75% of the wrapper. */
+  .bracket-pair {
     display: flex;
     flex-direction: column;
     justify-content: space-around;
-    gap: 1rem;
+    height: 100%;
+    min-height: 28rem;
+    position: relative;
   }
-  .bracket-cell { position: relative; }
+  .bracket-cell {
+    position: relative;
+  }
 
-  /* Connector lines: only on desktop. Each QF cell gets a horizontal line
-     reaching toward the center column; pairs of QF cells are joined by a
-     vertical line that meets at the SF cell's height. */
-  @media (min-width: 1024px) {
-    /* LEFT QF column → horizontal line going right */
-    .bracket-qfl .bracket-cell::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      right: -1rem;
-      width: 1rem;
-      height: 1px;
-      background: rgba(255,255,255,0.18);
-    }
-    /* LEFT QF column → vertical line connecting the two QFs */
-    .bracket-qfl .bracket-cell:first-child::before {
-      content: "";
-      position: absolute;
-      top: 50%;
-      right: -1rem;
-      width: 1px;
-      height: calc(100% + 1rem);
-      background: rgba(255,255,255,0.18);
-    }
+  /* Single-match cell (SF, Final): vertically centered in its column. */
+  .bracket-single {
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+  .bracket-single > .bracket-cell {
+    width: 100%;
+  }
 
-    /* RIGHT QF column → mirrored */
-    .bracket-qfr .bracket-cell::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: -1rem;
-      width: 1rem;
-      height: 1px;
-      background: rgba(255,255,255,0.18);
-    }
-    .bracket-qfr .bracket-cell:first-child::before {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: -1rem;
-      width: 1px;
-      height: calc(100% + 1rem);
-      background: rgba(255,255,255,0.18);
-    }
+  /* CENTER stack */
+  .bracket-center {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+  }
 
-    /* SF cells → short line toward center */
-    .bracket-sfl .bracket-sf::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      right: -1rem;
-      width: 1rem;
-      height: 1px;
-      background: rgba(255,255,255,0.18);
-    }
-    .bracket-sfr .bracket-sf::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: -1rem;
-      width: 1rem;
-      height: 1px;
-      background: rgba(255,255,255,0.18);
-    }
+  /* ===== CONNECTOR LINES (desktop only) ===== */
+
+  /* Spacer columns (the narrow gap columns 2 / 4 / 6 / 8) hold the
+     L-shaped connectors. We use ::before for the vertical bar joining
+     the two QF midpoints, and ::after for the horizontal line into the
+     next round's match. */
+
+  .bracket-spacer {
+    position: relative;
+    height: 100%;
+  }
+
+  /* LEFT QF→SF connector (column index 2) */
+  .bracket-spacer-l-1::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 25%;
+    bottom: 25%;
+    width: 2px;
+    background: rgba(255,255,255,0.18);
+  }
+  /* Top arm of the L on the left side: from QF1 midpoint (25%) along the
+     spacer's left edge into the bar */
+  .bracket-spacer-l-1::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    background: rgba(255,255,255,0.18);
+  }
+
+  /* SF→FINAL connector (column index 4) */
+  .bracket-spacer-l-2::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    background: rgba(255,255,255,0.22);
+  }
+
+  /* RIGHT mirrored */
+  .bracket-spacer-r-2::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    background: rgba(255,255,255,0.22);
+  }
+  .bracket-spacer-r-1::before {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 25%;
+    bottom: 25%;
+    width: 2px;
+    background: rgba(255,255,255,0.18);
+  }
+  .bracket-spacer-r-1::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 2px;
+    background: rgba(255,255,255,0.18);
+  }
+
+  /* Horizontal "stubs" on each match cell. Inside QF pair → two stubs (one
+     per match) extend toward the spacer; inside SF singles → one stub
+     extends toward CENTER. Combined with the spacers above this gives the
+     classic bracket "[─┐ ─┘─" geometry. */
+
+  /* QF pair on the LEFT — stubs from each match's right edge */
+  .bracket-pair > .bracket-cell::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    height: 2px;
+    background: rgba(255,255,255,0.18);
+  }
+  /* When the pair sits in a column to the LEFT of its spacer (left half) */
+  .bracket-grid > .bracket-pair:first-child > .bracket-cell::after {
+    right: -2.25rem;
+    width: 2.25rem;
+  }
+  /* When the pair sits in a column to the RIGHT of its spacer (right half) */
+  .bracket-grid > .bracket-pair:last-child > .bracket-cell::after {
+    left: -2.25rem;
+    width: 2.25rem;
+  }
+
+  /* SF single → stub toward CENTER */
+  .bracket-single .bracket-sf::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    height: 2px;
+    background: rgba(255,255,255,0.22);
+  }
+  /* Left SF column (3rd grid column when QFs exist; 1st when not) — stub on the right */
+  .bracket-grid > .bracket-single:first-of-type .bracket-sf::after {
+    right: -2.5rem;
+    width: 2.5rem;
+  }
+  /* Right SF column — stub on the left */
+  .bracket-grid > .bracket-single:last-of-type .bracket-sf::after {
+    left: -2.5rem;
+    width: 2.5rem;
   }
 </style>
