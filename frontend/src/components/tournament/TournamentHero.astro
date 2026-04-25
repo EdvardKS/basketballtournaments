@@ -1,13 +1,16 @@
 ---
 import type { Tournament, TournamentStatus } from "../../lib/types.js";
+import type { TournamentPhase } from "../../lib/tournamentPhase.js";
 import { computeEffectiveStatus, formatDate } from "../../lib/display.js";
 
 interface Props {
   tournament: Tournament;
   effective?: TournamentStatus;
   liveMessage?: string | null;
+  phase?: TournamentPhase;          // sub-phase override (groups / knockouts / completed)
+  championTeamName?: string | null; // shown in the badge when phase==='completed'
 }
-const { tournament: t, effective, liveMessage } = Astro.props;
+const { tournament: t, effective, liveMessage, phase, championTeamName } = Astro.props;
 const eff: TournamentStatus = effective ?? computeEffectiveStatus(t);
 
 const STATUS_LABEL: Record<TournamentStatus, string> = {
@@ -30,7 +33,25 @@ const STATUS_TONE: Record<TournamentStatus, { color: string; live: boolean }> = 
   completed: { color: "#a0a7b8", live: false },
 };
 
-const tone = STATUS_TONE[eff];
+// When a `phase` is provided, override the badge label/tone to communicate
+// the sub-phase (groups vs knockouts vs champion). Otherwise fall back to
+// the previous status-based behavior so existing callers keep working.
+let badgeLabel: string;
+let tone: { color: string; live: boolean };
+if (phase === "groups") {
+  badgeLabel = "FASE DE GRUPOS EN VIVO";
+  tone = { color: "#ff6b00", live: true };
+} else if (phase === "knockouts") {
+  badgeLabel = "ELIMINATORIAS EN VIVO";
+  tone = { color: "#ff2d2d", live: true };
+} else if (phase === "completed") {
+  badgeLabel = championTeamName ? `CAMPEÓN · ${championTeamName.toUpperCase()}` : "FINALIZADO";
+  tone = { color: "#f5c518", live: false };
+} else {
+  badgeLabel = STATUS_LABEL[eff];
+  tone = STATUS_TONE[eff];
+}
+
 const dateLabel = formatDate(t.matchDate ?? t.date);
 
 const particles = Array.from({ length: 12 }, (_, i) => ({
@@ -99,7 +120,7 @@ const particles = Array.from({ length: 12 }, (_, i) => ({
             <span class="relative inline-flex rounded-full w-2.5 h-2.5" style={`background:${tone.color};`}></span>
           </span>
         )}
-        {STATUS_LABEL[eff]}
+        {badgeLabel}
       </span>
     </div>
 
@@ -135,7 +156,7 @@ const particles = Array.from({ length: 12 }, (_, i) => ({
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
         </svg>
-        {STATUS_LABEL[eff]}
+        {badgeLabel}
       </span>
     </div>
   </div>
