@@ -2,12 +2,21 @@
 import express from "express";
 import cors from "cors";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { config } from "./config.js";
+import { pool } from "./db/pool.js";
 import { apiRouter } from "./routes/index.js";
 import { errorHandler, notFound } from "./middleware/error.js";
 
+const PgSession = connectPgSimple(session);
+
 export const createApp = () => {
   const app = express();
+
+  // Trust the first hop (Docker bridge / future reverse proxy) so secure
+  // cookies and req.ip work correctly when we eventually front the app
+  // with nginx/traefik. Harmless when nothing is in front.
+  app.set("trust proxy", 1);
 
   app.use(cors({
     origin: config.corsOrigin,
@@ -15,10 +24,17 @@ export const createApp = () => {
   }));
   app.use(express.json({ limit: "2mb" }));
   app.use(session({
+    store: new PgSession({
+      pool,
+      tableName: "session",
+      createTableIfMissing: true,
+      pruneSessionInterval: 60 * 15, // seconds; clean expired rows every 15 min
+    }),
     name: config.cookieName,
     secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
+    rolling: true,
     cookie: {
       httpOnly: true,
       sameSite: "lax",

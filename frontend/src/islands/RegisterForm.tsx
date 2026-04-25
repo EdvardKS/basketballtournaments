@@ -96,7 +96,7 @@ export default function RegisterForm({ nextUrl, joinTournamentId }: Props) {
     if (score < 1) { setError("La contraseña es demasiado corta (mín. 6)"); setShake((s) => s + 1); return; }
     setLoading(true);
     try {
-      // Backend already auto-logs the user in by setting the session cookie
+      // Backend sets the session cookie on this response.
       await api("/auth/register", {
         method: "POST",
         body: JSON.stringify({
@@ -106,13 +106,33 @@ export default function RegisterForm({ nextUrl, joinTournamentId }: Props) {
         }),
       });
 
-      // Optional: auto-register in a tournament if requested
-      if (joinTournamentId) {
-        try { await api(`/tournaments/${joinTournamentId}/register`, { method: "POST" }); }
-        catch { /* non-blocking — user is logged in either way */ }
+      // Verify the cookie round-trip actually established a session before
+      // navigating to a protected page (otherwise the next SSR auth guard
+      // bounces the user to /login with no clue why).
+      try {
+        await api("/auth/me");
+      } catch {
+        setError("No se pudo iniciar la sesión, vuelve a intentarlo.");
+        setShake((s) => s + 1);
+        setLoading(false);
+        return;
       }
 
-      window.location.href = nextUrl || "/dashboard/player";
+      // Optional: auto-register in a tournament if the URL asked for it.
+      let joinedTournament = false;
+      if (joinTournamentId) {
+        try {
+          await api(`/tournaments/${joinTournamentId}/register`, { method: "POST" });
+          joinedTournament = true;
+        } catch { /* non-blocking — user is logged in either way */ }
+      }
+
+      // Build destination URL with welcome flags so the global Toast picks
+      // them up and shows the corporate confirmation alert.
+      const dest = new URL(nextUrl || "/dashboard/player", window.location.origin);
+      dest.searchParams.set("welcome", "registered");
+      if (joinedTournament) dest.searchParams.set("joined", "1");
+      window.location.assign(dest.pathname + dest.search + dest.hash);
     } catch (err) {
       const code = err instanceof ApiError ? err.code : "ERROR";
       const msgs: Record<string, string> = {

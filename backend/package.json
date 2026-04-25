@@ -15,6 +15,7 @@
     "seed:mark": "tsx src/db/migrate-cli.ts seed:mark"
   },
   "dependencies": {
+    "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
@@ -22,6 +23,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/connect-pg-simple": "^7.0.3",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/express-session": "^1.18.0",

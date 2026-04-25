@@ -2,6 +2,7 @@
 import "../styles/global.css";
 import Navbar from "../components/Navbar.astro";
 import Footer from "../components/Footer.astro";
+import Toast from "../islands/ui/Toast.js";
 import type { Player } from "../lib/types.js";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 const { title = "Villena Basket League", description = "Liga de baloncesto amateur de Villena", player } = Astro.props;
+const currentPath = Astro.url.pathname;
 ---
 <!doctype html>
 <html lang="es">
@@ -28,10 +30,11 @@ const { title = "Villena Basket League", description = "Liga de baloncesto amate
     />
   </head>
   <body class="min-h-screen flex flex-col">
-    <Navbar player={player} />
+    <Navbar player={player} currentPath={currentPath} />
     <main class="flex-1">
       <slot />
     </main>
     <Footer />
+    <Toast client:load />
   </body>
 </html>

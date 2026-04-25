@@ -1,13 +1,26 @@
 ---
 import type { Player } from "../lib/types.js";
 
-interface Props { player?: Player | null }
-const { player } = Astro.props;
+interface Props {
+  player?: Player | null;
+  currentPath?: string;
+}
+const { player, currentPath = "/" } = Astro.props;
 const role = player?.role;
 
 const dashLink = role === "admin" ? "/dashboard/admin"
   : role === "captain" ? "/dashboard/captain"
   : "/dashboard/player";
+
+// Context-aware register link: if the visitor is on a tournament page,
+// preserve where they came from and pre-arm the auto-join after signup.
+const tournamentMatch = currentPath.match(/^\/tournaments\/([^/?#]+)/);
+const registerHref = tournamentMatch
+  ? `/register?next=${encodeURIComponent(currentPath)}&joinTournament=${tournamentMatch[1]}`
+  : "/register";
+const loginHref = ["/", "/login", "/register"].includes(currentPath)
+  ? "/login"
+  : `/login?next=${encodeURIComponent(currentPath)}`;
 
 const ROLE_STYLE: Record<string, string> = {
   admin:   "bg-[var(--color-neon-red)]/15 text-[var(--color-neon-red)] border-[var(--color-neon-red)]/40 shadow-[0_0_12px_rgba(255,45,45,0.45)]",
@@ -71,20 +84,20 @@ const ROLE_LABEL: Record<string, string> = {
             <script>
               document.getElementById("btn-logout")?.addEventListener("click", async () => {
                 await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
-                window.location.href = "/";
+                window.location.href = "/?welcome=logout";
               });
             </script>
           </>
         ) : (
           <>
             <a
-              href="/login"
+              href={loginHref}
               class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-court-muted hover:text-white transition-colors"
             >
               Iniciar sesión
             </a>
             <a
-              href="/register"
+              href={registerHref}
               class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wider text-white transition-all hover:scale-105"
               style="background: linear-gradient(135deg, #ff6b00 0%, #ff8a1a 100%); box-shadow: 0 0 18px rgba(255,107,0,0.55), inset 0 1px 0 rgba(255,255,255,0.25);"
             >
