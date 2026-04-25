@@ -38,6 +38,13 @@ export const api = async <T = unknown>(
   if (!response.ok) {
     const body = data as { code?: string; error?: string };
     const code = body?.code ?? body?.error ?? "UNKNOWN_ERROR";
+    // Log the raw body so failed responses are debuggable from devtools
+    // (especially useful when an upstream proxy returns HTML instead of JSON
+    // and we'd otherwise just see "UNKNOWN_ERROR").
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.error(`[api] ${response.status} ${path} →`, data);
+    }
     throw new ApiError(response.status, code, data);
   }
   return data as T;
