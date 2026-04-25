@@ -6,6 +6,7 @@ import { z } from "zod";
 import { query, queryOne } from "../db/query.js";
 import { toTournament } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
+import { transitionTournament } from "./lifecycle.js";
 
 const STATUSES = ["upcoming","open","draft","setup","scheduled","active","completed"] as const;
 const LIVE_STATUSES = ["upcoming","open","draft","setup","scheduled","active"] as const;
@@ -53,6 +54,7 @@ export const listTournaments = async () => {
 };
 
 export const getTournament = async (id: string) => {
+  await transitionTournament(id);
   const row = await queryOne("SELECT * FROM tournaments WHERE id=$1", [id]);
   if (!row) throw new HttpError(404, "TOURNAMENT_NOT_FOUND");
   return toTournament(row);

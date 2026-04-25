@@ -3,8 +3,10 @@ import { query, queryOne, tx } from "../db/query.js";
 import { toMatch, toGroup, toGroupMember } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
 import { generateKnockout } from "./bracket.js";
+import { transitionTournament } from "./lifecycle.js";
 
 export const matchesForTournament = async (tournamentId: string) => {
+  await transitionTournament(tournamentId);
   const rows = await query(
     `SELECT m.*,
        ht.name AS home_team_name, ht.logo AS home_team_logo,
@@ -19,6 +21,7 @@ export const matchesForTournament = async (tournamentId: string) => {
 };
 
 export const groupsForTournament = async (tournamentId: string) => {
+  await transitionTournament(tournamentId);
   const groups = await query(
     "SELECT * FROM tournament_groups WHERE tournament_id=$1 ORDER BY name", [tournamentId],
   );

@@ -1,9 +1,11 @@
 // Process entry point. Waits for DB, applies migrations, optionally
-// applies example-data seeds, then starts listening.
+// applies example-data seeds, transitions tournament phases for any time
+// that elapsed while we were down, then starts listening.
 import { createApp } from "./app.js";
 import { config } from "./config.js";
 import { waitForDb } from "./db/pool.js";
 import { runMigrations, runSeeds } from "./db/migrate.js";
+import { transitionAll } from "./services/lifecycle.js";
 
 const main = async () => {
   await waitForDb();
@@ -13,6 +15,7 @@ const main = async () => {
   } else {
     console.log("[seed] EXAMPLE_DATA=false — skipping demo data");
   }
+  await transitionAll();
   const app = createApp();
   app.listen(config.port, () => {
     console.log(`[backend] listening on :${config.port}`);

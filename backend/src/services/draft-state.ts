@@ -2,8 +2,11 @@
 import { query, queryOne } from "../db/query.js";
 import { toDraftState, toDraftHistory, toPlayer, toTeam } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
+import { transitionTournament } from "./lifecycle.js";
 
 export const getDraftState = async (tournamentId: string) => {
+  // Date-based: opening the draft view may be enough to start it.
+  await transitionTournament(tournamentId);
   const row = await queryOne(
     "SELECT * FROM draft_state WHERE tournament_id=$1 ORDER BY created_at DESC LIMIT 1",
     [tournamentId],

@@ -148,7 +148,11 @@ export const pickPlayer = async (
 const endDraftInternal = async (tournamentId: string) => {
   await generateGroups(tournamentId);
   await generateSchedule(tournamentId);
-  await queryOne("UPDATE tournaments SET status='setup' WHERE id=$1", [tournamentId]);
+  // Status → setup AND hours auto-published (no separate "publicar horas" step).
+  await queryOne(
+    "UPDATE tournaments SET status='setup', hours_confirmed=true WHERE id=$1",
+    [tournamentId],
+  );
 };
 
 export const endDraft = async (tournamentId: string) => {
