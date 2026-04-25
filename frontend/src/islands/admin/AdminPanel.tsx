@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api.js";
-import type { Tournament, TeamWithPlayers, Match, Player, TournamentStatus } from "../../lib/types.js";
-import { computeEffectiveStatus, formatDate } from "../../lib/display.js";
+import type { Tournament, TeamWithPlayers, GroupWithMembers, Match, Player } from "../../lib/types.js";
+import { formatDate } from "../../lib/display.js";
+import { derivePhase, type TournamentPhase } from "../../lib/tournamentPhase.js";
 import Modal from "./Modal.js";
 import InscripcionesTab, { type Registration } from "./InscripcionesTab.js";
+import QuickScoreSheet from "./QuickScoreSheet.js";
 import TournamentForm from "../TournamentForm.js";
 import DraftBoard from "../DraftBoard.js";
-import AdminScoreUpdater from "../AdminScoreUpdater.js";
 import AdminScheduleConfirm from "../AdminScheduleConfirm.js";
 import AdminPlayerManager from "../AdminPlayerManager.js";
 
@@ -22,47 +23,62 @@ interface TournamentDetail {
   teams: TeamWithPlayers[];
 }
 
-type TabKey = "inscripciones" | "draft" | "jugadores" | "grupos" | "partidos" | "resultados" | "config";
+type TabKey = "inscripciones" | "draft" | "jugadores" | "grupos" | "eliminatorias" | "partidos" | "resultados" | "resumen" | "config";
 
 interface TabDef { key: TabKey; label: string; icon: string }
 
-const tabsForStatus = (s: TournamentStatus): TabDef[] => {
-  if (s === "open" || s === "upcoming") return [
-    { key: "inscripciones", label: "Inscripciones", icon: "M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM20 8v6M23 11h-6" },
-    { key: "config",        label: "Configuración", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 008.91 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 8.91a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" },
+const ICONS = {
+  inscripciones: "M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM20 8v6M23 11h-6",
+  config:        "M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 008.91 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 8.91a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z",
+  draft:         "M3 6h13M3 12h9M3 18h13M17 8l4 4-4 4",
+  jugadores:     "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
+  partidos:      "M3 10h18M3 14h18M5 6h14M5 18h14",
+  resultados:    "M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+  grupos:        "M3 3v18h18M7 14l3-3 4 4 5-5",
+  eliminatorias: "M6 4v16M18 4v16M6 12h12",
+  resumen:       "M8 21h8M12 17v4M5 4h14v5a7 7 0 01-14 0V4z",
+} as const;
+
+const tabsForPhase = (phase: TournamentPhase): TabDef[] => {
+  if (phase === "pre") return [
+    { key: "inscripciones", label: "Inscripciones", icon: ICONS.inscripciones },
+    { key: "config",        label: "Configuración", icon: ICONS.config },
   ];
-  if (s === "draft") return [
-    { key: "draft",        label: "Draft",         icon: "M3 6h13M3 12h9M3 18h13M17 8l4 4-4 4" },
-    { key: "jugadores",    label: "Jugadores",     icon: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" },
-    { key: "config",       label: "Configuración", icon: "M12 15a3 3 0 100-6 3 3 0 000 6z" },
+  if (phase === "draft") return [
+    { key: "draft",         label: "Draft",         icon: ICONS.draft },
+    { key: "jugadores",     label: "Jugadores",     icon: ICONS.jugadores },
+    { key: "config",        label: "Configuración", icon: ICONS.config },
   ];
-  if (s === "setup" || s === "scheduled") return [
-    { key: "grupos",       label: "Grupos",        icon: "M4 6h6v6H4zM14 6h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" },
-    { key: "partidos",     label: "Partidos",      icon: "M3 10h18M3 14h18M5 6h14M5 18h14" },
-    { key: "config",       label: "Configuración", icon: "M12 15a3 3 0 100-6 3 3 0 000 6z" },
+  if (phase === "groups") return [
+    { key: "grupos",        label: "Clasificación", icon: ICONS.grupos },
+    { key: "partidos",      label: "Marcador rápido", icon: ICONS.partidos },
+    { key: "resultados",    label: "Resultados",    icon: ICONS.resultados },
+    { key: "config",        label: "Configuración", icon: ICONS.config },
   ];
-  if (s === "active") return [
-    { key: "partidos",     label: "Partidos",      icon: "M3 10h18M3 14h18" },
-    { key: "resultados",   label: "Resultados",    icon: "M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-    { key: "grupos",       label: "Clasificación", icon: "M3 3v18h18M7 14l3-3 4 4 5-5" },
-    { key: "config",       label: "Configuración", icon: "M12 15a3 3 0 100-6 3 3 0 000 6z" },
+  if (phase === "knockouts") return [
+    { key: "eliminatorias", label: "Eliminatorias", icon: ICONS.eliminatorias },
+    { key: "partidos",      label: "Marcador rápido", icon: ICONS.partidos },
+    { key: "resultados",    label: "Resultados",    icon: ICONS.resultados },
+    { key: "grupos",        label: "Clasificación", icon: ICONS.grupos },
+    { key: "config",        label: "Configuración", icon: ICONS.config },
   ];
   // completed
   return [
-    { key: "resultados",   label: "Resultados",    icon: "M9 12l2 2 4-4" },
-    { key: "grupos",       label: "Clasificación", icon: "M3 3v18h18" },
-    { key: "config",       label: "Configuración", icon: "M12 15a3 3 0 100-6 3 3 0 000 6z" },
+    { key: "resumen",       label: "Resumen",       icon: ICONS.resumen },
+    { key: "eliminatorias", label: "Eliminatorias", icon: ICONS.eliminatorias },
+    { key: "grupos",        label: "Clasificación", icon: ICONS.grupos },
+    { key: "config",        label: "Configuración", icon: ICONS.config },
   ];
 };
 
-const STATUS_TONE: Record<TournamentStatus, { color: string; label: string; live: boolean }> = {
-  upcoming:  { color: "#0066ff", label: "Próximamente",        live: false },
-  open:      { color: "#ff6b00", label: "Inscripciones abiertas", live: true },
-  draft:     { color: "#ff2d2d", label: "Draft en curso",      live: true },
-  setup:     { color: "#0066ff", label: "Preparando torneo",   live: false },
-  scheduled: { color: "#0066ff", label: "Programado",          live: false },
-  active:    { color: "#ff2d2d", label: "Día de torneo",       live: true },
-  completed: { color: "#a0a7b8", label: "Finalizado",          live: false },
+// Tone for the summary card — derived from the same phase signal so the
+// admin sees the same color story as the public page.
+const PHASE_TONE: Record<TournamentPhase, { color: string; label: string; live: boolean }> = {
+  pre:        { color: "#ff6b00", label: "Pre-torneo",        live: false },
+  draft:      { color: "#ff2d2d", label: "Draft en curso",    live: true  },
+  groups:     { color: "#ff6b00", label: "Fase de grupos",    live: true  },
+  knockouts:  { color: "#ff2d2d", label: "Eliminatorias",     live: true  },
+  completed:  { color: "#f5c518", label: "Finalizado",        live: false },
 };
 
 export default function AdminPanel({ tournaments: initialTournaments, initialActiveId, allPlayers }: Props) {
@@ -70,22 +86,25 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
   const [selectedId, setSelectedId] = useState<string | null>(initialActiveId);
   const [detail, setDetail] = useState<TournamentDetail | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [groups, setGroups] = useState<GroupWithMembers[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
   const selected = tournaments.find((t) => t.id === selectedId) ?? null;
-  const effective: TournamentStatus = selected ? computeEffectiveStatus(selected) : "open";
-  const tabs = useMemo(() => tabsForStatus(effective), [effective]);
+  // Derive the visible sub-phase from data — single source of truth for tabs.
+  const phase: TournamentPhase = selected ? derivePhase(selected, matches) : "pre";
+  const tabs = useMemo(() => tabsForPhase(phase), [phase]);
   const [activeTab, setActiveTab] = useState<TabKey>(tabs[0]?.key ?? "config");
 
-  // Reset tab when tournament/state changes
+  // Reset tab when tournament or sub-phase changes (so opening a tournament
+  // mid-knockout lands on Eliminatorias, not the previously-selected tab).
   useEffect(() => {
     setActiveTab(tabs[0]?.key ?? "config");
-  }, [selectedId, effective]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedId, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadDetail = useCallback(async () => {
-    if (!selectedId) { setDetail(null); setMatches([]); return; }
+    if (!selectedId) { setDetail(null); setMatches([]); setGroups([]); return; }
     setLoadingDetail(true);
     try {
       const d = await api<TournamentDetail>(`/tournaments/${selectedId}`);
@@ -95,6 +114,10 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
       const m = await api<Match[]>(`/matches/tournament/${selectedId}`);
       setMatches(m);
     } catch { setMatches([]); }
+    try {
+      const g = await api<GroupWithMembers[]>(`/matches/tournament/${selectedId}/groups`);
+      setGroups(g);
+    } catch { setGroups([]); }
     setLoadingDetail(false);
   }, [selectedId]);
 
@@ -106,7 +129,7 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
     return s;
   }, [detail]);
 
-  const tone = STATUS_TONE[effective];
+  const tone = PHASE_TONE[phase];
 
   const onTournamentSaved = (t: Tournament) => {
     setTournaments((list) => {
@@ -257,6 +280,7 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
                 tournament={selected}
                 detail={detail}
                 matches={matches}
+                groups={groups}
                 allPlayers={allPlayers}
                 captainIds={captainIds}
                 onChange={loadDetail}
@@ -291,12 +315,13 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
 }
 
 function TabContent({
-  tab, tournament, detail, matches, allPlayers, captainIds, onChange, onSelfEdit,
+  tab, tournament, detail, matches, groups, allPlayers, captainIds, onChange, onSelfEdit,
 }: {
   tab: TabKey;
   tournament: Tournament;
   detail: TournamentDetail | null;
   matches: Match[];
+  groups: GroupWithMembers[];
   allPlayers: Player[];
   captainIds: Set<string>;
   onChange: () => void;
@@ -335,35 +360,59 @@ function TabContent({
   }
 
   if (tab === "grupos") {
-    if ((detail?.teams.length ?? 0) === 0) {
+    if (groups.length === 0) {
       return (
         <div className="glass p-10 text-center">
           <p className="text-5xl mb-3">📊</p>
-          <p className="text-white font-hero text-2xl">Aún no hay equipos</p>
-          <p className="text-court-muted text-sm mt-2">Los grupos se podrán organizar al cerrar el draft.</p>
+          <p className="text-white font-hero text-2xl">Aún no hay grupos</p>
+          <p className="text-court-muted text-sm mt-2">Los grupos se generan automáticamente al cerrar el draft.</p>
         </div>
       );
     }
     return (
-      <div className="glass p-6">
-        <p className="text-court-muted text-sm">
-          Los grupos se forman automáticamente al cerrar el draft. Para verlos en directo, abre la
-          {" "}<a href={`/tournaments/${tournament.id}`} className="text-[var(--color-neon-orange)] hover:underline">página pública del torneo</a>.
-        </p>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        {groups.map((g) => (
+          <GroupSummaryCard key={g.group.id} group={g} matches={matches} />
+        ))}
+      </div>
+    );
+  }
+
+  if (tab === "eliminatorias") {
+    const ko = matches.filter((m) => m.stage !== "group");
+    if (ko.length === 0) {
+      return (
+        <div className="glass p-10 text-center">
+          <p className="text-5xl mb-3">🥊</p>
+          <p className="text-white font-hero text-2xl">Bracket no generado todavía</p>
+          <p className="text-court-muted text-sm mt-2">Se crea automáticamente al cerrar el último partido de grupos.</p>
+        </div>
+      );
+    }
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5">
+        <div className="glass p-4 sm:p-6">
+          <h3 className="font-hero text-xl text-white mb-4">Bracket</h3>
+          <KoSummary matches={ko} />
+        </div>
+        <div className="glass p-4 sm:p-6 max-w-md">
+          <h3 className="font-hero text-xl text-white mb-4">Marcador rápido (KO)</h3>
+          <QuickScoreSheet matches={ko} />
+        </div>
       </div>
     );
   }
 
   if (tab === "partidos") {
+    // Mobile-first quick scoring. Schedule editing pushed to a secondary card on desktop.
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_22rem] gap-5">
         <div className="glass p-4 sm:p-6">
+          <QuickScoreSheet matches={matches} />
+        </div>
+        <div className="glass p-4 sm:p-6 self-start">
           <h3 className="font-hero text-xl text-white mb-4">Horario de partidos</h3>
           <AdminScheduleConfirm tournamentId={tournament.id} matches={matches} />
-        </div>
-        <div className="glass p-4 sm:p-6">
-          <h3 className="font-hero text-xl text-white mb-4">Marcador en vivo</h3>
-          <AdminScoreUpdater matches={matches} />
         </div>
       </div>
     );
@@ -397,6 +446,37 @@ function TabContent({
     );
   }
 
+  if (tab === "resumen") {
+    const finalMatch = matches.find((m) => m.stage === "final") ?? null;
+    const thirdMatch = matches.find((m) => m.stage === "third_place") ?? null;
+    const champion = finalMatch?.winnerId
+      ? detail?.teams.find((t) => t.id === finalMatch.winnerId) ?? null
+      : null;
+    return (
+      <div className="space-y-5">
+        <div className="glass p-6 text-center">
+          <p className="text-[11px] uppercase tracking-[0.4em] text-court-gold font-bold mb-2">Campeón</p>
+          <h3 className="font-hero text-4xl text-white leading-none" style={{ textShadow: "0 0 22px rgba(245,197,24,0.55)" }}>
+            {champion?.name ?? "—"}
+          </h3>
+          {finalMatch && finalMatch.homeScore != null && finalMatch.awayScore != null && (
+            <p className="mt-2 text-court-muted text-sm">
+              Final: <span className="font-hero text-xl text-white tabular-nums mx-1">{finalMatch.homeScore} — {finalMatch.awayScore}</span>
+            </p>
+          )}
+          {thirdMatch?.status === "completed" && thirdMatch.homeScore != null && thirdMatch.awayScore != null && (
+            <p className="text-court-muted text-xs">
+              3er puesto: <span className="font-hero text-base text-white tabular-nums mx-1">{thirdMatch.homeScore} — {thirdMatch.awayScore}</span>
+            </p>
+          )}
+        </div>
+        <a href={`/tournaments/${tournament.id}`} className="btn-neon-blue inline-flex">
+          Ver página pública del torneo →
+        </a>
+      </div>
+    );
+  }
+
   // config
   return (
     <div className="glass p-6">
@@ -410,6 +490,77 @@ function TabContent({
         </svg>
         Abrir editor de torneo
       </button>
+    </div>
+  );
+}
+
+// --- Lightweight inline summaries used only in the admin tabs --------------
+
+function GroupSummaryCard({ group: g, matches }: { group: GroupWithMembers; matches: Match[] }) {
+  const groupMatches = matches.filter((m) => m.stage === "group" && m.groupId === g.group.id);
+  const played = groupMatches.filter((m) => m.status === "completed").length;
+  return (
+    <div className="glass p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-hero text-2xl text-white leading-none">Grupo {g.group.name}</h4>
+        <span className="text-xs text-court-muted tabular-nums">{played}/{groupMatches.length} partidos</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-court-muted text-[10px] uppercase tracking-wider border-b border-white/10">
+              <th className="pb-2 pr-2">#</th>
+              <th className="pb-2 pr-2">Equipo</th>
+              <th className="pb-2 pr-2 text-center">PJ</th>
+              <th className="pb-2 pr-2 text-center">G</th>
+              <th className="pb-2 pr-2 text-center">P</th>
+              <th className="pb-2 text-center font-bold text-white">Pts</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {g.members.map((m, i) => (
+              <tr key={m.id} className={i === 0 && m.gamesPlayed > 0 ? "bg-court-gold/5" : ""}>
+                <td className="py-1.5 pr-2 font-hero text-base tabular-nums text-white/70">{i + 1}</td>
+                <td className="py-1.5 pr-2 text-white truncate">{m.teamName ?? "—"}</td>
+                <td className="py-1.5 pr-2 text-center text-court-muted tabular-nums">{m.gamesPlayed}</td>
+                <td className="py-1.5 pr-2 text-center text-court-ok tabular-nums">{m.gamesWon}</td>
+                <td className="py-1.5 pr-2 text-center text-court-danger tabular-nums">{m.gamesLost}</td>
+                <td className="py-1.5 text-center font-hero text-lg text-[var(--color-neon-orange)] tabular-nums">{m.points}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function KoSummary({ matches }: { matches: Match[] }) {
+  const STAGE_ORDER = ["quarterfinal", "semifinal", "third_place", "final"] as const;
+  const STAGE_LABEL: Record<string, string> = {
+    quarterfinal: "Cuartos", semifinal: "Semis", third_place: "3er puesto", final: "Final",
+  };
+  return (
+    <div className="space-y-4">
+      {STAGE_ORDER.map((stage) => {
+        const list = matches.filter((m) => m.stage === stage);
+        if (list.length === 0) return null;
+        return (
+          <div key={stage}>
+            <p className="text-[10px] uppercase tracking-widest text-court-muted font-bold mb-2">{STAGE_LABEL[stage]}</p>
+            <ul className="space-y-2">
+              {list.map((m) => (
+                <li key={m.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-black/30 border border-white/5">
+                  <span className="text-sm text-white truncate">{m.homeTeamName ?? "?"} vs {m.awayTeamName ?? "?"}</span>
+                  <span className="font-hero text-lg text-white tabular-nums shrink-0">
+                    {m.homeScore ?? "—"}<span className="text-white/30 mx-1">-</span>{m.awayScore ?? "—"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </div>
   );
 }
