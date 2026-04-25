@@ -1,0 +1,76 @@
+---
+interface Props {
+  title: string;
+  subtitle: string;
+  side?: "left" | "right";
+}
+const { title, subtitle, side = "left" } = Astro.props;
+
+const particles = Array.from({ length: 14 }, (_, i) => {
+  const left = (i * 67 + 11) % 100;
+  const delay = (i * 0.9) % 7;
+  const dur = 7 + ((i * 1.7) % 6);
+  const variant = i % 3 === 0 ? "blue" : i % 5 === 0 ? "red" : "";
+  return { left, delay, dur, variant };
+});
+---
+<section class="relative min-h-[calc(100vh-4rem)] flex items-center overflow-hidden">
+  <!-- Background gradient -->
+  <div
+    class="absolute inset-0 animate-gradient-shift -z-10"
+    style="background: linear-gradient(135deg, #000 0%, #0b0f1a 45%, #14001f 100%);"
+    aria-hidden="true"
+  />
+
+  <!-- Court SVG -->
+  <div class="absolute inset-0 pointer-events-none select-none opacity-[0.08] -z-10" aria-hidden="true">
+    <svg class="w-full h-full" viewBox="0 0 800 480" preserveAspectRatio="xMidYMid slice">
+      <line x1="400" y1="0" x2="400" y2="480" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <circle cx="400" cy="240" r="80" fill="none" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <rect x="80" y="140" width="160" height="200" fill="none" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <rect x="560" y="140" width="160" height="200" fill="none" stroke="#0066ff" stroke-width="2" class="court-line" />
+    </svg>
+  </div>
+
+  <!-- Glow orbs -->
+  <div class="absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full opacity-30 blur-3xl pointer-events-none -z-10" style="background:#ff6b00;" aria-hidden="true" />
+  <div class="absolute -bottom-32 -right-32 w-[28rem] h-[28rem] rounded-full opacity-25 blur-3xl pointer-events-none -z-10" style="background:#0066ff;" aria-hidden="true" />
+
+  <!-- Particles -->
+  <div class="absolute inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
+    {particles.map((p) => (
+      <span
+        class:list={["particle", p.variant]}
+        style={`left:${p.left}%; bottom:-10px; animation-delay:${p.delay}s; animation-duration:${p.dur}s;`}
+      />
+    ))}
+  </div>
+
+  <!-- Vignette -->
+  <div
+    class="absolute inset-0 pointer-events-none -z-10"
+    style="background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.85) 100%);"
+    aria-hidden="true"
+  />
+
+  <!-- Content layout -->
+  <div class="relative z-10 w-full max-w-7xl mx-auto px-4 py-12 grid lg:grid-cols-2 gap-12 items-center">
+    <!-- Pitch (hidden on mobile) -->
+    <div class:list={["hidden lg:block animate-slide-up", side === "right" && "lg:order-2"]}>
+      <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-orange)] font-semibold mb-4">Villena Basket League</p>
+      <h1 class="font-hero text-white leading-[0.85]" style="font-size: clamp(3rem, 7vw, 6rem);">
+        {title.split(" ").map((w, i) => (
+          <span class:list={["block", i === 0 && "text-neon-orange"]}>{w}</span>
+        ))}
+      </h1>
+      <p class="mt-6 text-court-muted text-lg max-w-md">{subtitle}</p>
+
+      <slot name="pitch" />
+    </div>
+
+    <!-- Form slot -->
+    <div class:list={["w-full max-w-md mx-auto lg:mx-0 animate-slide-up", side === "right" && "lg:order-1"]} style="animation-delay: 120ms;">
+      <slot />
+    </div>
+  </div>
+</section>

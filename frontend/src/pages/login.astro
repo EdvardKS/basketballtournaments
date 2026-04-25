@@ -1,16 +1,44 @@
 ---
 import Main from "../layouts/Main.astro";
+import AuthShell from "../components/auth/AuthShell.astro";
 import LoginForm from "../islands/LoginForm.js";
 import { loadSession } from "../lib/session.js";
 
 const session = await loadSession(Astro.request);
+const next = new URL(Astro.request.url).searchParams.get("next");
+
+const ROLE_HOME: Record<string, string> = {
+  admin: "/dashboard/admin",
+  captain: "/dashboard/captain",
+  player: "/dashboard/player",
+};
 if (session.isAuthenticated) {
-  const role = session.player?.role;
-  return Astro.redirect(role === "admin" ? "/dashboard/admin" : role === "captain" ? "/dashboard/captain" : "/dashboard/player");
+  return Astro.redirect(next ?? ROLE_HOME[session.player?.role ?? "player"] ?? "/dashboard/player");
 }
 ---
 <Main title="Iniciar sesión" player={null}>
-  <div class="max-w-7xl mx-auto px-4 py-16">
-    <LoginForm client:load />
-  </div>
+  <AuthShell title="Bienvenido de vuelta" subtitle="Tu plaza te espera. Vuelve a la cancha en un par de clicks.">
+    <div slot="pitch" class="mt-10 space-y-4">
+      <div class="flex items-center gap-3 text-sm text-court-muted">
+        <span class="w-9 h-9 rounded-lg flex items-center justify-center border border-[var(--color-neon-orange)]/40 bg-[var(--color-neon-orange)]/10 text-[var(--color-neon-orange)]" style="box-shadow: 0 0 14px rgba(255,107,0,0.35);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4M21 12c0 5-4 9-9 9s-9-4-9-9 4-9 9-9c2.4 0 4.6.9 6.3 2.5"/></svg>
+        </span>
+        Tus equipos, partidos y stats sincronizados.
+      </div>
+      <div class="flex items-center gap-3 text-sm text-court-muted">
+        <span class="w-9 h-9 rounded-lg flex items-center justify-center border border-[var(--color-neon-blue)]/40 bg-[var(--color-neon-blue)]/10 text-[var(--color-neon-blue)]" style="box-shadow: 0 0 14px rgba(0,102,255,0.35);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </span>
+        Calendario, draft y eliminatorias en directo.
+      </div>
+      <div class="flex items-center gap-3 text-sm text-court-muted">
+        <span class="w-9 h-9 rounded-lg flex items-center justify-center border border-court-gold/40 bg-court-gold/10 text-court-gold" style="box-shadow: 0 0 14px rgba(245,197,24,0.35);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M5 4h14v5a7 7 0 01-14 0V4z"/></svg>
+        </span>
+        Compite, gana y entra en el muro de campeones.
+      </div>
+    </div>
+
+    <LoginForm client:load nextUrl={next} />
+  </AuthShell>
 </Main>

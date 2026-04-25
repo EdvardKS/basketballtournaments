@@ -1,13 +1,82 @@
 ---
 import Main from "../layouts/Main.astro";
+import AuthShell from "../components/auth/AuthShell.astro";
 import RegisterForm from "../islands/RegisterForm.js";
 import { loadSession } from "../lib/session.js";
+import { api, getCookieHeader } from "../lib/api.js";
+import { computeEffectiveStatus, formatDate } from "../lib/display.js";
+import type { Tournament, TournamentDetail, TournamentStatus } from "../lib/types.js";
 
 const session = await loadSession(Astro.request);
-if (session.isAuthenticated) return Astro.redirect("/dashboard/player");
+const url = new URL(Astro.request.url);
+const next = url.searchParams.get("next");
+const joinTournamentId = url.searchParams.get("joinTournament");
+
+if (session.isAuthenticated) {
+  return Astro.redirect(next ?? "/dashboard/player");
+}
+
+const cookie = getCookieHeader(Astro.request);
+let tournaments: Tournament[] = [];
+try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
+
+const ACTIVE_STATES: TournamentStatus[] = ["open", "draft", "setup", "scheduled", "active"];
+const enriched = tournaments.map((t) => ({ t, eff: computeEffectiveStatus(t) }));
+const activeEntry =
+  enriched.find((e) => ACTIVE_STATES.includes(e.eff)) ??
+  enriched.find((e) => e.eff === "upcoming") ??
+  null;
+const active = activeEntry?.t ?? null;
+const activeEff = activeEntry?.eff ?? null;
+
+let teamsCount = 0;
+let registeredPlayers = 0;
+if (active) {
+  try {
+    const detail = await api<TournamentDetail>(`/tournaments/${active.id}`, {}, cookie);
+    teamsCount = detail.teams.length;
+    registeredPlayers = Array.isArray(detail.registrations) ? detail.registrations.length : 0;
+  } catch { /* fallback */ }
+}
+const spotsLeft = active ? Math.max(0, active.maxTeams - teamsCount) : 0;
+const dateLabel = active ? formatDate(active.matchDate ?? active.date) : null;
 ---
 <Main title="Crear cuenta" player={null}>
-  <div class="max-w-7xl mx-auto px-4 py-16">
-    <RegisterForm client:load />
-  </div>
+  <AuthShell title="Únete a la liga" subtitle="Una cuenta. Acceso a draft, partidos y la mejor competición 3×3 de Villena." side="right">
+    <div slot="pitch" class="mt-10 space-y-4">
+      {active && (
+        <div class="glass p-5 space-y-4">
+          {activeEff === "open" && (
+            <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] uppercase tracking-[0.25em] font-bold text-white border border-[var(--color-neon-orange)]/50 animate-glow" style="background: rgba(255,107,0,0.12);">
+              <span class="w-2 h-2 rounded-full bg-[var(--color-neon-orange)] animate-pulse"></span>
+              Inscripciones abiertas
+            </span>
+          )}
+          <div>
+            <p class="text-[10px] uppercase tracking-[0.25em] text-court-muted mb-1">Próximo torneo</p>
+            <p class="font-hero text-3xl text-white leading-none">{active.name}</p>
+            {dateLabel && <p class="text-court-muted text-sm mt-1">{dateLabel} · {active.location}</p>}
+          </div>
+          <div class="grid grid-cols-2 gap-3 pt-3 border-t border-white/5">
+            <div>
+              <p class="text-[10px] uppercase tracking-[0.25em] text-court-muted">Plazas libres</p>
+              <p class="font-hero text-3xl text-neon-orange leading-none tabular-nums">{spotsLeft}</p>
+            </div>
+            <div>
+              <p class="text-[10px] uppercase tracking-[0.25em] text-court-muted">Equipos</p>
+              <p class="font-hero text-3xl text-white leading-none tabular-nums">{teamsCount}<span class="text-white/30">/{active.maxTeams}</span></p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {registeredPlayers > 0 && (
+        <p class="text-sm text-court-muted">
+          <span class="text-[var(--color-neon-orange)] font-bold">+{registeredPlayers} jugadores</span> ya inscritos en este torneo.
+        </p>
+      )}
+    </div>
+
+    <RegisterForm client:load nextUrl={next} joinTournamentId={joinTournamentId} />
+  </AuthShell>
 </Main>

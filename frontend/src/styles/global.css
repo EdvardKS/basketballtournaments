@@ -116,6 +116,23 @@ body {
          focus:outline-none focus:border-court-accent transition-colors;
 }
 
+@utility input-neon {
+  @apply w-full rounded-xl px-4 py-3 text-base text-white placeholder-white/30
+         transition-all duration-200 outline-none border;
+  background: rgba(0,0,0,0.35);
+  border-color: rgba(255,255,255,0.08);
+}
+.input-neon:hover { border-color: rgba(255,255,255,0.18); }
+.input-neon:focus {
+  border-color: var(--color-neon-orange);
+  box-shadow: 0 0 0 3px rgba(255,107,0,0.15), 0 0 22px rgba(255,107,0,0.35);
+  background: rgba(0,0,0,0.55);
+}
+.input-neon[aria-invalid="true"] {
+  border-color: var(--color-neon-red);
+  box-shadow: 0 0 0 3px rgba(255,45,45,0.15), 0 0 18px rgba(255,45,45,0.35);
+}
+
 @utility label-text {
   @apply block text-xs font-semibold text-court-muted uppercase tracking-wider mb-1;
 }
@@ -211,6 +228,16 @@ body {
   50%  { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+@keyframes shake-x {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-8px); }
+  40%      { transform: translateX(7px); }
+  60%      { transform: translateX(-5px); }
+  80%      { transform: translateX(3px); }
+}
+@keyframes spin-neon {
+  to { transform: rotate(360deg); }
+}
 
 .animate-slide-in     { animation: slide-in     0.3s ease both; }
 .animate-slide-up     { animation: slide-up-fade 0.6s cubic-bezier(.2,.8,.2,1) both; }
@@ -226,6 +253,16 @@ body {
 .animate-gradient-shift {
   background-size: 200% 200%;
   animation: gradient-shift 8s ease infinite;
+}
+.animate-shake { animation: shake-x 0.45s ease both; }
+.spinner-neon {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 9999px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  animation: spin-neon 0.7s linear infinite;
 }
 .pulse-turn { animation: pulse-pick 1.5s infinite; }
 .court-line { stroke-dasharray: 400; animation: court-line 1.2s ease forwards; }
