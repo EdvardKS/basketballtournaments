@@ -106,6 +106,21 @@ Defaults recomendados:
 - `backend/.env` → `EXAMPLE_DATA=true` (desarrollo, demo útil)
 - `backend/.env.prod` → `EXAMPLE_DATA=false` (producción, arrancar limpio)
 
+### Admin de producción (sin seeds)
+
+Cuando `EXAMPLE_DATA=false` la BBDD arranca vacía y no hay usuarios. Para
+tener acceso admin desde el primer boot, define dos variables en
+`backend/.env.prod`:
+
+```
+BOOTSTRAP_ADMIN_USERNAME=jaimes
+BOOTSTRAP_ADMIN_PASSWORD=villena26
+```
+
+El backend hará un `INSERT … ON CONFLICT (username) DO UPDATE` en cada arranque,
+así que cambiar la contraseña en el `.env.prod` y reiniciar el contenedor la
+rota en BBDD también. Login en `/login` con `jaimes` / `villena26`.
+
 ## Usuarios de ejemplo (cuando `EXAMPLE_DATA=true`)
 
 Todos los usuarios seed usan la misma contraseña: **`123123123`**.
