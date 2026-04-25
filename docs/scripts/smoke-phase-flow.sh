@@ -111,7 +111,26 @@ else
   printf "\033[33m  ⚠ %s completed tournaments lack a winner_id (legacy data — populate manually if needed)\033[0m\n" "$NULL_WINNERS"
 fi
 
-# ---------- 5) Summary -----------------------------------------------------
+# ---------- 5) Recompute standings endpoint --------------------------------
+_log "5) Recompute standings endpoint (admin)"
+call POST "/matches/tournament/$T_ID/recompute-standings" ""
+case "$STATUS" in
+  200) _ok "POST /matches/tournament/:id/recompute-standings → 200"
+       REPLAYED=$(node -e "const d=JSON.parse(require('fs').readFileSync('$RESP','utf8'));console.log(d.replayed||0)")
+       _ok "replayed $REPLAYED completed group matches" ;;
+  *)   _err "POST recompute-standings → $STATUS" ;;
+esac
+
+# ---------- 6) Idempotency: recompute again, totals must match -------------
+_log "6) Recompute is idempotent (no double-count)"
+call GET "/matches/tournament/$T_ID/groups"
+BEFORE=$(node -e "const g=JSON.parse(require('fs').readFileSync('$RESP','utf8'));console.log(JSON.stringify(g.map(x=>x.members.map(m=>[m.teamId,m.points,m.gamesPlayed,m.pointsFor,m.pointsAgainst]))))")
+call POST "/matches/tournament/$T_ID/recompute-standings" ""
+call GET "/matches/tournament/$T_ID/groups"
+AFTER=$(node -e "const g=JSON.parse(require('fs').readFileSync('$RESP','utf8'));console.log(JSON.stringify(g.map(x=>x.members.map(m=>[m.teamId,m.points,m.gamesPlayed,m.pointsFor,m.pointsAgainst]))))")
+if [ "$BEFORE" = "$AFTER" ]; then _ok "standings unchanged after second recompute"; else _err "standings drifted after second recompute"; fi
+
+# ---------- 7) Summary -----------------------------------------------------
 echo
 echo "──────────────────────────────────────────────"
 echo "  PASS: $PASS   FAIL: $FAIL"

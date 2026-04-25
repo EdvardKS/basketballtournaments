@@ -8,7 +8,7 @@ import { asyncRoute } from "../middleware/error.js";
 import { requireRole } from "../middleware/auth.js";
 import {
   matchesForTournament, groupsForTournament,
-  startMatch, updateScore, completeMatch,
+  startMatch, updateScore, completeMatch, recomputeStandings,
 } from "../services/matches.js";
 import { updateMatchTime } from "../services/schedule.js";
 
@@ -21,6 +21,13 @@ matchesRouter.get("/tournament/:id", asyncRoute(async (req, res) => {
 matchesRouter.get("/tournament/:id/groups", asyncRoute(async (req, res) => {
   res.json(await groupsForTournament(req.params.id));
 }));
+
+// Admin-only: rebuild group standings from scratch by replaying every
+// completed group match. Safe to call repeatedly — idempotent.
+matchesRouter.post("/tournament/:id/recompute-standings", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    res.json(await recomputeStandings(req.params.id));
+  }));
 
 const timeSchema = z.object({ scheduledAt: z.string().min(1) });
 

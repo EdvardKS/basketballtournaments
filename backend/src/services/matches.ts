@@ -88,12 +88,55 @@ export const updateScore = async (matchId: string, body: unknown) => {
   return toMatch(row!);
 };
 
+// Re-derives `group_members` from scratch by replaying every completed
+// group match. Useful after admin-side scoring drift (matches with score
+// saved but never finalized, or any historical inconsistency that left
+// the running totals out of sync).
+export const recomputeStandings = async (tournamentId: string) => {
+  return tx(async (q) => {
+    // 1) Reset every member of every group of this tournament.
+    await q(
+      `UPDATE group_members SET
+         points         = 0,
+         games_played   = 0,
+         games_won      = 0,
+         games_lost     = 0,
+         points_for     = 0,
+         points_against = 0
+       WHERE group_id IN (SELECT id FROM tournament_groups WHERE tournament_id = $1)`,
+      [tournamentId],
+    );
+
+    // 2) Replay every completed group match through updateStandings.
+    const rows = await q(
+      `SELECT id, group_id, home_team_id, away_team_id, home_score, away_score
+       FROM matches
+       WHERE tournament_id = $1
+         AND stage = 'group'
+         AND status = 'completed'
+         AND home_score IS NOT NULL AND away_score IS NOT NULL
+         AND home_team_id IS NOT NULL AND away_team_id IS NOT NULL
+         AND group_id IS NOT NULL
+       ORDER BY completed_at NULLS LAST, created_at`,
+      [tournamentId],
+    );
+    for (const r of rows as Array<{ group_id: string; home_team_id: string; away_team_id: string; home_score: number; away_score: number }>) {
+      await updateStandings(q, r.group_id, r.home_team_id, r.away_team_id, r.home_score, r.away_score);
+    }
+
+    return { replayed: rows.length };
+  });
+};
+
 export const completeMatch = async (matchId: string) => {
   return tx(async (q) => {
     const rows = await q("SELECT * FROM matches WHERE id=$1", [matchId]);
     if (rows.length === 0) throw new HttpError(404, "MATCH_NOT_FOUND");
     const m = toMatch(rows[0]);
     if (m.homeScore == null || m.awayScore == null) throw new HttpError(400, "NO_SCORE");
+    // Guard: re-completing the same match would double-credit standings via
+    // updateStandings()'s incremental UPDATEs. Bail out idempotently.
+    if (m.status === "completed") return m;
 
     const winnerId = m.homeScore >= m.awayScore ? m.homeTeamId : m.awayTeamId;
     const updated = await q(

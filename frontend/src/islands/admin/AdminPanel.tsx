@@ -397,7 +397,7 @@ function TabContent({
         </div>
         <div className="glass p-4 sm:p-6 max-w-md">
           <h3 className="font-hero text-xl text-white mb-4">Marcador rápido (KO)</h3>
-          <QuickScoreSheet matches={ko} />
+          <QuickScoreSheet matches={ko} tournamentId={tournament.id} />
         </div>
       </div>
     );
@@ -408,7 +408,7 @@ function TabContent({
     return (
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_22rem] gap-5">
         <div className="glass p-4 sm:p-6">
-          <QuickScoreSheet matches={matches} />
+          <QuickScoreSheet matches={matches} tournamentId={tournament.id} />
         </div>
         <div className="glass p-4 sm:p-6 self-start">
           <h3 className="font-hero text-xl text-white mb-4">Horario de partidos</h3>

@@ -5,6 +5,7 @@ import type { Match, MatchStatus } from "../../lib/types.js";
 interface Props {
   matches: Match[];
   hoursConfirmed?: boolean;
+  tournamentId?: string;     // when present, exposes the "Recalcular" action
 }
 
 interface LiveMatch {
@@ -29,7 +30,7 @@ const formatTime = (iso?: string | null) => {
   return new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 };
 
-export default function QuickScoreSheet({ matches }: Props) {
+export default function QuickScoreSheet({ matches, tournamentId }: Props) {
   // Local optimistic state per match (so taps feel instant).
   const [live, setLive] = useState<Record<string, LiveMatch>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -140,22 +141,72 @@ export default function QuickScoreSheet({ matches }: Props) {
     }
   };
 
+  // Diagnostic: matches with a saved score that aren't completed (= points
+  // not yet credited to standings). Loud in the UI so the admin acts.
+  const limbo = matches.filter((m) => (m.homeScore != null || m.awayScore != null) && m.status !== "completed");
+
+  const recompute = async () => {
+    if (!tournamentId) return;
+    if (!confirm("Esto resetea las tablas y vuelve a contar todos los partidos completados. ¿Continuar?")) return;
+    setBusyId("__recompute__");
+    try {
+      const res = await api<{ replayed: number }>(`/matches/tournament/${tournamentId}/recompute-standings`, { method: "POST" });
+      flash("ok", `Clasificación recalculada (${res.replayed} partidos)`);
+      setTimeout(() => window.location.reload(), 700);
+    } catch (e) {
+      flash("err", e instanceof ApiError ? e.code : "Error al recalcular");
+      setBusyId(null);
+    }
+  };
+
   if (ordered.length === 0) {
     return (
-      <div className="glass p-10 text-center">
-        <p className="text-5xl mb-3">🏁</p>
-        <p className="text-white font-hero text-2xl">Todos los partidos cerrados</p>
-        <p className="text-court-muted text-sm mt-2">No queda nada por puntuar.</p>
+      <div className="space-y-4">
+        <div className="glass p-10 text-center">
+          <p className="text-5xl mb-3">🏁</p>
+          <p className="text-white font-hero text-2xl">Todos los partidos cerrados</p>
+          <p className="text-court-muted text-sm mt-2">No queda nada por puntuar.</p>
+        </div>
+        {tournamentId && (
+          <button
+            type="button"
+            onClick={recompute}
+            disabled={busyId === "__recompute__"}
+            className="text-xs uppercase tracking-widest text-court-muted hover:text-white transition-colors"
+          >
+            ↻ Recalcular clasificación
+          </button>
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <header className="flex items-center justify-between gap-3">
+      <header className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-orange)] font-bold">Marcador rápido</p>
-        <p className="text-xs text-court-muted">{ordered.length} pendientes</p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-court-muted">{ordered.length} pendientes</p>
+          {tournamentId && (
+            <button
+              type="button"
+              onClick={recompute}
+              disabled={busyId === "__recompute__"}
+              className="text-[10px] uppercase tracking-widest font-bold text-[var(--color-neon-blue)] border border-[var(--color-neon-blue)]/40 px-2 py-1 rounded-md hover:bg-[var(--color-neon-blue)]/10 transition-all disabled:opacity-50"
+              title="Resetea las tablas y vuelve a contar todos los partidos completados"
+            >
+              ↻ Recalcular clasificación
+            </button>
+          )}
+        </div>
       </header>
+
+      {limbo.length > 0 && (
+        <div role="alert" className="px-3 py-2 rounded-lg text-sm border border-court-warn/40 bg-court-warn/10 text-court-warn">
+          <strong>{limbo.length}</strong> {limbo.length === 1 ? "partido tiene" : "partidos tienen"} marcador guardado pero
+          {" "}<strong>sin finalizar</strong> — esos puntos no cuentan en la clasificación. Pulsa <strong>Finalizar</strong> en cada uno para registrarlos.
+        </div>
+      )}
 
       {feedback && (
         <div role="status" className="px-3 py-2 rounded-lg text-sm border"
