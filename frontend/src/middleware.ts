@@ -27,10 +27,23 @@ export const onRequest = defineMiddleware(async ({ request }, next) => {
     init.body = await request.arrayBuffer();
   }
 
+  // Log only mutating requests to keep noise down; reveals whether the proxy
+  // ever sees the call, what cookie it forwards, and what the backend returns.
+  const isMutation = !["GET", "HEAD"].includes(request.method);
+  const cookieHdr = headers.get("cookie");
+  if (isMutation) {
+    console.log(`[proxy] → ${request.method} ${url.pathname} cookie=${cookieHdr ? `present(${cookieHdr.length}b)` : "MISSING"}`);
+  }
+
   const upstream = await fetch(BACKEND + url.pathname + url.search, init);
   const out = new Headers();
   upstream.headers.forEach((value, key) => {
     if (!HOP_BY_HOP.has(key.toLowerCase())) out.append(key, value);
   });
+
+  if (isMutation) {
+    console.log(`[proxy] ← ${request.method} ${url.pathname} status=${upstream.status}`);
+  }
+
   return new Response(upstream.body, { status: upstream.status, headers: out });
 });

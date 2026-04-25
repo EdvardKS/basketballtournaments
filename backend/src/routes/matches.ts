@@ -14,6 +14,16 @@ import { updateMatchTime } from "../services/schedule.js";
 
 export const matchesRouter = Router();
 
+// Trace mutating match endpoints so we can see — in docker logs — whether
+// the request actually reached Express, whose session it carried, and what
+// status went back. Pairs with the [proxy] log on the frontend container.
+matchesRouter.use((req, _res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    console.log(`[matches] ${req.method} ${req.originalUrl} session.role=${req.session?.role ?? "none"} playerId=${req.session?.playerId ?? "none"} sid=${req.session?.id ?? "none"}`);
+  }
+  next();
+});
+
 matchesRouter.get("/tournament/:id", asyncRoute(async (req, res) => {
   res.json(await matchesForTournament(req.params.id));
 }));
