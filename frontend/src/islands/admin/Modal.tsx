@@ -45,17 +45,22 @@ export default function Modal({ open, title, subtitle, onClose, children, size =
         aria-label="Cerrar"
         onClick={onClose}
         className="absolute inset-0 cursor-default"
-        style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+        style={{ background: "rgba(0,0,0,0.82)", backdropFilter: "blur(6px)" }}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`glass relative w-full ${SIZE[size]} max-h-[calc(100vh-4rem)] overflow-y-auto`}
-        style={{ animation: "modal-pop 0.32s cubic-bezier(.2,.8,.2,1) both" }}
+        className={`relative w-full ${SIZE[size]} max-h-[calc(100vh-4rem)] overflow-y-auto rounded-2xl border border-white/10`}
+        style={{
+          // Solid panel — no transparency. Subtle dark gradient + neon edge glow.
+          background: "linear-gradient(180deg, #14192a 0%, #0c1120 100%)",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,107,0,0.08), 0 0 28px rgba(255,107,0,0.18)",
+          animation: "modal-pop 0.32s cubic-bezier(.2,.8,.2,1) both",
+        }}
       >
-        <header className="sticky top-0 z-10 flex items-start justify-between gap-4 p-5 sm:p-6 border-b border-white/5"
-                style={{ background: "rgba(11,15,26,0.82)", backdropFilter: "blur(10px)" }}>
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-4 p-5 sm:p-6 border-b border-white/10"
+                style={{ background: "#0c1120" }}>
           <div className="min-w-0">
             <h2 id="modal-title" className="font-hero text-2xl sm:text-3xl text-white leading-none">{title}</h2>
             {subtitle && <p className="text-court-muted text-sm mt-1.5">{subtitle}</p>}
