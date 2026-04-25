@@ -1,54 +1,209 @@
 ---
+// Champions-League "Camino a la Final" mirror bracket.
+//
+// Desktop (≥lg): 5 columns — QFL · SFL · CENTER · SFR · QFR.
+//                CENTER stacks: trofeo SVG → Final → 3er puesto.
+// Mobile  (<lg): 2 columns compact, ronda a ronda; Final + 3rd full-width.
+//
+// Bracket positions are read from match.round_number assigned by the backend
+// seeder (services/bracket.ts):
+//   QF round 1 → SFL.home, QF round 2 → SFL.away,
+//   QF round 3 → SFR.home, QF round 4 → SFR.away.
+//   SF round 1 → Final.home + 3rd_place.home (loser),
+//   SF round 2 → Final.away + 3rd_place.away (loser).
 import type { Match } from "../lib/types.js";
-import MatchCard from "./MatchCard.astro";
+import BracketMatch from "./tournament/BracketMatch.astro";
 
 interface Props { matches: Match[]; hoursConfirmed?: boolean; isAdmin?: boolean }
-const { matches, hoursConfirmed = false, isAdmin = false } = Astro.props;
+const { matches, isAdmin = false } = Astro.props as Props;
 
-const byStage = (stage: string): Match[] => matches.filter((m: Match) => m.stage === stage);
+const byStage = (s: string): Match[] => matches.filter((m: Match) => m.stage === s);
+const findByRound = (list: Match[], round: number): Match | null =>
+  list.find((m) => m.roundNumber === round) ?? null;
+
 const quarters = byStage("quarterfinal");
-const semis = byStage("semifinal");
-const thirds = byStage("third_place");
-const final = byStage("final");
-const hasKo = quarters.length + semis.length + thirds.length + final.length > 0;
+const semis    = byStage("semifinal");
+const finals   = byStage("final");
+const thirds   = byStage("third_place");
+
+const qf1 = findByRound(quarters, 1);
+const qf2 = findByRound(quarters, 2);
+const qf3 = findByRound(quarters, 3);
+const qf4 = findByRound(quarters, 4);
+const sf1 = findByRound(semis, 1);
+const sf2 = findByRound(semis, 2);
+const finalMatch = findByRound(finals, 1);
+const thirdMatch = findByRound(thirds, 1);
+
+const hasKo = quarters.length + semis.length + finals.length + thirds.length > 0;
+const hasQuarters = quarters.length > 0;
 ---
-{hasKo ? (
-  <div class="space-y-8">
-    {quarters.length > 0 && (
-      <div>
-        <h3 class="font-display text-xl text-white mb-3">Cuartos de final</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {quarters.map((m: Match) => <MatchCard match={m} hoursConfirmed={hoursConfirmed} isAdmin={isAdmin} />)}
-        </div>
-      </div>
-    )}
-    {semis.length > 0 && (
-      <div>
-        <h3 class="font-display text-xl text-white mb-3">Semifinales</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {semis.map((m: Match) => <MatchCard match={m} hoursConfirmed={hoursConfirmed} isAdmin={isAdmin} />)}
-        </div>
-      </div>
-    )}
-    {thirds.length > 0 && (
-      <div>
-        <h3 class="font-display text-lg text-court-muted mb-2">3er y 4to puesto</h3>
-        <div class="max-w-sm">
-          {thirds.map((m: Match) => <MatchCard match={m} hoursConfirmed={hoursConfirmed} isAdmin={isAdmin} />)}
-        </div>
-      </div>
-    )}
-    {final.length > 0 && (
-      <div class="border border-court-gold/30 rounded-xl p-1 bg-court-gold/5">
-        <h3 class="font-display text-2xl text-court-gold mb-3 px-3 pt-2">🏆 Final</h3>
-        <div class="max-w-sm px-3 pb-3">
-          {final.map((m: Match) => <MatchCard match={m} hoursConfirmed={hoursConfirmed} isAdmin={isAdmin} />)}
-        </div>
-      </div>
-    )}
-  </div>
-) : (
-  <div class="card text-center py-8">
+{!hasKo ? (
+  <div class="rounded-xl border border-white/5 bg-court-card/40 p-8 text-center">
     <p class="text-court-muted text-sm">Las eliminatorias se generarán al acabar la fase de grupos</p>
   </div>
+) : (
+  <div class="bracket">
+    <!-- ============ DESKTOP MIRROR ============ -->
+    <div class="hidden lg:block">
+      <div
+        class="grid items-center gap-x-4 gap-y-3"
+        style={hasQuarters
+          ? "grid-template-columns: 1fr 1fr 1.4fr 1fr 1fr;"
+          : "grid-template-columns: 1.2fr 1.6fr 1.2fr;"}
+      >
+        {/* ============ LEFT HALF ============ */}
+        {hasQuarters && (
+          <div class="bracket-col bracket-qfl">
+            <div class="bracket-cell"><BracketMatch match={qf1} isAdmin={isAdmin} size="sm" /></div>
+            <div class="bracket-cell"><BracketMatch match={qf2} isAdmin={isAdmin} size="sm" /></div>
+          </div>
+        )}
+        <div class="bracket-col bracket-sfl">
+          <div class="bracket-cell bracket-sf"><BracketMatch match={sf1} isAdmin={isAdmin} size="md" /></div>
+        </div>
+
+        {/* ============ CENTER (trophy + final + 3rd) ============ */}
+        <div class="bracket-center">
+          <div class="text-center mb-3">
+            <svg class="mx-auto w-14 h-14 text-court-gold" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                 style="filter: drop-shadow(0 0 14px rgba(245,197,24,0.7));">
+              <path d="M8 21h8M12 17v4M5 4h14v5a7 7 0 01-14 0V4z" />
+              <path d="M5 4H2v3a4 4 0 003 4M19 4h3v3a4 4 0 01-3 4" />
+            </svg>
+            <p class="font-hero text-court-gold tracking-[0.3em] text-sm mt-1">FINAL</p>
+          </div>
+          <div class="rounded-2xl border border-court-gold/30 p-2 mb-3"
+               style="background: linear-gradient(135deg, rgba(245,197,24,0.08), rgba(20,26,44,0.6));">
+            <BracketMatch match={finalMatch} isAdmin={isAdmin} size="md" />
+          </div>
+          <p class="font-hero text-court-muted tracking-[0.3em] text-[10px] text-center mt-4 mb-2">3ER PUESTO</p>
+          <div class="rounded-xl border border-white/8 p-1.5"
+               style="background: rgba(20,26,44,0.5);">
+            <BracketMatch match={thirdMatch} isAdmin={isAdmin} size="sm" />
+          </div>
+        </div>
+
+        {/* ============ RIGHT HALF ============ */}
+        <div class="bracket-col bracket-sfr">
+          <div class="bracket-cell bracket-sf"><BracketMatch match={sf2} isAdmin={isAdmin} size="md" /></div>
+        </div>
+        {hasQuarters && (
+          <div class="bracket-col bracket-qfr">
+            <div class="bracket-cell"><BracketMatch match={qf3} isAdmin={isAdmin} size="sm" /></div>
+            <div class="bracket-cell"><BracketMatch match={qf4} isAdmin={isAdmin} size="sm" /></div>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- ============ MOBILE COMPACT ============ -->
+    <div class="lg:hidden space-y-5">
+      {hasQuarters && (
+        <section>
+          <p class="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-2">Cuartos</p>
+          <div class="grid grid-cols-2 gap-2">
+            <BracketMatch match={qf1} isAdmin={isAdmin} size="sm" />
+            <BracketMatch match={qf3} isAdmin={isAdmin} size="sm" />
+            <BracketMatch match={qf2} isAdmin={isAdmin} size="sm" />
+            <BracketMatch match={qf4} isAdmin={isAdmin} size="sm" />
+          </div>
+        </section>
+      )}
+      <section>
+        <p class="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-2">Semifinales</p>
+        <div class="grid grid-cols-2 gap-2">
+          <BracketMatch match={sf1} isAdmin={isAdmin} size="sm" />
+          <BracketMatch match={sf2} isAdmin={isAdmin} size="sm" />
+        </div>
+      </section>
+      <section class="rounded-2xl border border-court-gold/30 p-3"
+               style="background: linear-gradient(135deg, rgba(245,197,24,0.08), rgba(20,26,44,0.6));">
+        <p class="text-[10px] uppercase tracking-[0.3em] text-court-gold font-bold mb-2 text-center">🏆 Final</p>
+        <BracketMatch match={finalMatch} isAdmin={isAdmin} size="md" />
+      </section>
+      {thirdMatch && (
+        <section>
+          <p class="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-2">3er puesto</p>
+          <BracketMatch match={thirdMatch} isAdmin={isAdmin} size="sm" />
+        </section>
+      )}
+    </div>
+  </div>
 )}
+
+<style>
+  .bracket-col {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: 1rem;
+  }
+  .bracket-cell { position: relative; }
+
+  /* Connector lines: only on desktop. Each QF cell gets a horizontal line
+     reaching toward the center column; pairs of QF cells are joined by a
+     vertical line that meets at the SF cell's height. */
+  @media (min-width: 1024px) {
+    /* LEFT QF column → horizontal line going right */
+    .bracket-qfl .bracket-cell::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -1rem;
+      width: 1rem;
+      height: 1px;
+      background: rgba(255,255,255,0.18);
+    }
+    /* LEFT QF column → vertical line connecting the two QFs */
+    .bracket-qfl .bracket-cell:first-child::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -1rem;
+      width: 1px;
+      height: calc(100% + 1rem);
+      background: rgba(255,255,255,0.18);
+    }
+
+    /* RIGHT QF column → mirrored */
+    .bracket-qfr .bracket-cell::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: -1rem;
+      width: 1rem;
+      height: 1px;
+      background: rgba(255,255,255,0.18);
+    }
+    .bracket-qfr .bracket-cell:first-child::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: -1rem;
+      width: 1px;
+      height: calc(100% + 1rem);
+      background: rgba(255,255,255,0.18);
+    }
+
+    /* SF cells → short line toward center */
+    .bracket-sfl .bracket-sf::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -1rem;
+      width: 1rem;
+      height: 1px;
+      background: rgba(255,255,255,0.18);
+    }
+    .bracket-sfr .bracket-sf::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: -1rem;
+      width: 1rem;
+      height: 1px;
+      background: rgba(255,255,255,0.18);
+    }
+  }
+</style>

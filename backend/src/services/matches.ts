@@ -2,7 +2,7 @@
 import { query, queryOne, tx } from "../db/query.js";
 import { toMatch, toGroup, toGroupMember } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
-import { generateKnockout } from "./bracket.js";
+import { generateKnockout, propagateBracketWinner } from "./bracket.js";
 import { transitionTournament } from "./lifecycle.js";
 
 export const matchesForTournament = async (tournamentId: string) => {
@@ -146,6 +146,13 @@ export const completeMatch = async (matchId: string) => {
 
     if (m.groupId && m.homeTeamId && m.awayTeamId) {
       await updateStandings(q, m.groupId, m.homeTeamId, m.awayTeamId, m.homeScore, m.awayScore);
+    }
+
+    // Propagate KO winner to the next round's slot (no-op for group matches
+    // and for final / third_place). Idempotent — safe on re-completes.
+    if (m.stage !== "group") {
+      const loserId = winnerId === m.homeTeamId ? m.awayTeamId : m.homeTeamId;
+      await propagateBracketWinner(q, m.tournamentId, m.stage, m.roundNumber, winnerId, loserId);
     }
 
     // If all group matches completed, auto-generate knockout

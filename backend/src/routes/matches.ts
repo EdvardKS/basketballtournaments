@@ -10,6 +10,7 @@ import {
   matchesForTournament, groupsForTournament,
   startMatch, updateScore, completeMatch, recomputeStandings,
 } from "../services/matches.js";
+import { regenerateBracket } from "../services/bracket.js";
 import { updateMatchTime } from "../services/schedule.js";
 
 export const matchesRouter = Router();
@@ -37,6 +38,15 @@ matchesRouter.get("/tournament/:id/groups", asyncRoute(async (req, res) => {
 matchesRouter.post("/tournament/:id/recompute-standings", requireRole("admin"),
   asyncRoute(async (req, res) => {
     res.json(await recomputeStandings(req.params.id));
+  }));
+
+// Admin-only: wipe all KO matches and re-seed the bracket using the current
+// crossed-pairing algorithm. Useful to fix brackets generated with the old
+// (groupmate-colliding) seeder. Will refuse if any KO match has a score
+// already set, to avoid losing real results.
+matchesRouter.post("/tournament/:id/regenerate-bracket", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    res.json(await regenerateBracket(req.params.id));
   }));
 
 const timeSchema = z.object({ scheduledAt: z.string().min(1) });

@@ -1,0 +1,112 @@
+---
+import type { Match } from "../../lib/types.js";
+import { teamAccent } from "../../lib/teamColors.js";
+import MatchEditOverlay from "../../islands/admin/MatchEditOverlay.js";
+
+interface Props {
+  match: Match | null;             // when null, render placeholder
+  isAdmin?: boolean;
+  size?: "sm" | "md";              // sm for QF columns, md for SFs / Final
+  byeLabel?: string | null;        // e.g. "BYE → Semifinal" when a team skips this round
+}
+const { match, isAdmin = false, size = "md", byeLabel = null } = Astro.props;
+
+// ---- visual constants (per size) ----
+const sizeCls = size === "sm"
+  ? { card: "p-2", logo: "w-7 h-7 text-xs", name: "text-xs", score: "text-base", row: "gap-2", min: "min-h-[64px]" }
+  : { card: "p-3", logo: "w-9 h-9 text-sm", name: "text-sm", score: "text-lg", row: "gap-3", min: "min-h-[88px]" };
+
+// ---- derived state for a real match ----
+const m = match;
+const status = m?.status ?? null;
+const isCompleted = status === "completed";
+const homeWin = isCompleted && m!.winnerId === m!.homeTeamId;
+const awayWin = isCompleted && m!.winnerId === m!.awayTeamId;
+const homeLost = isCompleted && !homeWin;
+const awayLost = isCompleted && !awayWin;
+const winnerAccent = isCompleted && m?.winnerId ? teamAccent(m.winnerId).color : null;
+
+const homeName = m?.homeTeamName ?? null;
+const awayName = m?.awayTeamName ?? null;
+const homeScore = m?.homeScore ?? null;
+const awayScore = m?.awayScore ?? null;
+---
+{byeLabel ? (
+  <div class:list={[
+    "rounded-xl border border-dashed border-white/10 bg-white/[0.02] flex items-center justify-center text-[10px] uppercase tracking-widest text-court-muted",
+    sizeCls.card, sizeCls.min,
+  ]}>
+    {byeLabel}
+  </div>
+) : !m ? (
+  <div class:list={[
+    "rounded-xl border border-dashed border-white/5 bg-white/[0.01]",
+    sizeCls.card, sizeCls.min,
+  ]} />
+) : (
+  <div
+    class:list={[
+      "relative rounded-xl border bg-court-card/70 transition-all",
+      sizeCls.card,
+      isCompleted ? "border-white/15" : "border-white/10",
+      status === "in_progress" && "border-[var(--color-neon-red)]/60",
+    ]}
+    style={winnerAccent ? `box-shadow: 0 0 0 1px ${winnerAccent}66, 0 0 18px ${winnerAccent}33;` : undefined}
+  >
+    {isAdmin && <MatchEditOverlay match={m} client:visible />}
+
+    <!-- Home row -->
+    <div class:list={["flex items-center", sizeCls.row, homeLost && "opacity-50"]}>
+      {homeName ? (
+        <>
+          <div
+            class:list={["rounded-md flex items-center justify-center font-hero leading-none border shrink-0", sizeCls.logo]}
+            style={homeWin && winnerAccent
+              ? `background:${winnerAccent}33; border-color:${winnerAccent}99; color:#fff;`
+              : `background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.12); color:${homeLost ? "#666" : "#aaa"}; ${homeLost ? "filter:grayscale(1);" : ""}`}
+            aria-hidden="true"
+          >{homeName.charAt(0).toUpperCase()}</div>
+          <span class:list={[
+            "flex-1 truncate",
+            sizeCls.name,
+            homeWin ? "text-white font-bold" : homeLost ? "text-white/40 line-through" : "text-white",
+          ]}>{homeName}</span>
+        </>
+      ) : (
+        <span class:list={["flex-1 italic text-court-muted/60", sizeCls.name]}>Por definir</span>
+      )}
+      <span class:list={[
+        "font-hero leading-none tabular-nums shrink-0",
+        sizeCls.score,
+        homeScore == null ? "text-white/20" : homeWin ? "text-white" : homeLost ? "text-white/30 line-through" : "text-white",
+      ]}>{homeScore ?? "—"}</span>
+    </div>
+
+    <!-- Away row -->
+    <div class:list={["flex items-center mt-1.5", sizeCls.row, awayLost && "opacity-50"]}>
+      {awayName ? (
+        <>
+          <div
+            class:list={["rounded-md flex items-center justify-center font-hero leading-none border shrink-0", sizeCls.logo]}
+            style={awayWin && winnerAccent
+              ? `background:${winnerAccent}33; border-color:${winnerAccent}99; color:#fff;`
+              : `background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.12); color:${awayLost ? "#666" : "#aaa"}; ${awayLost ? "filter:grayscale(1);" : ""}`}
+            aria-hidden="true"
+          >{awayName.charAt(0).toUpperCase()}</div>
+          <span class:list={[
+            "flex-1 truncate",
+            sizeCls.name,
+            awayWin ? "text-white font-bold" : awayLost ? "text-white/40 line-through" : "text-white",
+          ]}>{awayName}</span>
+        </>
+      ) : (
+        <span class:list={["flex-1 italic text-court-muted/60", sizeCls.name]}>Por definir</span>
+      )}
+      <span class:list={[
+        "font-hero leading-none tabular-nums shrink-0",
+        sizeCls.score,
+        awayScore == null ? "text-white/20" : awayWin ? "text-white" : awayLost ? "text-white/30 line-through" : "text-white",
+      ]}>{awayScore ?? "—"}</span>
+    </div>
+  </div>
+)}

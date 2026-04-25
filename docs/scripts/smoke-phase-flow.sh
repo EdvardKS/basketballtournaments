@@ -130,7 +130,43 @@ call GET "/matches/tournament/$T_ID/groups"
 AFTER=$(node -e "const g=JSON.parse(require('fs').readFileSync('$RESP','utf8'));console.log(JSON.stringify(g.map(x=>x.members.map(m=>[m.teamId,m.points,m.gamesPlayed,m.pointsFor,m.pointsAgainst]))))")
 if [ "$BEFORE" = "$AFTER" ]; then _ok "standings unchanged after second recompute"; else _err "standings drifted after second recompute"; fi
 
-# ---------- 7) Summary -----------------------------------------------------
+# ---------- 7) Bracket regenerate + structural integrity ------------------
+# Pick a completed seed tournament so we exercise the bracket logic regardless
+# of the live tournament's phase.
+_log "7) Bracket regenerate endpoint (admin)"
+call GET /tournaments
+PAST_T=$(node -e "
+const ts=JSON.parse(require('fs').readFileSync('$RESP','utf8'));
+const t=ts.find(t=>t.status==='completed');
+console.log(t?.id||'')")
+if [ -z "$PAST_T" ]; then
+  printf "\033[33m  ⚠ no completed tournament available — skipping bracket structural test\033[0m\n"
+else
+  call POST "/matches/tournament/$PAST_T/regenerate-bracket" ""
+  case "$STATUS" in
+    200) N=$(node -e "const d=JSON.parse(require('fs').readFileSync('$RESP','utf8'));console.log(d.qualifiedCount||0)")
+         _ok "POST regenerate-bracket → 200 (N=$N qualified)" ;;
+    *)   _err "POST regenerate-bracket → $STATUS" ;;
+  esac
+
+  call GET "/matches/tournament/$PAST_T"
+  STRUCT=$(node -e "
+const ms=JSON.parse(require('fs').readFileSync('$RESP','utf8'));
+const ko=ms.filter(m=>m.stage!=='group');
+const by={};for(const m of ko){by[m.stage]=(by[m.stage]||0)+1}
+console.log(JSON.stringify(by))")
+  echo "  KO match counts: $STRUCT"
+  HAS_FINAL=$(node -e "const ms=JSON.parse(require('fs').readFileSync('$RESP','utf8'));console.log(ms.some(m=>m.stage==='final'))")
+  HAS_THIRD=$(node -e "const ms=JSON.parse(require('fs').readFileSync('$RESP','utf8'));console.log(ms.some(m=>m.stage==='third_place'))")
+  HAS_SEMI=$(node -e "const ms=JSON.parse(require('fs').readFileSync('$RESP','utf8'));console.log(ms.filter(m=>m.stage==='semifinal').length===2)")
+  if [ "$HAS_FINAL" = "true" ] && [ "$HAS_THIRD" = "true" ] && [ "$HAS_SEMI" = "true" ]; then
+    _ok "bracket structure: 1 final + 1 3rd_place + 2 semifinals"
+  else
+    _err "bracket structure broken (final=$HAS_FINAL third=$HAS_THIRD semis=$HAS_SEMI)"
+  fi
+fi
+
+# ---------- 8) Summary -----------------------------------------------------
 echo
 echo "──────────────────────────────────────────────"
 echo "  PASS: $PASS   FAIL: $FAIL"
