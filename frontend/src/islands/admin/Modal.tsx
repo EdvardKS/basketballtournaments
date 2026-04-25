@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   open: boolean;
@@ -16,6 +17,9 @@ const SIZE: Record<NonNullable<Props["size"]>, string> = {
 };
 
 export default function Modal({ open, title, subtitle, onClose, children, size = "md" }: Props) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -28,9 +32,12 @@ export default function Modal({ open, title, subtitle, onClose, children, size =
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  // Portal to body so the modal isn't trapped by an ancestor's `transform`,
+  // `filter` or `backdrop-filter`, which would re-anchor `position: fixed`
+  // to that ancestor and offset the centering.
+  return createPortal(
     <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-4 sm:p-8 overflow-y-auto"
          style={{ animation: "modal-bg 0.2s ease both" }}>
       <button
@@ -71,6 +78,7 @@ export default function Modal({ open, title, subtitle, onClose, children, size =
         @keyframes modal-bg  { from { opacity: 0; } to { opacity: 1; } }
         @keyframes modal-pop { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: none; } }
       `}</style>
-    </div>
+    </div>,
+    document.body,
   );
 }

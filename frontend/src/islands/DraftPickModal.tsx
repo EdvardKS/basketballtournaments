@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { POSITION_LABEL } from "../lib/display.js";
 
 interface PickPlayer {
@@ -11,11 +13,33 @@ interface Props {
 }
 
 export default function DraftPickModal({ player, onConfirm, onCancel, loading }: Props) {
-  if (!player) return null;
+  // Portal target — only available in the browser. Server-side render returns null.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
-  return (
+  // Lock body scroll while the modal is open
+  useEffect(() => {
+    if (!player) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [player, onCancel]);
+
+  if (!player || !mounted) return null;
+
+  // Portal escapes any ancestor with `transform`, `filter` or `backdrop-filter`,
+  // which would otherwise become the containing block for `position: fixed`
+  // (centering the modal inside the card instead of the viewport).
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
       onClick={onCancel}
     >
       <div
@@ -53,6 +77,7 @@ export default function DraftPickModal({ player, onConfirm, onCancel, loading }:
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
