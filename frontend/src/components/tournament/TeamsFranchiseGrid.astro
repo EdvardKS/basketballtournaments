@@ -1,0 +1,32 @@
+---
+import type { TeamWithPlayers, Player } from "../../lib/types.js";
+import TeamFranchiseCard from "./TeamFranchiseCard.astro";
+
+interface Props {
+  teams: TeamWithPlayers[];
+  authenticated?: boolean;
+  captains?: Record<string, Pick<Player, "id" | "name">>;
+  rosterTarget?: number;
+  pickingTeamId?: string | null;
+}
+const { teams, authenticated = false, captains = {}, rosterTarget = 3, pickingTeamId = null } = Astro.props;
+---
+{teams.length > 0 ? (
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+    {teams.map((team, i) => (
+      <TeamFranchiseCard
+        team={team}
+        authenticated={authenticated}
+        captainPlayer={captains[team.captainId] ?? null}
+        rosterTarget={rosterTarget}
+        index={i}
+        isPicking={team.id === pickingTeamId}
+      />
+    ))}
+  </div>
+) : (
+  <div class="glass p-12 text-center">
+    <p class="text-5xl mb-4">🏀</p>
+    <p class="text-court-muted">No hay equipos formados todavía</p>
+  </div>
+)}

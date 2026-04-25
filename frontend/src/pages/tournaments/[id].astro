@@ -1,15 +1,18 @@
 ---
 import Main from "../../layouts/Main.astro";
-import TournamentPhaseBar from "../../components/TournamentPhaseBar.astro";
-import TeamsGrid from "../../components/TeamsGrid.astro";
+import TournamentHero from "../../components/tournament/TournamentHero.astro";
+import PhaseProgressBar from "../../components/landing/PhaseProgressBar.astro";
+import LiveDraftPanel from "../../components/tournament/LiveDraftPanel.astro";
+import TeamsFranchiseGrid from "../../components/tournament/TeamsFranchiseGrid.astro";
+import RulesCard from "../../components/tournament/RulesCard.astro";
 import GroupsTable from "../../components/GroupsTable.astro";
 import MatchesList from "../../components/MatchesList.astro";
 import KnockoutBracketView from "../../components/KnockoutBracketView.astro";
 import PlayerCard from "../../components/PlayerCard.astro";
 import { loadSession } from "../../lib/session.js";
 import { api, ApiError, getCookieHeader } from "../../lib/api.js";
-import { STATUS_LABEL, STATUS_COLOR, formatDate } from "../../lib/display.js";
-import type { Tournament, TeamWithPlayers, GroupWithMembers, Match, Player } from "../../lib/types.js";
+import { computeEffectiveStatus } from "../../lib/display.js";
+import type { Tournament, TeamWithPlayers, GroupWithMembers, Match, Player, DraftState } from "../../lib/types.js";
 
 const { id } = Astro.params;
 if (!id) return Astro.redirect("/");
@@ -35,95 +38,151 @@ try {
 }
 if (!tournament) return Astro.redirect("/");
 
-const showPhases = ["setup","scheduled","active","completed"].includes(tournament.status);
-if (showPhases) {
+const effective = computeEffectiveStatus(tournament);
+const showCompetitionPhases = ["setup","scheduled","active","completed"].includes(tournament.status);
+const isDraftLive = effective === "draft";
+
+if (showCompetitionPhases) {
   try { groups = await api<GroupWithMembers[]>(`/matches/tournament/${id}/groups`, {}, cookie); } catch { /* empty */ }
   try { matches = await api<Match[]>(`/matches/tournament/${id}`, {}, cookie); } catch { /* empty */ }
 }
 
+// Captains map (player_id → name) for franchise card display
 const captains: Record<string, { id: string; name: string }> = {};
 for (const reg of registrations) {
   const t = teams.find((team) => team.captainId === reg.player_id);
   if (t) captains[reg.player_id] = { id: reg.player_id, name: reg.name };
 }
 
+// For "isPicking" highlight on team cards while in draft
+let pickingTeamId: string | null = null;
+if (isDraftLive) {
+  try {
+    const draft = await api<{ currentTeamId: string | null; state: DraftState }>(`/draft/${id}/state`, {}, cookie);
+    pickingTeamId = draft.currentTeamId;
+  } catch { /* draft not started yet */ }
+}
+
 const koMatches = matches.filter((m) => m.stage !== "group");
 const groupMatches = matches.filter((m) => m.stage === "group");
+
+const liveMessage =
+  effective === "draft"  ? "Draft en vivo — los capitanes están eligiendo plantilla." :
+  effective === "open"   ? "Inscripciones abiertas. Reserva tu plaza antes del cierre." :
+  effective === "active" ? "Torneo en juego. Sigue los partidos y la clasificación en directo." :
+  effective === "completed" ? "Torneo finalizado. Mira el campeón y los resultados." :
+  effective === "setup" || effective === "scheduled" ? "Equipos formados. Calendario y grupos a punto." :
+  null;
 ---
 <Main title={tournament.name} player={session.player}>
-  <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
-    <!-- Header -->
-    <div class="space-y-3">
-      <div class="flex items-center gap-3 flex-wrap">
-        <span class={STATUS_COLOR[tournament.status]}>{STATUS_LABEL[tournament.status]}</span>
-        {tournament.matchDate && <span class="text-xs text-court-muted">📅 {formatDate(tournament.matchDate)}</span>}
-        <span class="text-xs text-court-muted">📍 {tournament.location}</span>
-      </div>
-      <h1 class="font-display text-5xl text-white">{tournament.name}</h1>
-      <p class="text-court-muted max-w-2xl">{tournament.description}</p>
-      <TournamentPhaseBar tournament={tournament} />
-    </div>
+  <TournamentHero tournament={tournament} effective={effective} liveMessage={liveMessage} />
 
-    <!-- Rules (for open/upcoming) -->
-    {["upcoming","open","draft"].includes(tournament.status) && tournament.rules && (
-      <div class="card">
-        <h2 class="font-display text-2xl text-white mb-3">Bases</h2>
-        <pre class="text-court-muted text-sm whitespace-pre-wrap font-body">{tournament.rules}</pre>
-      </div>
+  <div class="max-w-7xl mx-auto px-4 -mt-6 sm:-mt-8 relative z-10 space-y-10 pb-16">
+    <!-- Phase progress -->
+    <section class="glass p-5 sm:p-6">
+      <p class="text-[10px] uppercase tracking-[0.3em] text-court-muted mb-4">Progreso del torneo</p>
+      <PhaseProgressBar status={effective} />
+    </section>
+
+    <!-- Live draft panel: only when draft is in progress -->
+    {isDraftLive && (
+      <LiveDraftPanel tournamentId={tournament.id} authenticated={auth} />
     )}
 
-    <!-- Registration CTA -->
-    {tournament.status === "open" && !auth && (
-      <div class="card border-court-accent/40 flex items-center justify-between gap-4 flex-wrap">
-        <p class="text-white font-semibold">¿Quieres participar? Inscríbete ahora</p>
-        <div class="flex gap-3">
-          <a href="/register" class="btn-primary">Crear cuenta</a>
-          <a href="/login" class="btn-ghost">Ya tengo cuenta</a>
+    <!-- Registration CTA when open and visitor unauth'd -->
+    {effective === "open" && !auth && (
+      <section
+        class="relative overflow-hidden rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-4 border"
+        style="background: linear-gradient(120deg, rgba(255,107,0,0.18), rgba(255,45,45,0.10)); border-color: rgba(255,107,0,0.4); box-shadow: 0 0 36px rgba(255,107,0,0.18);"
+      >
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.3em] text-[var(--color-neon-orange)] font-bold mb-2">Quedan plazas</p>
+          <h3 class="font-hero text-3xl text-white leading-none">¿Quieres jugar este torneo?</h3>
+          <p class="text-court-muted text-sm mt-2">Crea tu cuenta y entra automáticamente al draft.</p>
         </div>
-      </div>
+        <div class="flex gap-3">
+          <a href={`/register?next=${encodeURIComponent(`/tournaments/${tournament.id}`)}&joinTournament=${tournament.id}`} class="btn-neon">
+            Inscribirme
+          </a>
+          <a href={`/login?next=${encodeURIComponent(`/tournaments/${tournament.id}`)}`} class="btn-neon-blue">
+            Ya tengo cuenta
+          </a>
+        </div>
+      </section>
     )}
 
-    <!-- Teams -->
-    <div>
-      <h2 class="font-display text-2xl text-white mb-4">Equipos ({teams.length})</h2>
-      <TeamsGrid teams={teams} authenticated={auth} captains={captains} />
-    </div>
+    <!-- Franchises -->
+    <section>
+      <header class="flex items-end justify-between flex-wrap gap-3 mb-5">
+        <div>
+          <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-orange)] font-bold mb-2">Franquicias</p>
+          <h2 class="font-hero text-3xl sm:text-4xl text-white leading-none">
+            EQUIPOS EN <span class="text-neon-orange">CANCHA</span>
+            <span class="font-hero text-court-muted text-2xl ml-2">({teams.length})</span>
+          </h2>
+        </div>
+        {pickingTeamId && (
+          <span class="inline-flex items-center gap-2 text-[10px] uppercase tracking-widest text-[var(--color-neon-red)]">
+            <span class="w-2 h-2 rounded-full bg-[var(--color-neon-red)] animate-pulse"></span>
+            Una franquicia está eligiendo en este momento
+          </span>
+        )}
+      </header>
+      <TeamsFranchiseGrid
+        teams={teams}
+        authenticated={auth}
+        captains={captains}
+        rosterTarget={tournament.teamSize}
+        pickingTeamId={pickingTeamId}
+      />
+    </section>
 
-    <!-- Registered players (only for admin/open status) -->
+    <!-- Registered players (admin only) -->
     {isAdmin && registrations.length > 0 && (
-      <div>
-        <h2 class="font-display text-2xl text-white mb-4">Jugadores inscritos ({registrations.length})</h2>
+      <section>
+        <h2 class="font-hero text-2xl text-white mb-4">Jugadores inscritos ({registrations.length})</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {registrations.map((r) => {
             const p = { id: r.player_id, name: r.name, mobile: r.mobile, email: null, avatar: null, position: "base", overall: 50, pace: 50, shooting: 50, passing: 50, dribbling: 50, defense: 50, physical: 50, role: "player", isPublic: true, age: null, gdprAccepted: true, gdprAcceptedAt: null, username: null, createdAt: "" } as Player;
             return <PlayerCard player={p} authenticated={isAdmin} showContact={isAdmin} />;
           })}
         </div>
-      </div>
+      </section>
+    )}
+
+    <!-- Rules / format -->
+    {["upcoming","open","draft","setup","scheduled"].includes(effective) && (
+      <RulesCard tournament={tournament} />
     )}
 
     <!-- Group phase -->
-    {showPhases && groups.length > 0 && (
-      <div>
-        <h2 class="font-display text-2xl text-white mb-4">Fase de grupos</h2>
+    {showCompetitionPhases && groups.length > 0 && (
+      <section>
+        <header class="mb-5">
+          <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-blue)] font-bold mb-2">Liguilla</p>
+          <h2 class="font-hero text-3xl sm:text-4xl text-white leading-none">FASE DE <span class="text-neon-blue">GRUPOS</span></h2>
+        </header>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <GroupsTable groups={groups} />
           {groupMatches.length > 0 && (
             <div>
-              <h3 class="font-display text-xl text-white mb-3">Partidos de grupos</h3>
+              <h3 class="font-hero text-xl text-white mb-3">Partidos de grupos</h3>
               <MatchesList matches={groupMatches} hoursConfirmed={tournament.hoursConfirmed} />
             </div>
           )}
         </div>
-      </div>
+      </section>
     )}
 
     <!-- Knockout -->
     {koMatches.length > 0 && (
-      <div>
-        <h2 class="font-display text-2xl text-white mb-4">Eliminatorias</h2>
+      <section>
+        <header class="mb-5">
+          <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-red)] font-bold mb-2">Sin margen</p>
+          <h2 class="font-hero text-3xl sm:text-4xl text-white leading-none">ELIMINATORIAS</h2>
+        </header>
         <KnockoutBracketView matches={koMatches} hoursConfirmed={tournament.hoursConfirmed} />
-      </div>
+      </section>
     )}
   </div>
 </Main>

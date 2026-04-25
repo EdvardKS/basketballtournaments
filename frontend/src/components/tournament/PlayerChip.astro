@@ -1,0 +1,53 @@
+---
+import { POSITION_LABEL, overallColor } from "../../lib/display.js";
+
+interface Props {
+  player: {
+    id: string;
+    name?: string;
+    avatar?: string | null;
+    position: string;
+    overall: number;
+  };
+  authenticated?: boolean;
+  accent?: string;
+  size?: "sm" | "md";
+}
+const { player, authenticated = false, accent = "#ff6b00", size = "md" } = Astro.props;
+
+const display = authenticated && player.name
+  ? player.name.split(" ").slice(0, 2).map((w) => w[0]?.toUpperCase()).join("")
+  : `J${player.overall}`;
+
+const fullLabel = authenticated && player.name ? player.name : `Jugador ${player.overall}`;
+const positionLabel = POSITION_LABEL[player.position] ?? player.position;
+const ovrCls = overallColor(player.overall);
+
+const dim = size === "sm" ? "w-9 h-9 text-xs" : "w-11 h-11 text-sm";
+---
+<div
+  class:list={[
+    "group relative inline-flex items-center gap-2.5 pl-1 pr-3 py-1 rounded-full border transition-all hover:-translate-y-0.5",
+  ]}
+  style={`background: rgba(255,255,255,0.04); border-color: ${accent}33;`}
+  title={`${fullLabel} · ${positionLabel} · OVR ${player.overall}`}
+>
+  {player.avatar ? (
+    <img
+      src={player.avatar}
+      alt={fullLabel}
+      class:list={[dim, "rounded-full object-cover border-2"]}
+      style={`border-color: ${accent}99; box-shadow: 0 0 10px ${accent}55;`}
+    />
+  ) : (
+    <span
+      class:list={[dim, "rounded-full flex items-center justify-center font-hero leading-none border-2"]}
+      style={`background: ${accent}22; border-color: ${accent}99; color:#fff; box-shadow: 0 0 10px ${accent}55;`}
+      aria-hidden="true"
+    >{display}</span>
+  )}
+  <div class="leading-tight">
+    <p class="text-[10px] uppercase tracking-widest text-court-muted">{positionLabel}</p>
+    <p class:list={["font-hero text-base leading-none tabular-nums", ovrCls]}>{player.overall}</p>
+  </div>
+</div>

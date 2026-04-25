@@ -1,0 +1,37 @@
+---
+import { api, getCookieHeader } from "../../lib/api.js";
+import type { DraftState } from "../../lib/types.js";
+import DraftLiveStatus from "../../islands/tournament/DraftLiveStatus.js";
+
+interface Props { tournamentId: string; authenticated?: boolean }
+const { tournamentId, authenticated = false } = Astro.props;
+
+const cookie = getCookieHeader(Astro.request);
+
+interface DraftPlayer { id: string; name?: string; avatar: string | null; position: string; overall: number }
+interface DraftTeam { id: string; name: string; logo: string | null; description: string | null; players: DraftPlayer[] }
+interface DraftPayload {
+  state: DraftState;
+  teams: DraftTeam[];
+  currentTeamId: string | null;
+  availablePlayers: DraftPlayer[];
+}
+
+let initial: DraftPayload | null = null;
+try {
+  initial = await api<DraftPayload>(`/draft/${tournamentId}/state`, {}, cookie);
+} catch { /* not started yet */ }
+---
+<section>
+  <header class="flex items-end justify-between flex-wrap gap-3 mb-5">
+    <div>
+      <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-red)] font-bold mb-2 animate-flicker">Sala de Draft</p>
+      <h2 class="font-hero text-3xl sm:text-4xl text-white leading-none">RETRANSMISIÓN <span class="text-neon-red">EN VIVO</span></h2>
+    </div>
+    <p class="text-court-muted text-sm max-w-md">
+      Los capitanes están eligiendo plantilla. La sala se actualiza cada 5 segundos.
+    </p>
+  </header>
+
+  <DraftLiveStatus client:load tournamentId={tournamentId} initial={initial} authenticated={authenticated} />
+</section>

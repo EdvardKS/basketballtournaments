@@ -1,0 +1,136 @@
+---
+import type { TeamWithPlayers, Player } from "../../lib/types.js";
+import { teamAccent } from "../../lib/teamColors.js";
+import PlayerChip from "./PlayerChip.astro";
+
+interface Props {
+  team: TeamWithPlayers;
+  authenticated?: boolean;
+  captainPlayer?: Pick<Player, "id" | "name"> | null;
+  rosterTarget?: number;
+  index?: number;
+  isPicking?: boolean;
+}
+const { team, authenticated = false, captainPlayer, rosterTarget = 3, index = 0, isPicking = false } = Astro.props;
+
+const accent = teamAccent(team.id);
+const filled = team.players.length;
+const total = Math.max(rosterTarget, filled);
+const pct = total === 0 ? 0 : Math.round((filled / total) * 100);
+const initial = team.name.charAt(0).toUpperCase();
+
+const STATUS_LABEL =
+  filled === 0          ? "Sin jugadores"  :
+  filled < rosterTarget ? "Reclutando"     :
+  filled === rosterTarget ? "Roster completo" :
+                          "Plantilla extendida";
+---
+<article
+  class:list={[
+    "group relative rounded-2xl border overflow-hidden transition-all duration-300 animate-slide-up",
+    "hover:-translate-y-1",
+  ]}
+  style={`
+    --accent:${accent.color};
+    background: linear-gradient(160deg, ${accent.soft} 0%, rgba(20,26,44,0.85) 55%, rgba(20,26,44,0.95) 100%);
+    border-color: ${accent.color}33;
+    animation-delay: ${Math.min(index, 8) * 90}ms;
+  `}
+>
+  <!-- Hover glow ring -->
+  <div
+    class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-2xl"
+    style={`box-shadow: 0 0 0 1px ${accent.color}aa, 0 0 36px ${accent.color}66;`}
+    aria-hidden="true"
+  />
+  {isPicking && (
+    <div
+      class="absolute inset-0 pointer-events-none rounded-2xl animate-glow"
+      style={`box-shadow: 0 0 0 2px ${accent.color}, 0 0 38px ${accent.color}aa;`}
+      aria-hidden="true"
+    />
+  )}
+
+  <!-- Decorative diagonal stripes -->
+  <div class="absolute inset-x-0 top-0 h-1" style={`background: linear-gradient(90deg, ${accent.color}, transparent);`} aria-hidden="true" />
+
+  <!-- Header -->
+  <div class="relative p-5 flex items-start gap-4">
+    {team.logo ? (
+      <img
+        src={team.logo}
+        alt={team.name}
+        class="w-16 h-16 rounded-xl object-cover border-2"
+        style={`border-color: ${accent.color}99; box-shadow: 0 0 22px ${accent.color}55;`}
+      />
+    ) : (
+      <div
+        class="w-16 h-16 rounded-xl flex items-center justify-center font-hero text-4xl text-white border-2 leading-none shrink-0"
+        style={`background: linear-gradient(135deg, ${accent.color}, ${accent.color}80); border-color: ${accent.color}; box-shadow: 0 0 22px ${accent.color}55, inset 0 1px 0 rgba(255,255,255,0.2);`}
+        aria-hidden="true"
+      >{initial}</div>
+    )}
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2 mb-1">
+        <p class="text-[10px] uppercase tracking-[0.3em] font-bold" style={`color:${accent.color};`}>Franquicia</p>
+        {isPicking && (
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] uppercase tracking-widest font-bold text-white animate-glow" style={`background:${accent.color}; box-shadow: 0 0 12px ${accent.color}aa;`}>
+            <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+            Eligiendo
+          </span>
+        )}
+      </div>
+      <h3 class="font-hero text-2xl text-white leading-none truncate">{team.name}</h3>
+      {captainPlayer && (
+        <p class="text-xs text-court-muted mt-1 truncate">
+          <span class="text-white/40">CAP·</span> {authenticated ? captainPlayer.name : "***"}
+        </p>
+      )}
+    </div>
+  </div>
+
+  <!-- Style of play / description -->
+  {team.description && (
+    <p class="relative px-5 pb-3 text-xs text-court-muted line-clamp-2 italic">
+      "{team.description}"
+    </p>
+  )}
+
+  <!-- Roster -->
+  <div class="relative px-5 pb-5">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-[10px] uppercase tracking-[0.25em] text-court-muted font-semibold">Roster</span>
+      <span class="text-xs font-bold tabular-nums" style={`color:${accent.color};`}>
+        {filled}<span class="text-white/30">/{total}</span>
+      </span>
+    </div>
+
+    <!-- Roster fill bar -->
+    <div class="h-1 rounded-full bg-white/5 overflow-hidden mb-3">
+      <div
+        class="h-full rounded-full"
+        style={`width:${pct}%; background: linear-gradient(90deg, ${accent.color}, ${accent.color}80); box-shadow: 0 0 10px ${accent.color}aa;`}
+      />
+    </div>
+
+    {team.players.length > 0 ? (
+      <div class="flex flex-wrap gap-2">
+        {team.players.map((p) => (
+          <PlayerChip player={p} authenticated={authenticated} accent={accent.color} size="sm" />
+        ))}
+      </div>
+    ) : (
+      <p class="text-xs text-court-muted/70 italic">Aún sin jugadores asignados.</p>
+    )}
+
+    <div class="flex items-center justify-between mt-4 pt-3 border-t border-white/5">
+      <span class="text-[10px] uppercase tracking-[0.25em] text-court-muted">{STATUS_LABEL}</span>
+      {team.whatsappLink && authenticated && (
+        <a
+          href={team.whatsappLink} target="_blank" rel="noopener"
+          class="text-[10px] uppercase tracking-widest font-semibold text-court-ok hover:text-white transition-colors"
+        >WhatsApp →</a>
+      )}
+    </div>
+  </div>
+</article>

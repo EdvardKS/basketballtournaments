@@ -1,0 +1,142 @@
+---
+import type { Tournament, TournamentStatus } from "../../lib/types.js";
+import { computeEffectiveStatus, formatDate } from "../../lib/display.js";
+
+interface Props {
+  tournament: Tournament;
+  effective?: TournamentStatus;
+  liveMessage?: string | null;
+}
+const { tournament: t, effective, liveMessage } = Astro.props;
+const eff: TournamentStatus = effective ?? computeEffectiveStatus(t);
+
+const STATUS_LABEL: Record<TournamentStatus, string> = {
+  upcoming:  "PRÓXIMO TORNEO",
+  open:      "INSCRIPCIONES ABIERTAS",
+  draft:     "DRAFT EN VIVO",
+  setup:     "PREPARANDO TORNEO",
+  scheduled: "PROGRAMADO",
+  active:    "TORNEO EN JUEGO",
+  completed: "FINALIZADO",
+};
+
+const STATUS_TONE: Record<TournamentStatus, { color: string; live: boolean }> = {
+  upcoming:  { color: "#0066ff", live: false },
+  open:      { color: "#ff6b00", live: true  },
+  draft:     { color: "#ff2d2d", live: true  },
+  setup:     { color: "#0066ff", live: false },
+  scheduled: { color: "#0066ff", live: false },
+  active:    { color: "#ff2d2d", live: true  },
+  completed: { color: "#a0a7b8", live: false },
+};
+
+const tone = STATUS_TONE[eff];
+const dateLabel = formatDate(t.matchDate ?? t.date);
+
+const particles = Array.from({ length: 12 }, (_, i) => ({
+  left: (i * 71 + 13) % 100,
+  delay: (i * 0.6) % 5,
+  dur: 6 + ((i * 1.1) % 4),
+  variant: i % 3 === 0 ? "blue" : i % 4 === 0 ? "red" : "",
+}));
+---
+<section class="relative overflow-hidden">
+  <!-- Background gradient -->
+  <div
+    class="absolute inset-0 animate-gradient-shift -z-10"
+    style="background: linear-gradient(135deg, #000 0%, #0b0f1a 45%, #1a0500 100%);"
+    aria-hidden="true"
+  />
+
+  <!-- Court SVG -->
+  <div class="absolute inset-0 pointer-events-none select-none opacity-[0.07] -z-10" aria-hidden="true">
+    <svg class="w-full h-full" viewBox="0 0 800 360" preserveAspectRatio="xMidYMid slice">
+      <line x1="400" y1="0" x2="400" y2="360" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <circle cx="400" cy="180" r="60" fill="none" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <rect x="80" y="100" width="120" height="160" fill="none" stroke="#ff6b00" stroke-width="2" class="court-line" />
+      <rect x="600" y="100" width="120" height="160" fill="none" stroke="#0066ff" stroke-width="2" class="court-line" />
+    </svg>
+  </div>
+
+  <!-- Glow orbs -->
+  <div
+    class="absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full opacity-25 blur-3xl pointer-events-none -z-10"
+    style={`background:${tone.color};`}
+    aria-hidden="true"
+  />
+  <div class="absolute -bottom-32 -right-32 w-[24rem] h-[24rem] rounded-full opacity-20 blur-3xl pointer-events-none -z-10" style="background:#0066ff;" aria-hidden="true" />
+
+  <!-- Particles -->
+  <div class="absolute inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
+    {particles.map((p) => (
+      <span
+        class:list={["particle", p.variant]}
+        style={`left:${p.left}%; bottom:-10px; animation-delay:${p.delay}s; animation-duration:${p.dur}s;`}
+      />
+    ))}
+  </div>
+
+  <!-- Vignette -->
+  <div
+    class="absolute inset-0 pointer-events-none -z-10"
+    style="background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.85) 100%);"
+    aria-hidden="true"
+  />
+
+  <div class="relative max-w-7xl mx-auto px-4 py-12 sm:py-16">
+    <!-- Status badge -->
+    <div class="animate-slide-up" style="animation-delay: 0ms;">
+      <span
+        class:list={[
+          "inline-flex items-center gap-2 px-4 py-2 rounded-full border text-xs sm:text-sm font-bold uppercase tracking-[0.25em] text-white",
+          tone.live && "animate-glow",
+        ]}
+        style={`background: ${tone.color}1A; border-color: ${tone.color}80; box-shadow: 0 0 22px ${tone.color}66;`}
+      >
+        {tone.live && (
+          <span class="relative flex w-2.5 h-2.5">
+            <span class="absolute inline-flex h-full w-full rounded-full opacity-70 animate-ping" style={`background:${tone.color};`}></span>
+            <span class="relative inline-flex rounded-full w-2.5 h-2.5" style={`background:${tone.color};`}></span>
+          </span>
+        )}
+        {STATUS_LABEL[eff]}
+      </span>
+    </div>
+
+    <!-- Title -->
+    <h1
+      class="font-hero text-white leading-[0.85] mt-6 animate-slide-up"
+      style="animation-delay: 120ms; font-size: clamp(2.75rem, 9vw, 6.5rem);"
+    >
+      {t.name}
+    </h1>
+
+    {liveMessage && (
+      <p class="mt-4 text-court-muted text-base sm:text-lg max-w-2xl animate-slide-up" style="animation-delay: 220ms;">
+        {liveMessage}
+      </p>
+    )}
+
+    <!-- Info chips -->
+    <div class="mt-6 flex flex-wrap gap-3 animate-slide-up" style="animation-delay: 320ms;">
+      <span class="glass inline-flex items-center gap-2 px-4 py-2 text-sm text-white">
+        <svg class="w-4 h-4 text-[var(--color-neon-orange)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        {dateLabel}
+      </span>
+      <span class="glass inline-flex items-center gap-2 px-4 py-2 text-sm text-white">
+        <svg class="w-4 h-4 text-[var(--color-neon-orange)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" />
+        </svg>
+        {t.location}
+      </span>
+      <span class="glass inline-flex items-center gap-2 px-4 py-2 text-sm" style={`color:${tone.color};`}>
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+        </svg>
+        {STATUS_LABEL[eff]}
+      </span>
+    </div>
+  </div>
+</section>
