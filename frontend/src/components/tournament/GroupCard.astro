@@ -6,13 +6,16 @@ interface Props {
   group: GroupWithMembers;
   matches: Match[];        // ALL tournament matches; we filter by groupId
   hoursConfirmed?: boolean;
+  isAdmin?: boolean;       // forwards to MatchCard for click-to-edit
 }
-const { group: gw, matches, hoursConfirmed = false } = Astro.props;
+const { group: gw, matches, hoursConfirmed = false, isAdmin = false } = Astro.props;
 const { group, members } = gw;
-const groupMatches = matches.filter((m) => m.stage === "group" && m.groupId === group.id);
-const played = groupMatches.filter((m) => m.status === "completed").length;
+const groupMatches: Match[] = matches.filter((m: Match) => m.stage === "group" && m.groupId === group.id);
+const played = groupMatches.filter((m: Match) => m.status === "completed").length;
 const total = groupMatches.length;
-const inProgress = groupMatches.some((m) => m.status === "in_progress");
+const inProgress = groupMatches.some((m: Match) => m.status === "in_progress");
+
+type GroupMember = (typeof members)[number];
 ---
 <article class="glass p-5 sm:p-6 animate-slide-up">
   <header class="flex items-end justify-between mb-4 gap-3">
@@ -48,7 +51,7 @@ const inProgress = groupMatches.some((m) => m.status === "in_progress");
         </tr>
       </thead>
       <tbody class="divide-y divide-white/5">
-        {members.map((m, i) => {
+        {members.map((m: GroupMember, i: number) => {
           const isLeader = i === 0 && m.gamesPlayed > 0;
           const qualifies = i < 2; // top 2 typically advance
           return (
@@ -93,8 +96,8 @@ const inProgress = groupMatches.some((m) => m.status === "in_progress");
     <div class="mt-5 pt-5 border-t border-white/5">
       <p class="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-3">Partidos del grupo</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {groupMatches.map((m) => (
-          <MatchCard match={m} hoursConfirmed={hoursConfirmed} />
+        {groupMatches.map((m: Match) => (
+          <MatchCard match={m} hoursConfirmed={hoursConfirmed} isAdmin={isAdmin} />
         ))}
       </div>
     </div>

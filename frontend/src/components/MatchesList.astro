@@ -2,8 +2,8 @@
 import type { Match } from "../lib/types.js";
 import MatchCard from "./MatchCard.astro";
 
-interface Props { matches: Match[]; hoursConfirmed?: boolean; groupId?: string | null }
-const { matches, hoursConfirmed = false, groupId = null } = Astro.props;
+interface Props { matches: Match[]; hoursConfirmed?: boolean; groupId?: string | null; isAdmin?: boolean }
+const { matches, hoursConfirmed = false, groupId = null, isAdmin = false } = Astro.props;
 
 // When a groupId is passed, narrow to that single group's matches before
 // stage-grouping. Lets GroupCard reuse this list filtered to its own group.
@@ -27,7 +27,7 @@ const STAGE_ORDER = ["group","quarterfinal","semifinal","third_place","final"];
         <h3 class="font-display text-xl text-white mb-3">{STAGE_LABEL[stage] ?? stage}</h3>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {byStage[stage].map((m: Match) => (
-            <MatchCard match={m} hoursConfirmed={hoursConfirmed} />
+            <MatchCard match={m} hoursConfirmed={hoursConfirmed} isAdmin={isAdmin} />
           ))}
         </div>
       </div>

@@ -141,11 +141,11 @@ const liveMessage =
               <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-red)] font-bold mb-2">Bracket</p>
               <h2 class="font-hero text-3xl sm:text-4xl text-white leading-none">ELIMINATORIAS</h2>
             </header>
-            <KnockoutBracketView matches={koMatches} hoursConfirmed={tournament.hoursConfirmed} />
+            <KnockoutBracketView matches={koMatches} hoursConfirmed={tournament.hoursConfirmed} isAdmin={isAdmin} />
           </section>
         )}
         {groups.length > 0 && (
-          <GroupsBlock groups={groups} matches={matches} hoursConfirmed={tournament.hoursConfirmed} variant="secondary" collapsed />
+          <GroupsBlock groups={groups} matches={matches} hoursConfirmed={tournament.hoursConfirmed} variant="secondary" collapsed isAdmin={isAdmin} />
         )}
         <section>
           <header class="mb-5">
@@ -165,10 +165,10 @@ const liveMessage =
             <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-red)] font-bold mb-2">Sin margen</p>
             <h2 class="font-hero text-3xl sm:text-4xl text-white leading-none">ELIMINATORIAS <span class="text-neon-red">EN VIVO</span></h2>
           </header>
-          <KnockoutBracketView matches={koMatches} hoursConfirmed={tournament.hoursConfirmed} />
+          <KnockoutBracketView matches={koMatches} hoursConfirmed={tournament.hoursConfirmed} isAdmin={isAdmin} />
         </section>
         {groups.length > 0 && (
-          <GroupsBlock groups={groups} matches={matches} hoursConfirmed={tournament.hoursConfirmed} variant="secondary" collapsed />
+          <GroupsBlock groups={groups} matches={matches} hoursConfirmed={tournament.hoursConfirmed} variant="secondary" collapsed isAdmin={isAdmin} />
         )}
         <section>
           <header class="mb-5">
@@ -184,7 +184,7 @@ const liveMessage =
     {phase === "groups" && (
       <>
         {groups.length > 0 && (
-          <GroupsBlock groups={groups} matches={matches} hoursConfirmed={tournament.hoursConfirmed} variant="lead" />
+          <GroupsBlock groups={groups} matches={matches} hoursConfirmed={tournament.hoursConfirmed} variant="lead" isAdmin={isAdmin} />
         )}
         <section>
           <header class="mb-5">

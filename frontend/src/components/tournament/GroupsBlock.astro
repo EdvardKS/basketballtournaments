@@ -8,8 +8,9 @@ interface Props {
   hoursConfirmed?: boolean;
   collapsed?: boolean;             // when true, wraps content in <details>
   variant?: "lead" | "secondary";  // visual emphasis
+  isAdmin?: boolean;               // forwards to MatchCard for click-to-edit
 }
-const { groups, matches, hoursConfirmed = false, collapsed = false, variant = "lead" } = Astro.props;
+const { groups, matches, hoursConfirmed = false, collapsed = false, variant = "lead", isAdmin = false } = Astro.props;
 
 if (groups.length === 0) return null;
 
@@ -29,7 +30,7 @@ const eyebrow = variant === "lead" ? "Fase de grupos" : "Clasificación final de
         </svg>
       </summary>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {groups.map((g) => <GroupCard group={g} matches={matches} hoursConfirmed={hoursConfirmed} />)}
+        {groups.map((g: GroupWithMembers) => <GroupCard group={g} matches={matches} hoursConfirmed={hoursConfirmed} isAdmin={isAdmin} />)}
       </div>
     </details>
   ) : (
@@ -41,7 +42,7 @@ const eyebrow = variant === "lead" ? "Fase de grupos" : "Clasificación final de
         </h2>
       </header>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {groups.map((g) => <GroupCard group={g} matches={matches} hoursConfirmed={hoursConfirmed} />)}
+        {groups.map((g: GroupWithMembers) => <GroupCard group={g} matches={matches} hoursConfirmed={hoursConfirmed} isAdmin={isAdmin} />)}
       </div>
     </>
   )}

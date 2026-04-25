@@ -1,9 +1,10 @@
 ---
 import type { Match } from "../lib/types.js";
 import { formatTime } from "../lib/display.js";
+import MatchEditOverlay from "../islands/admin/MatchEditOverlay.js";
 
-interface Props { match: Match; hoursConfirmed?: boolean }
-const { match: m, hoursConfirmed = false } = Astro.props;
+interface Props { match: Match; hoursConfirmed?: boolean; isAdmin?: boolean }
+const { match: m, hoursConfirmed = false, isAdmin = false } = Astro.props;
 
 const STATUS_BG: Record<string, string> = {
   pending: "border-court-border",
@@ -17,9 +18,11 @@ const hasScore = m.homeScore != null || m.awayScore != null;
 const needsFinalize = hasScore && m.status !== "completed";
 ---
 <div class:list={[
-  "card border transition-all",
+  "card border transition-all relative",
   needsFinalize ? "border-court-warn/60" : (STATUS_BG[m.status] ?? "border-court-border"),
+  isAdmin && "hover:border-[var(--color-neon-orange)]/60 hover:shadow-[0_0_22px_rgba(255,107,0,0.35)]",
 ]}>
+  {isAdmin && <MatchEditOverlay match={m} client:visible />}
   {m.status === "in_progress" && (
     <div class="flex items-center gap-2 mb-2">
       <span class="w-2 h-2 rounded-full bg-court-accent animate-pulse" />
