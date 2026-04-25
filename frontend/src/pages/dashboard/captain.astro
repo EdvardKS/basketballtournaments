@@ -63,6 +63,7 @@ const isDraft = active?.status === "draft";
             <DraftBoard
               tournamentId={active.id}
               myTeamId={myTeam?.id ?? null}
+              teamSize={active.teamSize}
               client:load
             />
           </div>

@@ -11,9 +11,14 @@ interface DraftTeam {
   whatsappLink?: string | null;
   players: AvailablePlayer[];
 }
-interface Props { tournamentId: string; myTeamId: string | null; isAdmin?: boolean }
+interface Props {
+  tournamentId: string;
+  myTeamId: string | null;
+  teamSize: number;
+  isAdmin?: boolean;
+}
 
-export default function DraftBoard({ tournamentId, myTeamId, isAdmin }: Props) {
+export default function DraftBoard({ tournamentId, myTeamId, teamSize, isAdmin }: Props) {
   const [state, setState] = useState<DraftState | null>(null);
   const [available, setAvailable] = useState<AvailablePlayer[]>([]);
   const [teams, setTeams] = useState<DraftTeam[]>([]);
@@ -21,6 +26,10 @@ export default function DraftBoard({ tournamentId, myTeamId, isAdmin }: Props) {
   const [selectedPlayer, setSelectedPlayer] = useState<AvailablePlayer | null>(null);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Admin-only: when true, the admin is "acting as" the captain whose turn it
+  // is. Toggled on by clicking the team name in DraftStatusBar; reset after
+  // every successful pick so the admin must opt in for each one.
+  const [actingAsCaptain, setActingAsCaptain] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -42,30 +51,47 @@ export default function DraftBoard({ tournamentId, myTeamId, isAdmin }: Props) {
   }, [state?.isActive, load]);
 
   const pick = async () => {
-    if (!selectedPlayer || !myTeamId) return;
+    if (!selectedPlayer) return;
+    // Pick goes to whichever team's turn it is. The backend already validates
+    // that for non-admins teamId must match currentTeamId; admins bypass it.
+    const teamId = currentTeamId;
+    if (!teamId) return;
     setPicking(true); setError(null);
     try {
-      const activeTeam = isAdmin ? currentTeamId : myTeamId;
       await api(`/draft/${tournamentId}/pick`, {
         method: "POST",
-        body: JSON.stringify({ teamId: activeTeam, playerId: selectedPlayer.id }),
+        body: JSON.stringify({ teamId, playerId: selectedPlayer.id }),
       });
       setSelectedPlayer(null);
+      setActingAsCaptain(false);  // require explicit re-opt-in for next pick
       await load();
     } catch (e) {
       setError(e instanceof ApiError ? e.code : "Error al fichar");
     } finally { setPicking(false); }
   };
 
-  const myTeam = teams.find((t) => t.id === myTeamId) ?? (isAdmin && teams[0]) ?? null;
-  const currentTeamName = teams.find((t) => t.id === currentTeamId)?.name;
-  const canPick = state?.isActive === true && (isAdmin || currentTeamId === myTeamId);
+  const myTeam = teams.find((t) => t.id === myTeamId) ?? null;
+  const isMyTurn = !!myTeamId && currentTeamId === myTeamId;
+  const canPick = state?.isActive === true && (
+    isMyTurn ||
+    (isAdmin === true && actingAsCaptain && currentTeamId !== null)
+  );
 
   return (
     <div className="space-y-4">
       {error && <div className="chip bg-court-danger/20 text-court-danger w-full justify-center py-2 rounded-lg">{error}</div>}
 
-      <DraftStatusBar state={state} myTeamId={myTeamId} currentTeamId={currentTeamId} currentTeamName={currentTeamName} />
+      <DraftStatusBar
+        state={state}
+        teams={teams}
+        teamSize={teamSize}
+        myTeamId={myTeamId}
+        currentTeamId={currentTeamId}
+        isAdmin={isAdmin}
+        actingAsCaptain={actingAsCaptain}
+        onPickAsCurrent={() => setActingAsCaptain(true)}
+        onStopActing={() => setActingAsCaptain(false)}
+      />
 
       {state?.isActive && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
