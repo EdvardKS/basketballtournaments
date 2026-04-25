@@ -41,26 +41,17 @@ const formatError = (e: unknown, fallback: string): string => {
   return fallback;
 };
 
-const isAuthError = (e: unknown): boolean =>
-  e instanceof ApiError && (e.status === 401 || e.status === 403);
 
 export default function MatchEditOverlay({ match }: Props) {
   const [open, setOpen] = useState(false);
   const [home, setHome] = useState<number>(match.homeScore ?? 0);
   const [away, setAway] = useState<number>(match.awayScore ?? 0);
-  const [busy, setBusy] = useState<null | "complete" | "recompute" | "logout">(null);
-  const [feedback, setFeedback] = useState<{ kind: "ok" | "err"; msg: string; auth?: boolean } | null>(null);
+  const [busy, setBusy] = useState<null | "complete" | "recompute">(null);
+  const [feedback, setFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
 
-  const flash = (kind: "ok" | "err", msg: string, auth = false) => {
-    setFeedback({ kind, msg, auth });
+  const flash = (kind: "ok" | "err", msg: string) => {
+    setFeedback({ kind, msg });
     if (kind === "ok") setTimeout(() => setFeedback(null), 2500);
-  };
-
-  const logoutAndRelogin = async () => {
-    setBusy("logout");
-    try { await api("/auth/logout", { method: "POST" }); } catch { /* ignore */ }
-    const here = window.location.pathname + window.location.search;
-    window.location.href = `/login?next=${encodeURIComponent(here)}`;
   };
 
   const close = () => {
@@ -88,7 +79,7 @@ export default function MatchEditOverlay({ match }: Props) {
       // Surface the real error (HTTP status + code) so 403 / 401 / VALIDATION
       // reach the admin instead of an opaque "UNKNOWN_ERROR".
       console.error("[finalize match]", e);
-      flash("err", formatError(e, "Error al finalizar"), isAuthError(e));
+      flash("err", formatError(e, "Error al finalizar"));
       setBusy(null);
     }
   };
@@ -109,7 +100,7 @@ export default function MatchEditOverlay({ match }: Props) {
       setTimeout(() => window.location.reload(), 700);
     } catch (e) {
       console.error("[recompute standings]", e);
-      flash("err", formatError(e, "Error al recalcular"), isAuthError(e));
+      flash("err", formatError(e, "Error al recalcular"));
       setBusy(null);
     }
   };
@@ -172,19 +163,13 @@ export default function MatchEditOverlay({ match }: Props) {
         )}
 
         {feedback && (
-          <div role="status" className="mb-4 px-3 py-2 rounded-lg text-sm border space-y-2"
+          <div role="status" className="mb-4 px-3 py-2 rounded-lg text-sm border"
                style={{
                  background: feedback.kind === "ok" ? "rgba(62,207,142,0.10)" : "rgba(255,45,45,0.10)",
                  borderColor: feedback.kind === "ok" ? "rgba(62,207,142,0.4)" : "rgba(255,45,45,0.4)",
                  color: feedback.kind === "ok" ? "#3ecf8e" : "#ff6b6b",
                }}>
-            <div>{feedback.msg}</div>
-            {feedback.auth && (
-              <button type="button" onClick={logoutAndRelogin} disabled={busy === "logout"}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] uppercase tracking-widest font-bold text-white bg-[var(--color-neon-red)] hover:scale-[1.03] transition-all disabled:opacity-50">
-                {busy === "logout" ? "Saliendo…" : "↻ Cerrar sesión y volver a entrar"}
-              </button>
-            )}
+            {feedback.msg}
           </div>
         )}
 
