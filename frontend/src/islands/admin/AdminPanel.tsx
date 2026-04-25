@@ -389,14 +389,32 @@ function TabContent({
         </div>
       );
     }
+    // Admin doesn't get the visual bracket here — that's the public tournament
+    // page (KnockoutBracketView, server-rendered). We give the admin the
+    // full-width scoring sheet for KO matches plus a prominent link to the
+    // bracket so the visual lives in one place only.
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5">
-        <div className="glass p-4 sm:p-6">
-          <h3 className="font-hero text-xl text-white mb-4">Bracket</h3>
-          <KoSummary matches={ko} />
+      <div className="space-y-5">
+        <div className="glass p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">Bracket visual</p>
+            <p className="text-white text-sm">
+              {ko.length} partidos de eliminatorias. Edítalos directamente desde el bracket público.
+            </p>
+          </div>
+          <a
+            href={`/tournaments/${tournament.id}`}
+            target="_blank" rel="noopener"
+            className="btn-neon-blue !py-2 !px-4 !text-xs"
+          >
+            Ver bracket completo
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M14 3h7v7M21 3l-9 9M5 5h6M5 19V8" />
+            </svg>
+          </a>
         </div>
-        <div className="glass p-4 sm:p-6 max-w-md">
-          <h3 className="font-hero text-xl text-white mb-4">Marcador rápido (KO)</h3>
+        <div className="glass p-4 sm:p-6">
+          <h3 className="font-hero text-xl text-white mb-4">Marcador rápido (eliminatorias)</h3>
           <QuickScoreSheet matches={ko} tournamentId={tournament.id} />
         </div>
       </div>
@@ -535,32 +553,3 @@ function GroupSummaryCard({ group: g, matches }: { group: GroupWithMembers; matc
   );
 }
 
-function KoSummary({ matches }: { matches: Match[] }) {
-  const STAGE_ORDER = ["quarterfinal", "semifinal", "third_place", "final"] as const;
-  const STAGE_LABEL: Record<string, string> = {
-    quarterfinal: "Cuartos", semifinal: "Semis", third_place: "3er puesto", final: "Final",
-  };
-  return (
-    <div className="space-y-4">
-      {STAGE_ORDER.map((stage) => {
-        const list = matches.filter((m) => m.stage === stage);
-        if (list.length === 0) return null;
-        return (
-          <div key={stage}>
-            <p className="text-[10px] uppercase tracking-widest text-court-muted font-bold mb-2">{STAGE_LABEL[stage]}</p>
-            <ul className="space-y-2">
-              {list.map((m) => (
-                <li key={m.id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-black/30 border border-white/5">
-                  <span className="text-sm text-white truncate">{m.homeTeamName ?? "?"} vs {m.awayTeamName ?? "?"}</span>
-                  <span className="font-hero text-lg text-white tabular-nums shrink-0">
-                    {m.homeScore ?? "—"}<span className="text-white/30 mx-1">-</span>{m.awayScore ?? "—"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
