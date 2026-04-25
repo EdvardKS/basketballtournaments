@@ -9,51 +9,128 @@ const dashLink = role === "admin" ? "/dashboard/admin"
   : role === "captain" ? "/dashboard/captain"
   : "/dashboard/player";
 
-const ROLE_COLOR: Record<string, string> = {
-  admin:   "chip bg-court-danger/20 text-court-danger",
-  captain: "chip bg-court-gold/20 text-court-gold",
-  player:  "chip bg-court-ok/20 text-court-ok",
+const ROLE_STYLE: Record<string, string> = {
+  admin:   "bg-[var(--color-neon-red)]/15 text-[var(--color-neon-red)] border-[var(--color-neon-red)]/40 shadow-[0_0_12px_rgba(255,45,45,0.45)]",
+  captain: "bg-court-gold/15 text-court-gold border-court-gold/40 shadow-[0_0_12px_rgba(245,197,24,0.45)]",
+  player:  "bg-[var(--color-neon-blue)]/15 text-[var(--color-neon-blue)] border-[var(--color-neon-blue)]/40 shadow-[0_0_12px_rgba(0,102,255,0.45)]",
 };
 const ROLE_LABEL: Record<string, string> = {
   admin: "Admin", captain: "Capitán", player: "Jugador",
 };
 ---
-<header class="sticky top-0 z-50 border-b border-court-border bg-court-dark/90 backdrop-blur-md">
-  <nav class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-    <!-- Logo -->
-    <a href="/" class="flex items-center gap-2 shrink-0">
-      <div class="w-8 h-8 rounded-full bg-court-accent flex items-center justify-center text-white font-display font-bold text-lg leading-none">V</div>
-      <span class="font-display text-xl font-semibold tracking-wide hidden sm:block">VBL</span>
-    </a>
+<header class="sticky top-0 z-50">
+  <!-- Glass + neon border bar -->
+  <div
+    class="relative border-b border-white/10"
+    style="background: linear-gradient(180deg, rgba(11,15,26,0.85) 0%, rgba(11,15,26,0.55) 100%); backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);"
+  >
+    <!-- Neon underline -->
+    <div
+      class="absolute bottom-0 left-0 right-0 h-px pointer-events-none"
+      style="background: linear-gradient(90deg, transparent 0%, rgba(255,107,0,0.55) 25%, rgba(255,45,45,0.55) 50%, rgba(0,102,255,0.55) 75%, transparent 100%);"
+      aria-hidden="true"
+    />
 
-    <!-- Center nav -->
-    <div class="flex items-center gap-1">
-      <a href="/" class="btn-ghost text-xs px-3 py-1.5">Inicio</a>
-      <a href="/docs" class="btn-ghost text-xs px-3 py-1.5">Bases</a>
-    </div>
+    <nav class="relative max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+      <!-- Logo -->
+      <a href="/" class="flex items-center gap-3 shrink-0 group">
+        <div
+          class="w-9 h-9 rounded-lg flex items-center justify-center font-hero text-xl leading-none text-white border transition-all group-hover:scale-105"
+          style="background: linear-gradient(135deg, #ff6b00 0%, #ff2d2d 100%); border-color: rgba(255,107,0,0.5); box-shadow: 0 0 18px rgba(255,107,0,0.55), inset 0 1px 0 rgba(255,255,255,0.25);"
+        >V</div>
+        <div class="hidden sm:flex flex-col leading-none">
+          <span class="font-hero text-xl tracking-[0.15em] text-white">VBL</span>
+          <span class="text-[9px] uppercase tracking-[0.3em] text-court-muted mt-0.5">Villena Basket</span>
+        </div>
+      </a>
 
-    <!-- Auth -->
-    <div class="flex items-center gap-2 shrink-0">
-      {player ? (
-        <>
-          {role && <span class={ROLE_COLOR[role]}>{ROLE_LABEL[role]}</span>}
-          <a href={dashLink} class="btn-ghost text-xs px-3 py-1.5">Mi Panel</a>
-          <button id="btn-logout" type="button" class="btn-ghost text-xs px-3 py-1.5 text-court-danger border-court-danger/30">
-            Salir
-          </button>
-          <script>
-            document.getElementById("btn-logout")?.addEventListener("click", async () => {
-              await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
-              window.location.href = "/";
-            });
-          </script>
-        </>
-      ) : (
-        <>
-          <a href="/login" class="btn-ghost text-xs px-3 py-1.5">Iniciar sesión</a>
-          <a href="/register" class="btn-primary text-xs px-3 py-1.5">Registrarse</a>
-        </>
-      )}
-    </div>
-  </nav>
+      <!-- Center nav -->
+      <div class="hidden md:flex items-center gap-1">
+        <a href="/" class="nav-link">Inicio</a>
+        <a href="/#torneo" class="nav-link">Torneo</a>
+        <a href="/docs" class="nav-link">Bases</a>
+      </div>
+
+      <!-- Auth -->
+      <div class="flex items-center gap-2 shrink-0">
+        {player ? (
+          <>
+            {role && (
+              <span class={`hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${ROLE_STYLE[role]}`}>
+                {ROLE_LABEL[role]}
+              </span>
+            )}
+            <a href={dashLink} class="nav-link">Mi Panel</a>
+            <button
+              id="btn-logout"
+              type="button"
+              class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-[var(--color-neon-red)] border border-[var(--color-neon-red)]/30 hover:bg-[var(--color-neon-red)]/10 hover:shadow-[0_0_14px_rgba(255,45,45,0.45)] transition-all cursor-pointer"
+            >
+              Salir
+            </button>
+            <script>
+              document.getElementById("btn-logout")?.addEventListener("click", async () => {
+                await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+                window.location.href = "/";
+              });
+            </script>
+          </>
+        ) : (
+          <>
+            <a
+              href="/login"
+              class="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-court-muted hover:text-white transition-colors"
+            >
+              Iniciar sesión
+            </a>
+            <a
+              href="/register"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wider text-white transition-all hover:scale-105"
+              style="background: linear-gradient(135deg, #ff6b00 0%, #ff8a1a 100%); box-shadow: 0 0 18px rgba(255,107,0,0.55), inset 0 1px 0 rgba(255,255,255,0.25);"
+            >
+              Inscríbete
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14M13 5l7 7-7 7" />
+              </svg>
+            </a>
+          </>
+        )}
+      </div>
+    </nav>
+  </div>
 </header>
+
+<style>
+  .nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #a0a7b8;
+    border-radius: 0.375rem;
+    transition: color 150ms ease;
+  }
+  .nav-link:hover {
+    color: #fff;
+    text-shadow: 0 0 10px rgba(255,107,0,0.7);
+  }
+  .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 0.15rem;
+    width: 0;
+    height: 1px;
+    background: linear-gradient(90deg, #ff6b00, #ff2d2d);
+    box-shadow: 0 0 8px rgba(255,107,0,0.7);
+    transition: width 200ms ease, left 200ms ease;
+  }
+  .nav-link:hover::after {
+    width: 60%;
+    left: 20%;
+  }
+</style>
