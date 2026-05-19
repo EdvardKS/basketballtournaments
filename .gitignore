@@ -9,6 +9,10 @@ build/
 backend/data/csv/*
 !backend/data/csv/.gitkeep
 
+# E2E test run artefacts (per-iteration logs + findings)
+backend/data/test-runs/*
+!backend/data/test-runs/.gitkeep
+
 # Past-edition photos live in frontend/public/img/photos/ now — tracked
 # in git so docker compose build picks them up via COPY public ./public.
 

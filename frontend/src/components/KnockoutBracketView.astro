@@ -29,6 +29,7 @@ const byStage = (s: string): Match[] => matches.filter((m: Match) => m.stage ===
 const findByRound = (list: Match[], round: number): Match | null =>
   list.find((m) => m.roundNumber === round) ?? null;
 
+const eighths  = byStage("eighth");
 const quarters = byStage("quarterfinal");
 const semis    = byStage("semifinal");
 const finals   = byStage("final");
@@ -43,8 +44,11 @@ const sf2 = findByRound(semis, 2);
 const finalMatch = findByRound(finals, 1);
 const thirdMatch = findByRound(thirds, 1);
 
-const hasKo = quarters.length + semis.length + finals.length + thirds.length > 0;
+const hasKo = eighths.length + quarters.length + semis.length + finals.length + thirds.length > 0;
 const hasQuarters = quarters.length > 0;
+const hasEighths = eighths.length > 0;
+// Eighths sorted by round_number for left→right reading.
+const eighthsSorted = [...eighths].sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0));
 ---
 {!hasKo ? (
   <div class="rounded-xl border border-white/5 bg-court-card/40 p-8 text-center">
@@ -52,6 +56,19 @@ const hasQuarters = quarters.length > 0;
   </div>
 ) : (
   <div class="bracket-root">
+    {hasEighths && (
+      <section class="mb-8">
+        <header class="mb-3">
+          <p class="text-[10px] uppercase tracking-[0.4em] text-[var(--color-neon-orange)] font-bold mb-1">Octavos de final</p>
+          <p class="text-sm text-court-muted">Ronda previa al cuadro principal · ganadores avanzan a cuartos.</p>
+        </header>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {eighthsSorted.map((m: Match) => (
+            <BracketMatch match={m} isAdmin={isAdmin} size="sm" />
+          ))}
+        </div>
+      </section>
+    )}
     {/* The whole bracket scrolls horizontally on mobile; on desktop the grid
         fits naturally inside the page width. */}
     <div class="overflow-x-auto pb-4 -mx-4 px-4 lg:mx-0 lg:px-0">

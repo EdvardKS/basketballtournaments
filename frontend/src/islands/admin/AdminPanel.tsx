@@ -6,6 +6,7 @@ import { derivePhase, type TournamentPhase } from "../../lib/tournamentPhase.js"
 import Modal from "./Modal.js";
 import InscripcionesTab, { type Registration } from "./InscripcionesTab.js";
 import QuickScoreSheet from "./QuickScoreSheet.js";
+import MatchEditOverlay from "./MatchEditOverlay.js";
 import TournamentForm from "../TournamentForm.js";
 import DraftBoard from "../DraftBoard.js";
 import AdminScheduleConfirm from "../AdminScheduleConfirm.js";
@@ -382,45 +383,8 @@ function TabContent({
   }
 
   if (tab === "eliminatorias") {
-    const ko = matches.filter((m) => m.stage !== "group");
-    if (ko.length === 0) {
-      return (
-        <div className="glass p-10 text-center">
-          <p className="text-5xl mb-3">🥊</p>
-          <p className="text-white font-hero text-2xl">Bracket no generado todavía</p>
-          <p className="text-court-muted text-sm mt-2">Se crea automáticamente al cerrar el último partido de grupos.</p>
-        </div>
-      );
-    }
-    // Admin doesn't get the visual bracket here — that's the public tournament
-    // page (KnockoutBracketView, server-rendered). We give the admin the
-    // full-width scoring sheet for KO matches plus a prominent link to the
-    // bracket so the visual lives in one place only.
     return (
-      <div className="space-y-5">
-        <div className="glass p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">Bracket visual</p>
-            <p className="text-white text-sm">
-              {ko.length} partidos de eliminatorias. Edítalos directamente desde el bracket público.
-            </p>
-          </div>
-          <a
-            href={`/tournaments/${tournament.id}`}
-            target="_blank" rel="noopener"
-            className="btn-neon-blue !py-2 !px-4 !text-xs"
-          >
-            Ver bracket completo
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M14 3h7v7M21 3l-9 9M5 5h6M5 19V8" />
-            </svg>
-          </a>
-        </div>
-        <div className="glass p-4 sm:p-6">
-          <h3 className="font-hero text-xl text-white mb-4">Marcador rápido (eliminatorias)</h3>
-          <QuickScoreSheet matches={ko} tournamentId={tournament.id} />
-        </div>
-      </div>
+      <AdminBracketEditor tournament={tournament} matches={matches} onChange={onChange} />
     );
   }
 
@@ -510,6 +474,125 @@ function TabContent({
         onSaved={onTournamentSaved}
         onCancel={onChange}
       />
+    </div>
+  );
+}
+
+// --- Admin bracket editor -------------------------------------------------
+// Renders the bracket inline in the Eliminatorias tab, grouped by stage.
+// Every match card carries the existing MatchEditOverlay pencil so the admin
+// can score / finalise / regenerate without leaving the tab. Works for
+// 4 / 8 / 16-team brackets (eighth → quarterfinal → semifinal → final +
+// third place).
+
+const STAGE_ORDER = ["eighth", "quarterfinal", "semifinal", "final", "third_place"] as const;
+const STAGE_TITLES: Record<string, string> = {
+  eighth: "Octavos de final",
+  quarterfinal: "Cuartos de final",
+  semifinal: "Semifinales",
+  final: "Final",
+  third_place: "Tercer puesto",
+};
+
+function BracketMatchCard({ match }: { match: Match }) {
+  const winner = match.winnerId;
+  return (
+    <div className="rounded-xl border border-white/10 bg-court-bg/70 px-3 py-2.5 hover:border-white/20 transition-colors relative">
+      <div className="absolute top-1.5 right-1.5">
+        <MatchEditOverlay match={match} />
+      </div>
+      <div className="flex items-center justify-between gap-2 pr-7">
+        <span className={`flex-1 truncate text-sm ${winner === match.homeTeamId ? "text-white font-semibold" : "text-court-muted"}`}>
+          {match.homeTeamName ?? "TBD"}
+        </span>
+        <span className={`font-display text-lg tabular-nums ${winner === match.homeTeamId ? "text-court-ok" : "text-court-muted"}`}>
+          {match.homeScore ?? "—"}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2 pr-7 mt-1">
+        <span className={`flex-1 truncate text-sm ${winner === match.awayTeamId ? "text-white font-semibold" : "text-court-muted"}`}>
+          {match.awayTeamName ?? "TBD"}
+        </span>
+        <span className={`font-display text-lg tabular-nums ${winner === match.awayTeamId ? "text-court-ok" : "text-court-muted"}`}>
+          {match.awayScore ?? "—"}
+        </span>
+      </div>
+      {match.scheduledAt && (
+        <p className="text-[10px] text-court-muted mt-1.5">
+          {new Date(match.scheduledAt).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+          {" · "}
+          <span className={`uppercase tracking-widest ${
+            match.status === "completed" ? "text-court-ok"
+              : match.status === "in_progress" ? "text-[var(--color-neon-orange)]"
+              : "text-court-muted"
+          }`}>{match.status}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AdminBracketEditor({
+  tournament, matches, onChange: _onChange,
+}: {
+  tournament: Tournament;
+  matches: Match[];
+  onChange: () => void;
+}) {
+  const ko = matches.filter((m) => m.stage !== "group");
+  if (ko.length === 0) {
+    return (
+      <div className="glass p-10 text-center">
+        <p className="text-5xl mb-3">🥊</p>
+        <p className="text-white font-hero text-2xl">Bracket no generado todavía</p>
+        <p className="text-court-muted text-sm mt-2">
+          Se crea automáticamente al cerrar el último partido de la fase de grupos.
+        </p>
+      </div>
+    );
+  }
+
+  const formatLabel = tournament.bracketFormat === "top1_plus_best2_seconds"
+    ? "1º de cada grupo + 2 mejores segundos"
+    : "Top 2 de cada grupo";
+
+  return (
+    <div className="space-y-6">
+      <header className="glass p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">Eliminatorias</p>
+          <p className="text-white text-sm">
+            {ko.length} partidos · formato: <span className="text-white font-semibold">{formatLabel}</span>
+            {tournament.bracketSize ? <> · cuadro fijado a <span className="text-white font-semibold">{tournament.bracketSize}</span></> : <> · cuadro auto</>}
+          </p>
+        </div>
+        <a
+          href={`/tournaments/${tournament.id}`}
+          target="_blank" rel="noopener"
+          className="btn-ghost !py-1.5 !px-3 !text-xs"
+        >
+          Vista pública ↗
+        </a>
+      </header>
+
+      {STAGE_ORDER.map((stage) => {
+        const ms = ko.filter((m) => m.stage === stage)
+          .sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0));
+        if (ms.length === 0) return null;
+        return (
+          <section key={stage} className="glass p-4 sm:p-5">
+            <h3 className="font-hero text-xl text-white mb-3">{STAGE_TITLES[stage]}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {ms.map((m) => <BracketMatchCard key={m.id} match={m} />)}
+            </div>
+          </section>
+        );
+      })}
+
+      <div className="glass p-4 sm:p-6">
+        <h3 className="font-hero text-xl text-white mb-3">Marcador rápido (eliminatorias)</h3>
+        <QuickScoreSheet matches={ko} tournamentId={tournament.id} />
+      </div>
     </div>
   );
 }

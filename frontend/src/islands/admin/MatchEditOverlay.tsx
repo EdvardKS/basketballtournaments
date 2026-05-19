@@ -9,7 +9,7 @@ interface Props { match: Match }
 // Live scoring is tracked off-platform; we only need the closing number.
 
 const STAGE_LABEL: Record<string, string> = {
-  group: "Grupo", quarterfinal: "Cuartos", semifinal: "Semis",
+  group: "Grupo", eighth: "Octavos", quarterfinal: "Cuartos", semifinal: "Semis",
   third_place: "3er puesto", final: "FINAL",
 };
 

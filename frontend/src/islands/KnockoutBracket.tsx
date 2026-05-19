@@ -32,9 +32,9 @@ const MatchBox = ({ match: m, hoursConfirmed }: { match: Match; hoursConfirmed: 
   </div>
 );
 
-const STAGES = ["quarterfinal", "semifinal", "third_place", "final"] as const;
+const STAGES = ["eighth", "quarterfinal", "semifinal", "third_place", "final"] as const;
 const STAGE_LABEL: Record<string, string> = {
-  quarterfinal: "Cuartos", semifinal: "Semis", third_place: "3er/4to", final: "Final",
+  eighth: "Octavos", quarterfinal: "Cuartos", semifinal: "Semis", third_place: "3er/4to", final: "Final",
 };
 
 export default function KnockoutBracket({ tournamentId, initialMatches, hoursConfirmed }: Props) {
