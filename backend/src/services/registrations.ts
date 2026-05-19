@@ -2,6 +2,7 @@
 import { query, queryOne, tx } from "../db/query.js";
 import { HttpError } from "../middleware/error.js";
 import { getTournament } from "./tournaments.js";
+import { exportTournamentRegistrationsCsv } from "./registration-backup.js";
 
 export const listRegistrations = async (tournamentId: string) => {
   return query(
@@ -29,6 +30,7 @@ export const registerForTournament = async (
   const row = await queryOne(
     `INSERT INTO tournament_registrations (tournament_id, player_id)
      VALUES ($1,$2) RETURNING *`, [tournamentId, playerId]);
+  await exportTournamentRegistrationsCsv(tournamentId);
   return row;
 };
 
@@ -45,6 +47,7 @@ export const unregisterFromTournament = async (
   await query(
     "DELETE FROM tournament_registrations WHERE tournament_id=$1 AND player_id=$2",
     [tournamentId, playerId]);
+  await exportTournamentRegistrationsCsv(tournamentId);
   return { ok: true };
 };
 
@@ -75,5 +78,8 @@ export const setCaptain = async (
       }
     }
     return reg[0];
+  }).then(async (result) => {
+    await exportTournamentRegistrationsCsv(tournamentId);
+    return result;
   });
 };

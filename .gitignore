@@ -5,6 +5,10 @@ build/
 .cache/
 .DS_Store
 
+# Runtime backups (CSV exports of tournament registrations)
+backend/data/csv/*
+!backend/data/csv/.gitkeep
+
 # Env files — each service has its own; never commit the real one
 .env
 .env.local

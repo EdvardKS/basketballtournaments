@@ -45,6 +45,7 @@ services:
     volumes:
       - ./db/init:/app/migrations:ro
       - ./db/seeds:/app/seeds:ro
+      - ./backend/data:/app/data
     ports:
       - "4010:4000"
     networks:

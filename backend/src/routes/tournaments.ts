@@ -11,6 +11,7 @@ import {
   unregisterFromTournament, setCaptain,
 } from "../services/registrations.js";
 import { listTeamsForTournament } from "../services/teams.js";
+import { exportTournamentRegistrationsCsv } from "../services/registration-backup.js";
 
 export const tournamentsRouter = Router();
 
@@ -76,6 +77,7 @@ tournamentsRouter.post("/:id/add-player", requireRole("admin"),
           [req.params.id, playerId],
         ));
     }
+    await exportTournamentRegistrationsCsv(req.params.id);
     res.json({ ok: true });
   }));
 
@@ -91,5 +93,6 @@ tournamentsRouter.delete("/:id/players/:playerId", requireRole("admin"),
       "DELETE FROM tournament_registrations WHERE tournament_id=$1 AND player_id=$2",
       [req.params.id, req.params.playerId],
     );
+    await exportTournamentRegistrationsCsv(req.params.id);
     res.json({ ok: true });
   }));
