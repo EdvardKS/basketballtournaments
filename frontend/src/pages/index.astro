@@ -6,6 +6,8 @@ import HowItWorks from "../components/landing/HowItWorks.astro";
 import UrgencyStrip from "../components/landing/UrgencyStrip.astro";
 import StatsSection from "../components/landing/StatsSection.astro";
 import HistorySection from "../components/landing/HistorySection.astro";
+import InstagramPhone from "../islands/InstagramPhone.js";
+import { FEATURED_PHOTOS } from "../lib/gallery.js";
 import { loadSession } from "../lib/session.js";
 import { api, getCookieHeader } from "../lib/api.js";
 import { computeEffectiveStatus } from "../lib/display.js";
@@ -96,4 +98,26 @@ const playersTotal = completed.reduce((acc, t) => acc + (t.maxTeams ?? 0) * (t.t
   )}
 
   <HistorySection tournaments={tournaments} />
+
+  <section class="max-w-7xl mx-auto px-4 py-16 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-center">
+    <div class="space-y-4">
+      <p class="text-[11px] uppercase tracking-[0.3em] text-court-muted font-semibold">
+        Galería · Instagram
+      </p>
+      <h2 class="font-display text-4xl sm:text-5xl text-white">
+        Tres ediciones, una misma fiebre
+      </h2>
+      <p class="text-court-muted max-w-xl">
+        Echa un vistazo a lo vivido en las ediciones I, II y III.
+        Capturas directas de Instagram con comentarios y likes reales.
+      </p>
+      <a href="/galeria" class="btn-primary inline-flex">
+        Ver galería completa
+        <svg class="w-3.5 h-3.5 ml-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14M13 5l7 7-7 7" />
+        </svg>
+      </a>
+    </div>
+    <InstagramPhone photos={FEATURED_PHOTOS} client:load />
+  </section>
 </Main>

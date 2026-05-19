@@ -1,0 +1,78 @@
+---
+import Main from "../layouts/Main.astro";
+import InstagramPhone from "../islands/InstagramPhone.js";
+import { loadSession } from "../lib/session.js";
+import { EDITIONS } from "../lib/gallery.js";
+
+const session = await loadSession(Astro.request);
+
+const selected = Astro.url.searchParams.get("ed") ?? EDITIONS[EDITIONS.length - 1].id;
+const edition = EDITIONS.find((e) => e.id === selected) ?? EDITIONS[EDITIONS.length - 1];
+---
+<Main title="Galería · ediciones pasadas" player={session.player} description="Capturas y momentos de las ediciones anteriores de la Villena Basket League">
+  <section class="max-w-7xl mx-auto px-4 py-10 space-y-8">
+    <header class="space-y-2">
+      <p class="text-[11px] uppercase tracking-[0.3em] text-court-muted font-semibold">
+        Galería · ediciones pasadas
+      </p>
+      <h1 class="font-display text-4xl sm:text-5xl text-white">
+        Lo que se ha vivido en pista
+      </h1>
+      <p class="text-court-muted max-w-2xl text-sm">
+        Tres ediciones de Villena Basket League — capturas de Instagram de cada
+        torneo. Selecciona una edición y desliza entre fotos. Contenido privado:
+        la página y las imágenes no están indexadas.
+      </p>
+    </header>
+
+    <div class="flex flex-wrap gap-2">
+      {EDITIONS.map((e) => (
+        <a
+          href={`/galeria?ed=${e.id}`}
+          class={`chip border ${
+            e.id === edition.id
+              ? "bg-court-accent/15 text-court-accent border-court-accent/40 shadow-[0_0_14px_rgba(255,107,0,0.35)]"
+              : "border-white/10 text-court-muted hover:text-white hover:border-white/30"
+          }`}
+        >
+          <span class="font-display tracking-wider">{e.label}</span>
+          <span class="ml-2 text-[10px] text-court-muted">{e.year}</span>
+          <span class="ml-2 text-[10px]">· {e.photos.length} fotos</span>
+        </a>
+      ))}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-8 items-start">
+      <div class="lg:sticky lg:top-24">
+        <InstagramPhone photos={edition.photos} client:load />
+      </div>
+
+      <div>
+        <h2 class="font-display text-2xl text-white mb-4">
+          {edition.label} · cuadrícula
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {edition.photos.map((p) => (
+            <a
+              href={p.src}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              class="group relative aspect-square overflow-hidden rounded-lg border border-white/5 bg-court-bg"
+            >
+              <img
+                src={p.src}
+                alt={p.alt}
+                loading="lazy"
+                class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <div class="absolute inset-0 flex items-end justify-between p-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/80 to-transparent text-white text-xs">
+                <span>♥ {p.likes}</span>
+                <span>💬 {p.comments.length}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+</Main>

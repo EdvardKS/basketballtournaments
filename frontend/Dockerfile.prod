@@ -10,6 +10,7 @@ RUN pnpm install --frozen-lockfile
 COPY astro.config.mjs tsconfig.json ./
 COPY src ./src
 COPY public ./public
+COPY photos ./photos
 RUN pnpm build
 
 FROM node:20-alpine AS runtime
@@ -22,6 +23,7 @@ COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile --prod && pnpm store prune
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/photos ./photos
 EXPOSE 4321
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 \

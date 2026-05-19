@@ -23,6 +23,22 @@ export default defineConfig({
     plugins: [tailwind()],
     server: {
       watch: { usePolling: true, interval: 300 },
+      // Dev-only: lock Vite's static file serving to /app/src and friends
+      // so a path-traversal URL like /foto/../package.json cannot reach
+      // sensitive files that live at the workspace root.
+      fs: {
+        strict: true,
+        allow: [".", "./src", "./public"],
+        deny: [
+          "**/.env*",
+          "**/package.json",
+          "**/package-lock.json",
+          "**/pnpm-lock.yaml",
+          "**/photos/**",
+          "**/tsconfig*.json",
+          "**/astro.config.*",
+        ],
+      },
     },
   },
 });

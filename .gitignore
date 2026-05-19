@@ -9,6 +9,15 @@ build/
 backend/data/csv/*
 !backend/data/csv/.gitkeep
 
+# Past-edition photos (Instagram screenshots). Big binary blobs — they
+# live next to the repo on each machine instead of inside it. Drop the
+# PNGs into frontend/photos/ before `docker compose build` so the
+# Dockerfile can COPY them into the image. The .gitkeep stays tracked so
+# the dir exists in fresh clones (otherwise the Dockerfile COPY fails).
+frontend/photos/*
+!frontend/photos/.gitkeep
+!frontend/photos/README.md
+
 # Env files — each service has its own; never commit the real one
 .env
 .env.local

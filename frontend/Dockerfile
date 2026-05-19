@@ -10,6 +10,7 @@ RUN pnpm install
 COPY astro.config.mjs tsconfig.json ./
 COPY src ./src
 COPY public ./public
+COPY photos ./photos
 
 EXPOSE 4321
 CMD ["pnpm", "dev"]
