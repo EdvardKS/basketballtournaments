@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex,nofollow,noarchive,nosnippet,noimageindex" />
+<title>Villena Basket League · Cómo funciona la aplicación</title>
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --panel: #141a2c;
+    --panel-2: #1a2138;
+    --border: rgba(255,255,255,0.08);
+    --text: #f1f2f6;
+    --muted: #9aa2b8;
+    --accent: #ff6b00;
+    --red: #ff2d2d;
+    --blue: #0066ff;
+    --cyan: #00d4ff;
+    --gold: #f5c518;
+    --green: #3ecf8e;
+    --shadow: 0 0 30px rgba(255,107,0,0.18);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--text); text-decoration: underline; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+  header.hero {
+    text-align: center;
+    padding: 40px 16px 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+    background:
+      radial-gradient(800px 200px at 50% 0%, rgba(255,107,0,0.18), transparent 60%),
+      linear-gradient(180deg, rgba(20,26,44,0.85), rgba(11,15,26,0));
+  }
+  .hero .eyebrow {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .hero h1 {
+    margin: 0 0 12px;
+    font-size: clamp(28px, 4vw, 44px);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    text-shadow: 0 0 24px rgba(255,107,0,0.35);
+  }
+  .hero p {
+    margin: 0 auto;
+    max-width: 720px;
+    color: var(--muted);
+  }
+  .toc {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin-bottom: 40px;
+  }
+  .toc h2 {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 12px;
+    font-weight: 700;
+  }
+  .toc ol {
+    columns: 2;
+    column-gap: 30px;
+    margin: 0;
+    padding-left: 18px;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .toc ol li { break-inside: avoid; padding: 2px 0; }
+  .toc a { color: var(--text); }
+  .toc a:hover { color: var(--accent); }
+  section.step {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 28px 24px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  section.step::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--accent), var(--red));
+    border-radius: 16px 0 0 16px;
+  }
+  section.step .head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  section.step .num {
+    flex-shrink: 0;
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ff6b00 0%, #ff2d2d 100%);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 800;
+    box-shadow: 0 0 18px rgba(255,107,0,0.55), inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+  section.step h2 {
+    margin: 0;
+    font-size: 24px;
+    letter-spacing: -0.01em;
+  }
+  section.step .icon {
+    font-size: 28px;
+    margin-left: auto;
+    opacity: 0.7;
+  }
+  section.step ol, section.step ul {
+    margin: 8px 0 0;
+    padding-left: 22px;
+  }
+  section.step ol li, section.step ul li { margin: 6px 0; }
+  section.step ol ol, section.step ol ul,
+  section.step ul ol, section.step ul ul {
+    margin-top: 6px;
+    padding-left: 22px;
+    color: var(--muted);
+    font-size: 15px;
+  }
+  section.step strong { color: var(--text); }
+  code {
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: var(--cyan);
+  }
+  /* Phase timeline */
+  .timeline {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-top: 18px;
+  }
+  .phase {
+    position: relative;
+    padding: 14px 12px 16px;
+    border-radius: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    text-align: center;
+  }
+  .phase .dot {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    margin: 0 auto 8px;
+    box-shadow: 0 0 12px currentColor;
+  }
+  .phase .name {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+  .phase .sub {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .phase.p-upcoming { color: var(--muted); }
+  .phase.p-open     { color: var(--accent); }
+  .phase.p-draft    { color: var(--red); }
+  .phase.p-setup    { color: var(--cyan); }
+  .phase.p-active   { color: var(--green); }
+
+  @media (max-width: 760px) {
+    .toc ol { columns: 1; }
+    .timeline { grid-template-columns: repeat(2, 1fr); }
+    section.step { padding: 22px 18px 18px; }
+    section.step h2 { font-size: 20px; }
+  }
+
+  /* Role cards */
+  .roles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .role {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: var(--panel-2);
+  }
+  .role h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .role.r-anon h3   { color: var(--muted); }
+  .role.r-player h3 { color: var(--blue); }
+  .role.r-captain h3{ color: var(--gold); }
+  .role.r-admin h3  { color: var(--red); }
+  .role ul { padding-left: 18px; margin: 4px 0 0; font-size: 14px; color: var(--muted); }
+  .role ul li { margin: 4px 0; }
+
+  /* Callouts */
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: rgba(255,107,0,0.06);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 14px;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .callout.warn {
+    border-color: var(--red);
+    background: rgba(255,45,45,0.06);
+  }
+  .callout.tip {
+    border-color: var(--green);
+    background: rgba(62,207,142,0.06);
+  }
+  footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">Villena Basket League</span>
+  <h1>Cómo funciona la aplicación · paso a paso</h1>
+  <p>Un recorrido visual y sin tecnicismos, desde que se enciende la web hasta que llega el día del torneo. Pensado para que cualquiera entienda qué pasa en cada botón.</p>
+</header>
+
+<nav class="toc">
+  <h2>Índice</h2>
+  <ol>
+    <li><a href="#s1">Encender la aplicación</a></li>
+    <li><a href="#s2">Iniciar sesión y recuperar contraseña</a></li>
+    <li><a href="#s3">Crear un torneo nuevo</a></li>
+    <li><a href="#s4">Inscripciones (fase «open»)</a></li>
+    <li><a href="#s5">Designar capitanes</a></li>
+    <li><a href="#s6">Editar el equipo</a></li>
+    <li><a href="#s7">Empezar el draft</a></li>
+    <li><a href="#s8">Elegir jugadores</a></li>
+    <li><a href="#s9">Traspasar la capitanía</a></li>
+    <li><a href="#s10">Día del torneo</a></li>
+    <li><a href="#s11">Copia de seguridad (CSV)</a></li>
+    <li><a href="#s12">Resumen visual de fases</a></li>
+    <li><a href="#s13">Quién ve qué</a></li>
+    <li><a href="#s14">Reglas que impone la app</a></li>
+    <li><a href="#s15">Pendiente para próximas iteraciones</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<section class="step" id="s1">
+  <div class="head">
+    <span class="num">1</span>
+    <h2>Encender la aplicación</h2>
+    <span class="icon">⚡</span>
+  </div>
+  <ol>
+    <li>El admin arranca la web en su servidor.
+      <ol>
+        <li>Indica si quiere <strong>datos de ejemplo</strong> o empezar con la base vacía.</li>
+        <li>Define un <strong>usuario administrador inicial</strong> (nombre + contraseña).</li>
+      </ol>
+    </li>
+    <li>La aplicación prepara la base de datos sola al arrancar.
+      <ol>
+        <li>Crea las tablas necesarias si faltan.</li>
+        <li>Mete los datos de ejemplo si así se pidió.</li>
+        <li>Garantiza que el usuario administrador existe.</li>
+      </ol>
+    </li>
+    <li>Cuando todo está listo, la web abre en <code>http://servidor:4322</code>.</li>
+  </ol>
+</section>
+
+<!-- 2 -->
+<section class="step" id="s2">
+  <div class="head">
+    <span class="num">2</span>
+    <h2>Iniciar sesión y recuperar contraseña</h2>
+    <span class="icon">🔐</span>
+  </div>
+  <ol>
+    <li>Cualquier persona entra a <code>/login</code>.
+      <ol>
+        <li>Puede escribir su <strong>móvil, su email o su nombre de usuario</strong>. Los tres valen.</li>
+        <li>Si los datos coinciden, entra a su panel.</li>
+      </ol>
+    </li>
+    <li>Si olvida la contraseña usa <code>/recover</code>:
+      <ol>
+        <li>Primero resuelve una pregunta sencilla (suma corta) para demostrar que no es un robot.</li>
+        <li>Introduce los <strong>tres datos</strong> de su cuenta: móvil, email y usuario.</li>
+        <li>Si los tres coinciden con la misma persona, la web le deja elegir una contraseña nueva.</li>
+        <li>Si <strong>NO</strong> coinciden, le pide escribir a <code>developerweks@gmail.com</code> para verificar identidad manualmente.</li>
+      </ol>
+    </li>
+    <li>Una vez dentro:
+      <ol>
+        <li>Desaparece el menú público.</li>
+        <li>Aparece un menú con sólo las acciones de su rol.</li>
+        <li>Los jugadores no ven menú: su panel ya tiene un botón «Salir».</li>
+      </ol>
+    </li>
+  </ol>
+</section>
+
+<!-- 3 -->
+<section class="step" id="s3">
+  <div class="head">
+    <span class="num">3</span>
+    <h2>Crear un torneo nuevo</h2>
+    <span class="icon">🏆</span>
+  </div>
+  <ol>
+    <li>El admin entra a su panel y pulsa «Crear torneo».
+      <ol>
+        <li>Sólo puede crear uno cuando no hay otro «en marcha».</li>
+        <li>Si ya hay uno activo la web se lo impide hasta cerrarlo.</li>
+      </ol>
+    </li>
+    <li>Rellena el formulario:
+      <ol>
+        <li>Nombre, lugar, descripción y reglas.</li>
+        <li>Fechas clave:
+          <ul>
+            <li><strong>Inicio de inscripciones</strong>: cuándo abren al público.</li>
+            <li><strong>Inicio del draft</strong>: cuándo empiezan los capitanes a elegir.</li>
+            <li><strong>Fin del draft</strong>: cuándo se cierra la elección.</li>
+            <li><strong>Día del torneo</strong>: la fecha del partido.</li>
+          </ul>
+        </li>
+      </ol>
+    </li>
+    <li>Al guardar, el torneo queda en fase <strong>«Inscripciones abiertas»</strong> si las fechas ya están dentro del periodo.</li>
+    <li>El botón «+ Nuevo torneo» desaparece. El admin gestiona ese torneo desde el panel.</li>
+  </ol>
+</section>
+
+<!-- 4 -->
+<section class="step" id="s4">
+  <div class="head">
+    <span class="num">4</span>
+    <h2>Inscripciones (fase «open»)</h2>
+    <span class="icon">📝</span>
+  </div>
+  <ol>
+    <li><strong>Personas sin cuenta</strong> (vienen de la calle):
+      <ol>
+        <li>Ven el botón «Inscribirme» en la página del torneo.</li>
+        <li>Crean cuenta (nombre, móvil, email, edad, foto, RGPD).</li>
+        <li>La web los inscribe automáticamente al terminar.</li>
+      </ol>
+    </li>
+    <li><strong>Personas con cuenta</strong> que aún no se han inscrito:
+      <ol>
+        <li>Ven un botón azul: «Inscríbete a este torneo».</li>
+        <li>Con un clic quedan dentro.</li>
+      </ol>
+    </li>
+    <li><strong>El admin</strong> puede dar de alta a alguien manualmente:
+      <ol>
+        <li>Pestaña «Inscripciones» → «+ Alta de jugador».</li>
+        <li>Nombre, móvil, email, edad, posición. Contraseña inicial: <code>123123123</code>.</li>
+        <li>Opcional: marcar «Capitán» y poner nombre de equipo en el mismo paso.</li>
+      </ol>
+    </li>
+    <li>El <strong>admin no puede inscribirse a sí mismo</strong>. La aplicación lo bloquea: él organiza, no juega.</li>
+    <li>Cada inscripción, alta o baja:
+      <ol>
+        <li>Se guarda en la base de datos.</li>
+        <li>Se reescribe un <strong>CSV de seguridad</strong> con todos los inscritos del torneo (abrible en Excel).</li>
+      </ol>
+    </li>
+  </ol>
+</section>
+
+<!-- 5 -->
+<section class="step" id="s5">
+  <div class="head">
+    <span class="num">5</span>
+    <h2>Designar capitanes</h2>
+    <span class="icon">⭐</span>
+  </div>
+  <ol>
+    <li>El admin entra a la card de un jugador inscrito.
+      <ol>
+        <li>Marca el check «Capitán de este torneo».</li>
+        <li>Escribe el nombre del equipo (se autogenera si lo deja vacío).</li>
+      </ol>
+    </li>
+    <li>La aplicación, por detrás:
+      <ol>
+        <li>Crea el equipo con ese nombre.</li>
+        <li>Mete al capitán como primer miembro de la plantilla.</li>
+        <li>Sube su rol de «jugador» a «capitán».</li>
+      </ol>
+    </li>
+    <li>Si el admin <strong>quita</strong> el rol de capitán (sólo antes del draft):
+      <ol>
+        <li>La web pide confirmación dos veces.</li>
+        <li>Muestra logo, nombre, WhatsApp y descripción del equipo que se va a borrar.</li>
+        <li>Al confirmar, elimina el equipo entero. El jugador vuelve a su rol normal.</li>
+      </ol>
+    </li>
+  </ol>
+  <div class="callout warn"><strong>⚠️ Importante:</strong> una vez empieza el draft, el admin <em>ya no</em> puede tocar capitanías.</div>
+</section>
+
+<!-- 6 -->
+<section class="step" id="s6">
+  <div class="head">
+    <span class="num">6</span>
+    <h2>Editar el equipo (capitán)</h2>
+    <span class="icon">🎨</span>
+  </div>
+  <ol>
+    <li>El capitán entra a su panel y ve la sección «Mi equipo».</li>
+    <li>Puede:
+      <ol>
+        <li>Subir un logo (la web lo recorta a 200 px).</li>
+        <li>Editar nombre del equipo, descripción y enlace de WhatsApp.</li>
+      </ol>
+    </li>
+    <li>Tiene hasta el <strong>día anterior</strong> al partido para tocar estos campos.</li>
+    <li>Desde la víspera la web los bloquea. El admin sí puede tocarlos por si hay una urgencia.</li>
+  </ol>
+</section>
+
+<!-- 7 -->
+<section class="step" id="s7">
+  <div class="head">
+    <span class="num">7</span>
+    <h2>Empezar el draft (paso de «open» a «draft»)</h2>
+    <span class="icon">🎯</span>
+  </div>
+  <ol>
+    <li>Cuando llega la fecha de «Inicio del draft»:
+      <ol>
+        <li>La app pasa el torneo automáticamente a «draft» en cuanto alguien lo visita.</li>
+        <li>Sortea el orden inicial de los capitanes.</li>
+        <li>Marca el draft como «en curso».</li>
+      </ol>
+    </li>
+    <li>Desde ese instante el admin <strong>no puede tocar capitanías</strong>.</li>
+    <li>La página pública del torneo muestra «DRAFT EN VIVO».</li>
+  </ol>
+</section>
+
+<!-- 8 -->
+<section class="step" id="s8">
+  <div class="head">
+    <span class="num">8</span>
+    <h2>Elegir jugadores (draft)</h2>
+    <span class="icon">🏀</span>
+  </div>
+  <ol>
+    <li>Cada capitán entra a su panel y, cuando le toca, pulsa al jugador que quiere fichar.</li>
+    <li>La app rota turnos entre capitanes ronda tras ronda.
+      <ol>
+        <li>En cada ronda baraja el orden: <strong>ningún capitán repite la misma posición</strong> que en rondas anteriores.</li>
+        <li>Si en una ronda alguien fue el 2º, en la siguiente no podrá serlo otra vez.</li>
+      </ol>
+    </li>
+    <li>El draft continúa <strong>hasta repartir a todos los inscritos</strong>.
+      <ol>
+        <li>Con 53 jugadores y 6 capitanes, unos equipos quedan con 8 y otros con 9. Es normal.</li>
+        <li>Cuando se acaba la pool, la app cierra el draft sola. No hay que pulsar nada.</li>
+      </ol>
+    </li>
+    <li>Al cerrarse, la app hace todo esto automáticamente:
+      <ol>
+        <li><strong>Genera los grupos</strong> (un grupo por cada 4 equipos, equilibrado).</li>
+        <li><strong>Genera el calendario</strong> con la hora de cada partido, según el día, las canchas y la duración.</li>
+        <li>Confirma las horas como publicadas (los jugadores ya las ven).</li>
+        <li>El torneo pasa a fase «Grupos publicados».</li>
+      </ol>
+    </li>
+  </ol>
+  <div class="callout tip"><strong>💡 Resultado:</strong> al final del draft cada equipo tiene su plantilla completa y la web ya muestra el calendario con horas en la página pública.</div>
+</section>
+
+<!-- 9 -->
+<section class="step" id="s9">
+  <div class="head">
+    <span class="num">9</span>
+    <h2>Traspasar la capitanía</h2>
+    <span class="icon">🔄</span>
+  </div>
+  <ol>
+    <li>Una vez empezó el draft, el admin <strong>ya no puede quitar capitanes</strong>.</li>
+    <li>Pero el capitán que <em>ya haya elegido</em> al menos a un jugador puede pasarle el rol a un miembro de su equipo:
+      <ol>
+        <li>Entra a «Traspasar capitanía» en su panel.</li>
+        <li>Elige al nuevo capitán de la lista de su plantilla.</li>
+        <li>Confirma dos veces.</li>
+      </ol>
+    </li>
+    <li>El equipo se queda intacto: <strong>logo, nombre, WhatsApp y plantilla siguen igual</strong>. Sólo cambia quién aparece como capitán visible. El ex-capitán se queda como jugador normal del equipo.</li>
+  </ol>
+</section>
+
+<!-- 10 -->
+<section class="step" id="s10">
+  <div class="head">
+    <span class="num">10</span>
+    <h2>El día del torneo (paso de «setup» a «active»)</h2>
+    <span class="icon">🚀</span>
+  </div>
+  <ol>
+    <li>Cuando llega la fecha del partido, la app cambia el torneo automáticamente a «TORNEO EN JUEGO» en cuanto alguien entra a verlo.</li>
+    <li>La home pública lo refleja con el banner correspondiente.</li>
+    <li>Aparece la lista completa de partidos con sus horas.</li>
+    <li>Los partidos están como «pendientes» hasta que el admin los arranque (eso ya es la fase post-partido, fuera de este flujo por ahora).</li>
+  </ol>
+</section>
+
+<!-- 11 -->
+<section class="step" id="s11">
+  <div class="head">
+    <span class="num">11</span>
+    <h2>Copia de seguridad permanente (CSV)</h2>
+    <span class="icon">💾</span>
+  </div>
+  <ol>
+    <li>Por cada cambio en las inscripciones, la app reescribe un fichero <code>.csv</code> con TODOS los inscritos de ese torneo.</li>
+    <li>Se guarda en <code>backend/data/csv/&lt;fecha-del-partido&gt;.csv</code> y se abre con Excel o LibreOffice.</li>
+    <li>Contiene, fila a fila: cuándo se inscribió, datos del torneo, datos del jugador (nombre, móvil, email, edad, posición, stats, RGPD) y, si es capitán, su equipo.</li>
+    <li>El CSV se actualiza al instante en cada uno de estos eventos:
+      <ol>
+        <li>Alguien se inscribe.</li>
+        <li>Alguien se da de baja.</li>
+        <li>El admin nombra o quita un capitán.</li>
+        <li>El admin da de alta o elimina un jugador del torneo.</li>
+        <li>El admin edita los datos de un jugador.</li>
+        <li>Un capitán traspasa su rol.</li>
+      </ol>
+    </li>
+  </ol>
+  <div class="callout"><strong>🛟 Seguro de vida:</strong> si la aplicación se cayera, con este CSV se reconstruyen las inscripciones aunque la base de datos se pierda.</div>
+</section>
+
+<!-- 12 -->
+<section class="step" id="s12">
+  <div class="head">
+    <span class="num">12</span>
+    <h2>Resumen visual de las fases</h2>
+    <span class="icon">🗺️</span>
+  </div>
+  <div class="timeline">
+    <div class="phase p-upcoming">
+      <div class="dot" style="background: var(--muted);"></div>
+      <div class="name">Upcoming</div>
+      <div class="sub">próximo · nadie ve nada todavía</div>
+    </div>
+    <div class="phase p-open">
+      <div class="dot" style="background: var(--accent);"></div>
+      <div class="name">Open</div>
+      <div class="sub">inscripciones abiertas</div>
+    </div>
+    <div class="phase p-draft">
+      <div class="dot" style="background: var(--red);"></div>
+      <div class="name">Draft</div>
+      <div class="sub">capitanes eligen plantilla</div>
+    </div>
+    <div class="phase p-setup">
+      <div class="dot" style="background: var(--cyan);"></div>
+      <div class="name">Setup</div>
+      <div class="sub">grupos + horas publicados</div>
+    </div>
+    <div class="phase p-active">
+      <div class="dot" style="background: var(--green);"></div>
+      <div class="name">Active</div>
+      <div class="sub">día del partido</div>
+    </div>
+  </div>
+  <p style="color: var(--muted); margin-top: 16px;">
+    Las transiciones entre fases las dispara la <strong>fecha</strong>. La app no necesita que nadie pulse nada: si pasa la fecha de inicio del draft, lo enciende. Si pasa el día del torneo, lo pone «en juego». El admin puede acelerar manualmente si quiere.
+  </p>
+</section>
+
+<!-- 13 -->
+<section class="step" id="s13">
+  <div class="head">
+    <span class="num">13</span>
+    <h2>Quién ve qué</h2>
+    <span class="icon">👥</span>
+  </div>
+  <div class="roles">
+    <div class="role r-anon">
+      <h3>Anónimo</h3>
+      <ul>
+        <li>Home, torneo, galería, bases.</li>
+        <li>Botones para inscribirse / login / registrarse.</li>
+      </ul>
+    </div>
+    <div class="role r-player">
+      <h3>Jugador</h3>
+      <ul>
+        <li>Su carta tipo FIFA con stats.</li>
+        <li>Torneo activo + botón Salir.</li>
+      </ul>
+    </div>
+    <div class="role r-captain">
+      <h3>Capitán</h3>
+      <ul>
+        <li>Gestión del equipo (logo, nombre, WhatsApp).</li>
+        <li>Draft en vivo cuando toca.</li>
+        <li>Traspaso de capitanía si ya picó.</li>
+      </ul>
+    </div>
+    <div class="role r-admin">
+      <h3>Admin</h3>
+      <ul>
+        <li>Pestañas: Inscripciones, Draft, Jugadores, Grupos, Eliminatorias, Partidos, Resultados, Resumen, Configuración.</li>
+        <li>Edición del torneo inline en la propia pestaña.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="step" id="s14">
+  <div class="head">
+    <span class="num">14</span>
+    <h2>Cosas que la aplicación impide a propósito</h2>
+    <span class="icon">🛡️</span>
+  </div>
+  <ol>
+    <li>Tener <strong>dos torneos en marcha</strong> a la vez.</li>
+    <li>Que el <strong>admin se apunte</strong> como jugador.</li>
+    <li>Tocar <strong>capitanes</strong> una vez empezado el draft.</li>
+    <li>Que un <strong>capitán edite su equipo</strong> desde la víspera del partido.</li>
+    <li>Inscribirse <strong>fuera del periodo</strong> de inscripción / draft.</li>
+    <li>Usar un <strong>móvil ya registrado</strong> para una cuenta nueva.</li>
+  </ol>
+  <p style="color: var(--muted);">Cada una de estas reglas devuelve un mensaje claro a quien intenta saltársela.</p>
+</section>
+
+<!-- 15 -->
+<section class="step" id="s15">
+  <div class="head">
+    <span class="num">15</span>
+    <h2>Pendiente para próximas iteraciones</h2>
+    <span class="icon">🛠️</span>
+  </div>
+  <ol>
+    <li>Marcar partidos (empezar, anotar tantos, finalizar).</li>
+    <li>Generar y verificar la fase eliminatoria (cuartos, semis, final).</li>
+    <li>Pasar contraseñas a <code>bcrypt</code> (ahora se guardan en claro).</li>
+    <li>Poner HTTPS real delante (Caddy/Traefik).</li>
+    <li>Bracket interactivo de partidos en directo.</li>
+  </ol>
+</section>
+
+<footer>
+  Villena Basket League · documento generado para uso interno · prohibida la indexación
+</footer>
+
+</div>
+</body>
+</html>
