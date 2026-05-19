@@ -9,6 +9,7 @@ import GroupsBlock from "../../components/tournament/GroupsBlock.astro";
 import KnockoutBracketView from "../../components/KnockoutBracketView.astro";
 import ChampionPodium from "../../components/tournament/ChampionPodium.astro";
 import PlayerCard from "../../components/PlayerCard.astro";
+import RegisterButton from "../../islands/RegisterButton.js";
 import { loadSession } from "../../lib/session.js";
 import { api, ApiError, getCookieHeader } from "../../lib/api.js";
 import { computeEffectiveStatus } from "../../lib/display.js";
@@ -74,6 +75,11 @@ const championTeam = finalMatch?.winnerId
   ? teams.find((tm) => tm.id === finalMatch.winnerId) ?? null
   : null;
 
+// Is the logged-in player already in the registrations list for this tournament?
+const selfId = session.player?.id ?? null;
+const isSelfRegistered = !!selfId && registrations.some((r) => r.player_id === selfId);
+const canStillJoin = effective === "open" || effective === "draft";
+
 const liveMessage =
   phase === "draft"     ? "Draft en vivo — los capitanes están eligiendo plantilla." :
   phase === "groups"    ? "Fase de grupos en juego. Sigue las clasificaciones en directo." :
@@ -104,7 +110,7 @@ const liveMessage =
     )}
 
     <!-- Registration CTA -->
-    {effective === "open" && !auth && (
+    {canStillJoin && !auth && (
       <section
         class="relative overflow-hidden rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-4 border"
         style="background: linear-gradient(120deg, rgba(255,107,0,0.18), rgba(255,45,45,0.10)); border-color: rgba(255,107,0,0.4); box-shadow: 0 0 36px rgba(255,107,0,0.18);"
@@ -122,6 +128,21 @@ const liveMessage =
             Ya tengo cuenta
           </a>
         </div>
+      </section>
+    )}
+
+    {/* Logged-in but not yet on the registration list and the door is still open. */}
+    {canStillJoin && auth && !isSelfRegistered && (
+      <section
+        class="relative overflow-hidden rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-4 border"
+        style="background: linear-gradient(120deg, rgba(0,102,255,0.18), rgba(0,212,255,0.10)); border-color: rgba(0,102,255,0.4); box-shadow: 0 0 36px rgba(0,102,255,0.18);"
+      >
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.3em] text-[var(--color-neon-blue)] font-bold mb-2">Aún no estás dentro</p>
+          <h3 class="font-hero text-3xl text-white leading-none">Inscríbete a este torneo</h3>
+          <p class="text-court-muted text-sm mt-2">Tu cuenta ya existe — un clic y entras al draft.</p>
+        </div>
+        <RegisterButton tournamentId={tournament.id} initiallyRegistered={false} client:load />
       </section>
     )}
 

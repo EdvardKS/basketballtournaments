@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../../lib/api.js";
-import type { Player } from "../../lib/types.js";
+import type { Player, TeamWithPlayers } from "../../lib/types.js";
 
 export interface Registration {
   player_id: string;
@@ -14,6 +14,7 @@ interface Props {
   tournamentId: string;
   registrations: Registration[];
   captainIds: Set<string>;
+  teams: TeamWithPlayers[];
   canManage: boolean;        // admin can alta/edit/promote while open
   onChange: () => void;       // reload parent detail
 }
@@ -35,7 +36,7 @@ const POSITIONS = ["base", "escolta", "alero", "ala-pivot", "pivot"] as const;
 const DEFAULT_PASSWORD = "123123123";
 
 export default function InscripcionesTab({
-  tournamentId, registrations, captainIds, canManage, onChange,
+  tournamentId, registrations, captainIds, teams, canManage, onChange,
 }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -201,6 +202,7 @@ export default function InscripcionesTab({
                       playerId={r.player_id}
                       tournamentId={tournamentId}
                       isCaptain={isCaptain}
+                      team={teams.find((t) => t.captainId === r.player_id) ?? null}
                       busy={busy}
                       onBusyChange={(b) => setBusyId(b ? r.player_id : null)}
                       onSaved={(msg) => { flash("ok", msg); setEditingId(null); onChange(); }}
@@ -345,11 +347,12 @@ function NewPlayerForm({
 // API calls (PATCH /players/:id + POST /tournaments/:id/captains).
 
 function PlayerEditor({
-  playerId, tournamentId, isCaptain, busy, onBusyChange, onSaved, onError, onRemove,
+  playerId, tournamentId, isCaptain, team, busy, onBusyChange, onSaved, onError, onRemove,
 }: {
   playerId: string;
   tournamentId: string;
   isCaptain: boolean;
+  team: TeamWithPlayers | null;
   busy: boolean;
   onBusyChange: (b: boolean) => void;
   onSaved: (msg: string) => void;
@@ -363,6 +366,7 @@ function PlayerEditor({
     captain: boolean; teamName: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [demoteConfirm, setDemoteConfirm] = useState<0 | 1 | 2>(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -397,7 +401,15 @@ function PlayerEditor({
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => (f ? { ...f, [k]: v } : f));
 
+  // Captain demotion deletes the team (logo, name, whatsapp, roster). Require
+  // a two-step confirmation that shows what the captain has configured.
+  const isDemoting = isCaptain && form.captain === false;
+
   const save = async () => {
+    if (isDemoting && demoteConfirm < 2) {
+      setDemoteConfirm((s) => (s + 1) as 0 | 1 | 2);
+      return;
+    }
     onBusyChange(true);
     try {
       await api(`/players/${playerId}`, {
@@ -427,7 +439,10 @@ function PlayerEditor({
       onSaved(`${form.name} actualizado`);
     } catch (e) {
       onError(e instanceof ApiError ? e.code : "Error al guardar");
-    } finally { onBusyChange(false); }
+    } finally {
+      onBusyChange(false);
+      setDemoteConfirm(0);
+    }
   };
 
   return (
@@ -481,9 +496,11 @@ function PlayerEditor({
       </div>
 
       <label className="flex items-center gap-2 cursor-pointer text-sm text-white/80">
-        <input type="checkbox" checked={form.captain}
-          onChange={(e) => set("captain", e.target.checked)}
-          className="accent-court-accent" />
+        <input
+          type="checkbox" checked={form.captain}
+          onChange={(e) => { set("captain", e.target.checked); setDemoteConfirm(0); }}
+          className="accent-court-accent"
+        />
         Capitán de este torneo
       </label>
       {form.captain && !isCaptain && (
@@ -495,10 +512,62 @@ function PlayerEditor({
         </label>
       )}
 
+      {isDemoting && team && (
+        <div
+          className="rounded-xl border p-3 sm:p-4 space-y-2"
+          style={{ background: "rgba(255,45,45,0.08)", borderColor: "rgba(255,45,45,0.4)" }}
+        >
+          <p className="text-xs uppercase tracking-widest text-[var(--color-neon-red)] font-bold">
+            Vas a eliminar el equipo
+          </p>
+          <div className="flex items-center gap-3">
+            {team.logo
+              ? <img src={team.logo} alt={team.name} className="w-12 h-12 rounded-lg object-cover border border-white/10" />
+              : <div className="w-12 h-12 rounded-lg bg-white/10 flex items-center justify-center font-hero text-white text-lg">
+                  {team.name.charAt(0).toUpperCase()}
+                </div>}
+            <div className="min-w-0">
+              <p className="text-white font-semibold truncate">{team.name}</p>
+              <p className="text-[11px] text-court-muted truncate">
+                {team.players?.length ?? 0} jugadores
+                {team.description ? ` · ${team.description}` : ""}
+              </p>
+              {team.whatsappLink && (
+                <p className="text-[11px] text-court-muted truncate">📱 {team.whatsappLink}</p>
+              )}
+            </div>
+          </div>
+          <p className="text-[11px] text-white/80">
+            Se borrarán el logo, nombre, descripción, WhatsApp y la plantilla.
+            Esta acción no se puede deshacer.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
-        <button type="button" onClick={save} disabled={busy} className="btn-primary">
-          {busy ? "Guardando…" : "Guardar cambios"}
+        <button
+          type="button" onClick={save} disabled={busy}
+          className={isDemoting && demoteConfirm > 0 ? "btn-danger" : "btn-primary"}
+        >
+          {busy
+            ? "Guardando…"
+            : isDemoting && demoteConfirm === 0
+              ? "Guardar cambios"
+              : isDemoting && demoteConfirm === 1
+                ? "Confirma una vez más"
+                : isDemoting && demoteConfirm === 2
+                  ? "Sí, eliminar equipo"
+                  : "Guardar cambios"}
         </button>
+        {isDemoting && demoteConfirm > 0 && (
+          <button
+            type="button"
+            onClick={() => { setDemoteConfirm(0); set("captain", true); }}
+            className="btn-ghost"
+          >
+            Cancelar
+          </button>
+        )}
         <button
           type="button" onClick={onRemove} disabled={busy}
           className="px-3 py-2 rounded-md text-xs font-semibold uppercase tracking-wider text-[var(--color-neon-red)] border border-[var(--color-neon-red)]/30 hover:bg-[var(--color-neon-red)]/10 transition-all"

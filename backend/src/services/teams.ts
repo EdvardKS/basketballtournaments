@@ -4,6 +4,19 @@ import { query, queryOne, tx } from "../db/query.js";
 import { toTeam } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
 
+// Captains can edit team config up to the start of the day BEFORE the match
+// day (the user's wording: "hasta que sea el día anterior al día del
+// partido"). Admin bypasses the lock.
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const isPastEditWindow = (matchDate: Date | string | null): boolean => {
+  if (!matchDate) return false;
+  const md = matchDate instanceof Date ? matchDate : new Date(matchDate);
+  if (Number.isNaN(md.getTime())) return false;
+  // Lock when "now" is on/after midnight of the day before match day.
+  // matchDate is a YYYY-MM-DD column, so it already lands at 00:00 UTC.
+  return Date.now() >= md.getTime() - MS_PER_DAY;
+};
+
 export const teamPatchSchema = z.object({
   name: z.string().min(1).max(60).optional(),
   nameConfirmed: z.boolean().optional(),
@@ -47,9 +60,19 @@ export const listTeamsForTournament = async (tournamentId: string) => {
   }));
 };
 
-export const patchTeam = async (id: string, raw: unknown) => {
+export const patchTeam = async (id: string, raw: unknown, callerRole: string) => {
   const data = teamPatchSchema.parse(raw);
   const current = await getTeam(id);
+  // Admin can still tweak after the lock; captain can't.
+  if (callerRole !== "admin") {
+    const matchDate = await queryOne<{ match_date: Date | string | null }>(
+      "SELECT match_date FROM tournaments WHERE id=$1",
+      [current.tournamentId]);
+    if (matchDate && isPastEditWindow(matchDate.match_date)) {
+      throw new HttpError(409, "TEAM_EDIT_LOCKED",
+        "El día anterior al torneo se cierra la edición del equipo.");
+    }
+  }
   const merged = { ...current, ...data };
   const row = await queryOne(
     `UPDATE teams SET name=$2, name_confirmed=$3,

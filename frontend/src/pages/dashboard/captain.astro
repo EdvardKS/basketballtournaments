@@ -53,6 +53,7 @@ const isDraft = active?.status === "draft";
           <TeamSettings
             team={myTeam}
             matchDate={active.matchDate}
+            selfPlayerId={player.id}
             client:load
           />
         )}
