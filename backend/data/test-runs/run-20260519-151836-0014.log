@@ -1,0 +1,53 @@
+# 20260519-151836 · iter 14
+# params: {'CAPTAINS_N': '16', 'PLAYERS_N': '57', 'BRACKET_FORMAT': 'top2_per_group', 'LABEL': 'R-151836-16c-57p-top2-auto'}
+
+[36m▶ login admin · tester[0m
+  [32m✓[0m login OK · playerId=1b70fc35-f36b-48e9-92f3-a0ebc8d64887 · cookies_secure_stripped=0
+
+=== R-151836-16c-57p-top2-auto ===
+  captains=16  players=57  total=73
+  bracket_format=top2_per_group  bracket_size=None
+[36m▶ crear torneo · matchDate=2026-06-18[0m
+  [32m✓[0m id=b157cf36-e9d4-482b-bead-37ff20dfa85a
+[36m▶ alta e inscripción de 73 jugadores[0m
+  [2m  25/73[0m
+  [2m  50/73[0m
+  [2m  73/73[0m
+[36m▶ promover 16 capitanes[0m
+  [32m✓[0m CSV 2026-06-18.csv · 73 filas · 16 capitanes
+[36m▶ PATCH fechas → ventana de draft[0m
+  [32m✓[0m status=draft
+  [32m✓[0m draft activo · teamOrder n=16
+[36m▶ draft loop · 57 picks[0m
+  [32m✓[0m draft auto-cerrado · pool vacía
+[36m▶ verificar setup (grupos + calendario)[0m
+  [32m✓[0m status=setup
+  [32m✓[0m 24 partidos generados
+[36m▶ PATCH matchDate=ayer → status active[0m
+  [32m✓[0m status=active
+[36m▶ jugar fase de grupos (24 partidos)[0m
+  [2m  10/24  último: 20-8[0m
+  [2m  20/24  último: 17-11[0m
+  [2m  24/24  último: 2-15[0m
+  [2m  grupo Grupo A: gp_sum=12, líder=Team A pts=6[0m
+  [2m  grupo Grupo B: gp_sum=12, líder=Team F pts=6[0m
+  [2m  grupo Grupo C: gp_sum=12, líder=Team O pts=6[0m
+  [2m  grupo Grupo D: gp_sum=12, líder=Team P pts=6[0m
+  [32m✓[0m standings consultados
+  [32m✓[0m bracket generado · stages=['final', 'quarterfinal', 'semifinal', 'third_place'] · matches=8
+[36m▶ jugar quarterfinal (4 partidos)[0m
+  [2m  quarterfinal: 21-8[0m
+  [2m  quarterfinal: 5-11[0m
+  [2m  quarterfinal: 7-14[0m
+  [2m  quarterfinal: 15-21[0m
+[36m▶ jugar semifinal (2 partidos)[0m
+  [2m  semifinal: 13-19[0m
+  [2m  semifinal: 21-6[0m
+[36m▶ jugar final (1 partidos)[0m
+  [2m  final: 7-12[0m
+[36m▶ jugar third_place (1 partidos)[0m
+  [2m  third_place: 11-18[0m
+[36m▶ verificar campeón[0m
+  [32m✓[0m campeón = teamId 5fe91079-d98e-423b-89f2-bb49d9edf5d6 · status=completed
+
+✓ ciclo completo · tournament=b157cf36-e9d4-482b-bead-37ff20dfa85a

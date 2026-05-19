@@ -45,8 +45,9 @@ type GroupMember = (typeof members)[number];
           <th class="px-2 pb-2 text-center">PJ</th>
           <th class="px-2 pb-2 text-center">G</th>
           <th class="px-2 pb-2 text-center">P</th>
-          <th class="px-2 pb-2 text-center hidden sm:table-cell">PF</th>
-          <th class="px-2 pb-2 text-center hidden sm:table-cell">PC</th>
+          <th class="px-2 pb-2 text-center hidden sm:table-cell" title="Puntos a favor">PF</th>
+          <th class="px-2 pb-2 text-center hidden sm:table-cell" title="Puntos en contra">PC</th>
+          <th class="px-2 pb-2 text-center" title="Diferencia">DIF</th>
           <th class="px-2 pb-2 text-center font-bold text-white">Pts</th>
         </tr>
       </thead>
@@ -83,6 +84,13 @@ type GroupMember = (typeof members)[number];
               <td class="px-2 py-2 text-center text-court-danger tabular-nums">{m.gamesLost}</td>
               <td class="px-2 py-2 text-center text-court-muted tabular-nums hidden sm:table-cell">{m.pointsFor}</td>
               <td class="px-2 py-2 text-center text-court-muted tabular-nums hidden sm:table-cell">{m.pointsAgainst}</td>
+              <td class={`px-2 py-2 text-center tabular-nums font-semibold ${
+                m.pointsFor - m.pointsAgainst > 0 ? "text-court-ok"
+                  : m.pointsFor - m.pointsAgainst < 0 ? "text-court-danger"
+                  : "text-court-muted"
+              }`}>
+                {m.pointsFor - m.pointsAgainst > 0 ? "+" : ""}{m.pointsFor - m.pointsAgainst}
+              </td>
               <td class="px-2 py-2 text-center font-hero text-2xl text-[var(--color-neon-orange)] tabular-nums">{m.points}</td>
             </tr>
           );

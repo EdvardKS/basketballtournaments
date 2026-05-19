@@ -1,0 +1,27 @@
+# 20260519-151542 · iter 4
+# params: {'CAPTAINS_N': '3', 'PLAYERS_N': '10', 'BRACKET_FORMAT': 'top2_per_group', 'LABEL': 'R-151542-3c-10p-top2-auto'}
+
+[36m▶ login admin · tester[0m
+  [32m✓[0m login OK · playerId=1b70fc35-f36b-48e9-92f3-a0ebc8d64887 · cookies_secure_stripped=0
+
+=== R-151542-3c-10p-top2-auto ===
+  captains=3  players=10  total=13
+  bracket_format=top2_per_group  bracket_size=None
+[36m▶ crear torneo · matchDate=2026-06-18[0m
+  [32m✓[0m id=d607d42b-b2bc-4b6d-b12d-6d6c76abdbf4
+[36m▶ alta e inscripción de 13 jugadores[0m
+  [2m  13/13[0m
+[36m▶ promover 3 capitanes[0m
+  [32m✓[0m CSV 2026-06-18.csv · 13 filas · 3 capitanes
+[36m▶ PATCH fechas → ventana de draft[0m
+  [32m✓[0m status=draft
+  [32m✓[0m draft activo · teamOrder n=3
+[36m▶ draft loop · 10 picks[0m
+  [32m✓[0m draft auto-cerrado · pool vacía
+[36m▶ verificar setup (grupos + calendario)[0m
+  [32m✓[0m status=setup
+  [32m✓[0m 3 partidos generados
+[36m▶ PATCH matchDate=ayer → status active[0m
+  [32m✓[0m status=active
+[36m▶ jugar fase de grupos (3 partidos)[0m
+[31m✗ POST /matches/3eb7b912-123c-4fc3-8d1f-6788f76b560c/complete → 400: {'error': 'TOO_FEW_TEAMS', 'message': 'Faltan equipos para montar un cuadro (hay 3, hacen falta 4 mínimo).'}[0m

@@ -31,7 +31,11 @@ export const groupsForTournament = async (tournamentId: string) => {
       `SELECT gm.*, t.name AS team_name, t.logo AS team_logo
        FROM group_members gm JOIN teams t ON t.id=gm.team_id
        WHERE gm.group_id=$1
-       ORDER BY gm.points DESC, (gm.points_for - gm.points_against) DESC`, [(g as { id: string }).id],
+       ORDER BY
+         gm.points DESC,
+         (gm.points_for - gm.points_against) DESC,
+         gm.points_for DESC,
+         gm.games_won DESC`, [(g as { id: string }).id],
     );
     result.push({ group: toGroup(g), members: members.map((m) => ({ ...toGroupMember(m), teamName: m.team_name, teamLogo: m.team_logo })) });
   }

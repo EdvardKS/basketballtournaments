@@ -1,30 +1,85 @@
 // Knockout bracket generator + winner propagation.
-// - Seeding: top 1+2 of each group; pairs are crossed so groupmates never face
-//   each other in the first round (1A vs 2B, 1B vs 2A, ...).
-// - Awkward counts (5/6/7 qualified) get random byes that skip a round.
-// - propagateBracketWinner is called from completeMatch and fills the next
-//   round's slot deterministically based on stage + round_number, so the
-//   bracket stays in sync without manual editing.
+//
+// Supported formats (admin chooses on tournament config):
+//
+//   - top2_per_group               default — 2 mejores de cada grupo
+//   - top1_plus_best2_seconds      1º de cada grupo + 2 mejores 2dos
+//
+// Supported bracket sizes (admin chooses):
+//
+//   - 4   semifinales + final + 3er puesto
+//   - 8   cuartos     + semis  + final + 3er puesto
+//   - 16  octavos     + cuartos + semis + final + 3er puesto
+//
+// If the qualified pool is bigger than the chosen size, the pool is trimmed
+// globally by (points DESC, diff DESC, points_for DESC, wins DESC). If it's
+// smaller, an error is thrown (admin must drop format or add more groups).
+//
+// Seeding: cross-paired so groupmates / same-group qualifiers never meet in
+// the very first round when possible. Byes (when the qualified count doesn't
+// fit a power of two) use a deterministic per-tournament shuffle so re-runs
+// reproduce.
+//
+// propagateBracketWinner is called from completeMatch and fills the next
+// round's slot deterministically based on stage + round_number.
 import { query, queryOne, tx } from "../db/query.js";
 import { HttpError } from "../middleware/error.js";
 import type { MatchStage } from "../types.js";
 
-interface Qualified { teamId: string; groupId: string; rank: number /* 1 or 2 */ }
+export type BracketFormat =
+  | "top2_per_group"
+  | "top1_plus_best2_seconds";
 
-const getTopFromGroup = async (
-  groupId: string, n: number,
-): Promise<Array<{ team_id: string }>> => {
-  const rows = await query(
-    `SELECT gm.team_id, gm.points, (gm.points_for - gm.points_against) AS diff
-     FROM group_members gm
-     WHERE gm.group_id=$1
-     ORDER BY gm.points DESC, diff DESC`, [groupId],
+export type BracketSize = 4 | 8 | 16;
+
+interface Qualified {
+  teamId: string;
+  groupId: string;
+  rank: number;           // 1 = group winner, 2 = 2nd in group, etc.
+  points: number;
+  diff: number;
+  pointsFor: number;
+  gamesWon: number;
+}
+
+// Fetch ALL members of a group, sorted with the canonical tiebreak order.
+const getGroupRanking = async (
+  q: typeof query, groupId: string,
+): Promise<Qualified[]> => {
+  const rows = await q<{
+    team_id: string; points: number; points_for: number;
+    points_against: number; games_won: number;
+  }>(
+    `SELECT team_id, points, points_for, points_against, games_won
+     FROM group_members
+     WHERE group_id=$1
+     ORDER BY
+       points DESC,
+       (points_for - points_against) DESC,
+       points_for DESC,
+       games_won DESC`,
+    [groupId],
   );
-  return rows.slice(0, n) as Array<{ team_id: string }>;
+  return rows.map((r, idx) => ({
+    teamId: r.team_id,
+    groupId,
+    rank: idx + 1,
+    points: Number(r.points),
+    diff: Number(r.points_for) - Number(r.points_against),
+    pointsFor: Number(r.points_for),
+    gamesWon: Number(r.games_won),
+  }));
 };
 
-// Tiny deterministic PRNG so re-renders / re-runs of the same tournament use
-// the same byes. Seeded by the tournament id (string → 32-bit hash).
+// Global tiebreak used everywhere we have to compare teams across groups.
+const cmpGlobal = (a: Qualified, b: Qualified): number =>
+  b.points - a.points
+  || b.diff - a.diff
+  || b.pointsFor - a.pointsFor
+  || b.gamesWon - a.gamesWon;
+
+// Deterministic PRNG so re-renders / re-runs of the same tournament reproduce
+// the same byes when the format requires them.
 const hashSeed = (s: string): number => {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {
@@ -52,103 +107,86 @@ const seededShuffle = <T>(arr: T[], seed: number): T[] => {
   return out;
 };
 
-// Build crossed pairs avoiding groupmate matchups.
-//   firsts:  [1A, 1B, 1C, 1D]
-//   seconds: [2A, 2B, 2C, 2D]
-// Returns pairs: [(1A,2B),(1B,2A),(1C,2D),(1D,2C)] for 8 teams.
-//                [(1A,2B),(1B,2A)]                  for 4 teams.
-const crossedPairs = (firsts: Qualified[], seconds: Qualified[]): Array<[Qualified, Qualified]> => {
+// --- Qualifier selection per format ---------------------------------------
+
+const collectQualified = async (
+  q: typeof query, tournamentId: string, format: BracketFormat,
+): Promise<Qualified[]> => {
+  const groups = await q<{ id: string }>(
+    "SELECT id FROM tournament_groups WHERE tournament_id=$1 ORDER BY name",
+    [tournamentId],
+  );
+  if (groups.length === 0) throw new HttpError(400, "NO_GROUPS");
+
+  const groupRankings: Qualified[][] = [];
+  for (const g of groups) {
+    groupRankings.push(await getGroupRanking(q, g.id));
+  }
+
+  if (format === "top2_per_group") {
+    // Single group → grab top 4 (rank 1..4) so it still works.
+    if (groupRankings.length === 1) {
+      return groupRankings[0].slice(0, 4);
+    }
+    const out: Qualified[] = [];
+    for (const ranking of groupRankings) out.push(...ranking.slice(0, 2));
+    return out;
+  }
+
+  if (format === "top1_plus_best2_seconds") {
+    if (groupRankings.length < 2) {
+      throw new HttpError(400, "FORMAT_NEEDS_MULTIPLE_GROUPS");
+    }
+    const firsts: Qualified[] = [];
+    const seconds: Qualified[] = [];
+    for (const ranking of groupRankings) {
+      if (ranking[0]) firsts.push(ranking[0]);
+      if (ranking[1]) seconds.push(ranking[1]);
+    }
+    seconds.sort(cmpGlobal);
+    return [...firsts, ...seconds.slice(0, 2)];
+  }
+
+  throw new HttpError(400, "UNKNOWN_BRACKET_FORMAT");
+};
+
+// --- Cross-pair helper (avoids groupmate matchups in round 1) -------------
+
+const crossPairsAvoidingGroupmates = (
+  seedsHome: Qualified[],
+  seedsAway: Qualified[],
+): Array<[Qualified, Qualified]> => {
+  // Walk home seeds and try to find an away seed from a different group,
+  // not already used. Falls back to a groupmate if no other option remains.
   const pairs: Array<[Qualified, Qualified]> = [];
-  // Walk firsts and shift seconds so groupmates never line up.
-  // Pair 0 ↔ shifted seconds[0]; we use a swap-by-pair pattern: (0,1),(1,0),(2,3),(3,2)
-  // which guarantees firsts[i].groupId ≠ seconds[paired].groupId when groups are distinct.
-  for (let i = 0; i < firsts.length; i += 2) {
-    const a = firsts[i];
-    const b = firsts[i + 1];
-    const sa = seconds.find((s) => s.groupId !== a.groupId && !pairs.some((p) => p[1] === s));
-    const sb = seconds.find((s) => s.groupId !== b?.groupId && s !== sa);
-    if (a && sa) pairs.push([a, sa]);
-    if (b && sb) pairs.push([b, sb]);
+  const usedAway = new Set<number>();
+  for (let i = 0; i < seedsHome.length; i++) {
+    const home = seedsHome[i];
+    let pickedIdx = seedsAway.findIndex(
+      (s, idx) => !usedAway.has(idx) && s.groupId !== home.groupId,
+    );
+    if (pickedIdx < 0) {
+      // Last resort: take any remaining away (forced groupmate).
+      pickedIdx = seedsAway.findIndex((_, idx) => !usedAway.has(idx));
+    }
+    if (pickedIdx < 0) break;
+    usedAway.add(pickedIdx);
+    pairs.push([home, seedsAway[pickedIdx]]);
   }
   return pairs;
 };
 
-export const generateKnockout = async (tournamentId: string) => {
-  return tx(async (q) => {
-    const existingKo = await q(
-      "SELECT id FROM matches WHERE tournament_id=$1 AND stage!='group'", [tournamentId],
-    );
-    if (existingKo.length > 0) return { ok: true, skipped: true };
-    return await provisionBracket(q, tournamentId);
-  });
-};
+// --- Bracket provisioners by size -----------------------------------------
 
-// Wipes any non-group matches and re-creates the bracket from current standings.
-// Used by the admin "regenerate" endpoint to fix brackets seeded with the old
-// (groupmate-colliding) algorithm.
-export const regenerateBracket = async (tournamentId: string) => {
-  return tx(async (q) => {
-    await q("DELETE FROM matches WHERE tournament_id=$1 AND stage!='group'", [tournamentId]);
-    return await provisionBracket(q, tournamentId);
-  });
-};
-
-const provisionBracket = async (q: typeof query, tournamentId: string) => {
-  const groups = await q(
-    "SELECT id FROM tournament_groups WHERE tournament_id=$1 ORDER BY name", [tournamentId],
-  );
-  if (groups.length === 0) throw new HttpError(400, "NO_GROUPS");
-
-  // Collect qualified teams with rank + groupId.
-  const topN = groups.length === 1 ? 4 : 2;
-  const qualified: Qualified[] = [];
-  for (const g of groups) {
-    const groupId = (g as { id: string }).id;
-    const tops = await getTopFromGroup(groupId, topN);
-    tops.forEach((t, idx) => qualified.push({ teamId: t.team_id, groupId, rank: idx + 1 }));
-  }
-
-  let n = qualified.length;
-  if (n < 4) throw new HttpError(400, "TOO_FEW_TEAMS");
-
-  // Cap at 8: with N=5 or N=7 we can't build a clean QF/SF/Final structure
-  // using our current schema, so reduce to top 4 by points.
-  if (n === 5 || n === 7) {
-    console.warn(`[bracket] tournament=${tournamentId} N=${n} not supported by 3-stage bracket — capping to top 4 by standings`);
-    // We need to re-rank globally by points; approximate by group rank then by groupId.
-    qualified.sort((a, b) => a.rank - b.rank || a.groupId.localeCompare(b.groupId));
-    qualified.length = 4;
-    n = 4;
-  } else if (n > 8) {
-    console.warn(`[bracket] tournament=${tournamentId} N=${n} > 8 — capping to top 8`);
-    qualified.sort((a, b) => a.rank - b.rank || a.groupId.localeCompare(b.groupId));
-    qualified.length = 8;
-    n = 8;
-  }
-
-  if (n === 4) {
-    await provisionFour(q, tournamentId, qualified);
-  } else if (n === 6) {
-    await provisionSix(q, tournamentId, qualified);
-  } else if (n === 8) {
-    await provisionEight(q, tournamentId, qualified);
-  }
-
-  return { ok: true, qualifiedCount: n };
-};
-
-// 4 teams → SF×2 + Final + 3rd. Cross-paired by groupmate-avoidance.
-const provisionFour = async (q: typeof query, tournamentId: string, qualified: Qualified[]) => {
-  const firsts = qualified.filter((x) => x.rank === 1);
-  const seconds = qualified.filter((x) => x.rank === 2);
-  // Special: single group → 4 teams, all rank 1..4. Treat 1+4 vs 2+3 cross.
-  let pairs: Array<[Qualified, Qualified]>;
-  if (firsts.length === 4 && seconds.length === 0) {
-    pairs = [[firsts[0], firsts[3]], [firsts[1], firsts[2]]];
-  } else {
-    pairs = crossedPairs(firsts, seconds);
-  }
-  // SFs
+const provisionFour = async (
+  q: typeof query, tournamentId: string, qualified: Qualified[],
+) => {
+  // Cross 1 vs 4 / 2 vs 3 when from same single group; otherwise 1 vs 4 / 2 vs 3 also works as a pure seeding.
+  const seeds = qualified.slice(); // already sorted globally
+  const pairs: Array<[Qualified, Qualified]> = [
+    [seeds[0], seeds[3]],
+    [seeds[1], seeds[2]],
+  ];
   for (let i = 0; i < pairs.length; i++) {
     const [home, away] = pairs[i];
     await q(
@@ -157,57 +195,24 @@ const provisionFour = async (q: typeof query, tournamentId: string, qualified: Q
       [tournamentId, i + 1, home.teamId, away.teamId],
     );
   }
-  await q(`INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'final','pending',1)`, [tournamentId]);
-  await q(`INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'third_place','pending',1)`, [tournamentId]);
+  await q(
+    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'final','pending',1)`,
+    [tournamentId],
+  );
+  await q(
+    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'third_place','pending',1)`,
+    [tournamentId],
+  );
 };
 
-// 6 teams → 2 random byes + 2 QFs + 2 SFs + Final + 3rd.
-const provisionSix = async (q: typeof query, tournamentId: string, qualified: Qualified[]) => {
-  const seed = hashSeed(tournamentId);
-  const shuffled = seededShuffle(qualified, seed);
-  const byes = shuffled.slice(0, 2);
-  const others = shuffled.slice(2);
-  // Pair the others (4 teams → 2 QFs). Avoid groupmates if possible.
-  const qfPairs: Array<[Qualified, Qualified]> = [];
-  // Greedy: take first, find a partner with different groupId.
-  const remaining = others.slice();
-  while (remaining.length >= 2) {
-    const a = remaining.shift()!;
-    let partnerIdx = remaining.findIndex((x) => x.groupId !== a.groupId);
-    if (partnerIdx < 0) partnerIdx = 0; // forced groupmate
-    const b = remaining.splice(partnerIdx, 1)[0];
-    qfPairs.push([a, b]);
-  }
-
-  // QF1, QF2
-  for (let i = 0; i < qfPairs.length; i++) {
-    const [home, away] = qfPairs[i];
-    await q(
-      `INSERT INTO matches (tournament_id, stage, status, round_number, home_team_id, away_team_id)
-       VALUES ($1,'quarterfinal','pending',$2,$3,$4)`,
-      [tournamentId, i + 1, home.teamId, away.teamId],
-    );
-  }
-
-  // SFs: one bye on home_team_id, away comes from the QF winner.
-  // SF1 = bye0 + winner of QF1; SF2 = bye1 + winner of QF2.
-  for (let i = 0; i < 2; i++) {
-    await q(
-      `INSERT INTO matches (tournament_id, stage, status, round_number, home_team_id)
-       VALUES ($1,'semifinal','pending',$2,$3)`,
-      [tournamentId, i + 1, byes[i].teamId],
-    );
-  }
-  await q(`INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'final','pending',1)`, [tournamentId]);
-  await q(`INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'third_place','pending',1)`, [tournamentId]);
-};
-
-// 8 teams → 4 QFs (cross-paired) + 2 SFs + Final + 3rd.
-const provisionEight = async (q: typeof query, tournamentId: string, qualified: Qualified[]) => {
-  const firsts = qualified.filter((x) => x.rank === 1);
-  const seconds = qualified.filter((x) => x.rank === 2);
-  const pairs = crossedPairs(firsts, seconds);
-  // QF1..QF4
+const provisionEight = async (
+  q: typeof query, tournamentId: string, qualified: Qualified[],
+) => {
+  // Top half (seeds 1..4) vs bottom half (5..8), with groupmate avoidance.
+  const sorted = qualified.slice();
+  const top = sorted.slice(0, 4);
+  const bot = sorted.slice(4, 8);
+  const pairs = crossPairsAvoidingGroupmates(top, bot);
   for (let i = 0; i < pairs.length; i++) {
     const [home, away] = pairs[i];
     await q(
@@ -216,26 +221,145 @@ const provisionEight = async (q: typeof query, tournamentId: string, qualified: 
       [tournamentId, i + 1, home.teamId, away.teamId],
     );
   }
-  // SF1, SF2 (empty, fed by QFs via propagateBracketWinner)
   for (let i = 0; i < 2; i++) {
     await q(
       `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'semifinal','pending',$2)`,
       [tournamentId, i + 1],
     );
   }
-  await q(`INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'final','pending',1)`, [tournamentId]);
-  await q(`INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'third_place','pending',1)`, [tournamentId]);
+  await q(
+    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'final','pending',1)`,
+    [tournamentId],
+  );
+  await q(
+    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'third_place','pending',1)`,
+    [tournamentId],
+  );
+};
+
+const provisionSixteen = async (
+  q: typeof query, tournamentId: string, qualified: Qualified[],
+) => {
+  const sorted = qualified.slice();
+  const top = sorted.slice(0, 8);
+  const bot = sorted.slice(8, 16);
+  const pairs = crossPairsAvoidingGroupmates(top, bot);
+  for (let i = 0; i < pairs.length; i++) {
+    const [home, away] = pairs[i];
+    await q(
+      `INSERT INTO matches (tournament_id, stage, status, round_number, home_team_id, away_team_id)
+       VALUES ($1,'eighth','pending',$2,$3,$4)`,
+      [tournamentId, i + 1, home.teamId, away.teamId],
+    );
+  }
+  for (let i = 0; i < 4; i++) {
+    await q(
+      `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'quarterfinal','pending',$2)`,
+      [tournamentId, i + 1],
+    );
+  }
+  for (let i = 0; i < 2; i++) {
+    await q(
+      `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'semifinal','pending',$2)`,
+      [tournamentId, i + 1],
+    );
+  }
+  await q(
+    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'final','pending',1)`,
+    [tournamentId],
+  );
+  await q(
+    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'third_place','pending',1)`,
+    [tournamentId],
+  );
+};
+
+// --- Public API -----------------------------------------------------------
+
+const readBracketConfig = async (
+  q: typeof query, tournamentId: string,
+): Promise<{ format: BracketFormat; size: BracketSize | null }> => {
+  const row = await q<{
+    bracket_format: string | null; bracket_size: number | null;
+  }>(
+    "SELECT bracket_format, bracket_size FROM tournaments WHERE id=$1",
+    [tournamentId],
+  );
+  if (row.length === 0) throw new HttpError(404, "TOURNAMENT_NOT_FOUND");
+  const format = (row[0].bracket_format ?? "top2_per_group") as BracketFormat;
+  const rawSize = row[0].bracket_size;
+  const size = rawSize === 4 || rawSize === 8 || rawSize === 16 ? rawSize : null;
+  return { format, size };
+};
+
+// Pick a bracket size that fits the qualified pool when admin didn't choose.
+const inferSize = (n: number): BracketSize => {
+  if (n >= 16) return 16;
+  if (n >= 8)  return 8;
+  if (n >= 4)  return 4;
+  throw new HttpError(400, "TOO_FEW_TEAMS");
+};
+
+export const generateKnockout = async (tournamentId: string) => {
+  return tx(async (q) => {
+    const existingKo = await q(
+      "SELECT id FROM matches WHERE tournament_id=$1 AND stage!='group'",
+      [tournamentId],
+    );
+    if (existingKo.length > 0) return { ok: true, skipped: true };
+    return await provisionBracket(q, tournamentId);
+  });
+};
+
+// Wipes any non-group matches and re-creates the bracket from current
+// standings. Used by the admin "regenerate" endpoint and whenever the
+// bracket needs to follow a fresh format / size choice.
+export const regenerateBracket = async (tournamentId: string) => {
+  return tx(async (q) => {
+    await q(
+      "DELETE FROM matches WHERE tournament_id=$1 AND stage!='group'",
+      [tournamentId],
+    );
+    return await provisionBracket(q, tournamentId);
+  });
+};
+
+const provisionBracket = async (q: typeof query, tournamentId: string) => {
+  const { format, size: rawSize } = await readBracketConfig(q, tournamentId);
+  const qualified = await collectQualified(q, tournamentId, format);
+
+  // Global tiebreak: the qualified list lands here sorted by group rank;
+  // re-sort GLOBALLY by points to fix the seeding bug where a 2nd-place
+  // team with more points was getting dropped behind a weaker group winner.
+  qualified.sort(cmpGlobal);
+
+  if (qualified.length < 4) {
+    throw new HttpError(400, "TOO_FEW_TEAMS",
+      `Faltan equipos para montar un cuadro (hay ${qualified.length}, hacen falta 4 mínimo).`);
+  }
+
+  const size: BracketSize = rawSize ?? inferSize(qualified.length);
+  if (qualified.length < size) {
+    throw new HttpError(400, "TOO_FEW_FOR_SIZE",
+      `Hay ${qualified.length} clasificados pero el cuadro está fijado a ${size}.`);
+  }
+  const pool = qualified.slice(0, size);
+
+  if (size === 4)       await provisionFour(q, tournamentId, pool);
+  else if (size === 8)  await provisionEight(q, tournamentId, pool);
+  else if (size === 16) await provisionSixteen(q, tournamentId, pool);
+
+  return { ok: true, format, size, qualifiedCount: pool.length };
 };
 
 // Called from completeMatch when a knockout match closes. Fills the next
-// round's slot for this match's bracket position. Idempotent: re-running
-// against an already-set slot just rewrites the same value.
+// round's slot. Mapping:
 //
-// Mapping (round_number is positional):
-//   QF round R (1..4) → SF round ceil(R/2). R odd → home, R even → away.
-//   SF round R (1..2) → Final.home (R=1) or Final.away (R=2).
-//                       SF loser  → third_place.home (R=1) or .away (R=2).
-//   Final/third_place: no propagation; tournament.winner_id is set elsewhere.
+//   eighth R (1..8)        → quarterfinal ceil(R/2). odd R → home, even R → away.
+//   quarterfinal R (1..4)  → semifinal    ceil(R/2). odd R → home, even R → away.
+//   semifinal R (1..2)     → final.home (R=1) or final.away (R=2).
+//                            loser → third_place.home (R=1) or .away (R=2).
+//   final/third_place      : no propagation.
 export const propagateBracketWinner = async (
   q: typeof query,
   tournamentId: string,
@@ -245,6 +369,17 @@ export const propagateBracketWinner = async (
   loserId: string | null,
 ): Promise<void> => {
   if (!round || !winnerId) return;
+
+  if (stage === "eighth") {
+    const qfRound = Math.ceil(round / 2);
+    const slot = round % 2 === 1 ? "home_team_id" : "away_team_id";
+    await q(
+      `UPDATE matches SET ${slot}=$1
+       WHERE tournament_id=$2 AND stage='quarterfinal' AND round_number=$3`,
+      [winnerId, tournamentId, qfRound],
+    );
+    return;
+  }
 
   if (stage === "quarterfinal") {
     const sfRound = Math.ceil(round / 2);
@@ -273,5 +408,4 @@ export const propagateBracketWinner = async (
     }
     return;
   }
-  // Final + third_place: no propagation needed.
 };

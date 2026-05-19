@@ -1,0 +1,50 @@
+# 20260519-151600 · iter 10
+# params: {'CAPTAINS_N': '16', 'PLAYERS_N': '95', 'BRACKET_FORMAT': 'top2_per_group', 'BRACKET_SIZE': '4', 'LABEL': 'R-151600-16c-95p-top2-4'}
+
+[36m▶ login admin · tester[0m
+  [32m✓[0m login OK · playerId=1b70fc35-f36b-48e9-92f3-a0ebc8d64887 · cookies_secure_stripped=0
+
+=== R-151600-16c-95p-top2-4 ===
+  captains=16  players=95  total=111
+  bracket_format=top2_per_group  bracket_size=4
+[36m▶ crear torneo · matchDate=2026-06-18[0m
+  [32m✓[0m id=b382dd53-ffe9-497a-a14e-22468ff4357b
+[36m▶ alta e inscripción de 111 jugadores[0m
+  [2m  25/111[0m
+  [2m  50/111[0m
+  [2m  75/111[0m
+  [2m  100/111[0m
+  [2m  111/111[0m
+[36m▶ promover 16 capitanes[0m
+  [32m✓[0m CSV 2026-06-18.csv · 111 filas · 16 capitanes
+[36m▶ PATCH fechas → ventana de draft[0m
+  [32m✓[0m status=draft
+  [32m✓[0m draft activo · teamOrder n=16
+[36m▶ draft loop · 95 picks[0m
+  [32m✓[0m draft auto-cerrado · pool vacía
+[36m▶ verificar setup (grupos + calendario)[0m
+  [32m✓[0m status=setup
+  [32m✓[0m 24 partidos generados
+[36m▶ PATCH matchDate=ayer → status active[0m
+  [32m✓[0m status=active
+[36m▶ jugar fase de grupos (24 partidos)[0m
+  [2m  10/24  último: 12-16[0m
+  [2m  20/24  último: 12-18[0m
+  [2m  24/24  último: 20-21[0m
+  [2m  grupo Grupo A: gp_sum=12, líder=Team I pts=4[0m
+  [2m  grupo Grupo B: gp_sum=12, líder=Team B pts=6[0m
+  [2m  grupo Grupo C: gp_sum=12, líder=Team G pts=4[0m
+  [2m  grupo Grupo D: gp_sum=12, líder=Team P pts=6[0m
+  [32m✓[0m standings consultados
+  [32m✓[0m bracket generado · stages=['final', 'semifinal', 'third_place'] · matches=4
+[36m▶ jugar semifinal (2 partidos)[0m
+  [2m  semifinal: 18-3[0m
+  [2m  semifinal: 18-11[0m
+[36m▶ jugar final (1 partidos)[0m
+  [2m  final: 9-19[0m
+[36m▶ jugar third_place (1 partidos)[0m
+  [2m  third_place: 18-6[0m
+[36m▶ verificar campeón[0m
+  [32m✓[0m campeón = teamId 945f6807-4048-4637-a061-47b3d991f296 · status=completed
+
+✓ ciclo completo · tournament=b382dd53-ffe9-497a-a14e-22468ff4357b

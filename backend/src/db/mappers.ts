@@ -55,6 +55,8 @@ export const toTournament = (r: Row): Tournament => ({
   gameDurationMinutes: Number(r.game_duration_minutes ?? 20),
   hoursConfirmed: Boolean(r.hours_confirmed),
   teamSize: Number(r.team_size ?? 3),
+  bracketFormat: (r.bracket_format as Tournament["bracketFormat"]) ?? "top2_per_group",
+  bracketSize: r.bracket_size == null ? null : Number(r.bracket_size) as Tournament["bracketSize"],
 });
 
 export const toTeam = (r: Row): Team => ({

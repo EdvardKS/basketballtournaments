@@ -2,7 +2,9 @@
 export type Role = "player" | "captain" | "admin";
 export type TournamentStatus =
   | "upcoming" | "open" | "draft" | "setup" | "scheduled" | "active" | "completed";
-export type MatchStage = "group" | "quarterfinal" | "semifinal" | "final" | "third_place";
+export type MatchStage = "group" | "eighth" | "quarterfinal" | "semifinal" | "final" | "third_place";
+export type BracketFormat = "top2_per_group" | "top1_plus_best2_seconds";
+export type BracketSize = 4 | 8 | 16;
 export type MatchStatus = "pending" | "in_progress" | "completed";
 
 export interface Player {
@@ -24,6 +26,8 @@ export interface Tournament {
   courtCount: number; halfCourt: boolean;
   gameDurationMinutes: number; hoursConfirmed: boolean;
   teamSize: number;
+  bracketFormat: BracketFormat;
+  bracketSize: BracketSize | null;
 }
 
 export interface Team {

@@ -35,6 +35,10 @@ export const tournamentSchema = z.object({
   matchDate: z.string().regex(dateRx).optional().nullable(),
   courtCount: z.coerce.number().int().min(1).max(10).default(1),
   halfCourt: z.boolean().default(true),
+  bracketFormat: z.enum(["top2_per_group", "top1_plus_best2_seconds"])
+    .default("top2_per_group"),
+  bracketSize: z.union([z.literal(4), z.literal(8), z.literal(16)])
+    .optional().nullable(),
 });
 
 export const updateSchema = tournamentSchema.partial().extend({
@@ -73,13 +77,16 @@ export const createTournament = async (raw: unknown) => {
     `INSERT INTO tournaments
        (name, date, status, location, description, rules, max_teams,
         inscription_start, inscription_end, draft_start, draft_end, match_date,
-        court_count, half_court, game_duration_minutes, team_size)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+        court_count, half_court, game_duration_minutes, team_size,
+        bracket_format, bracket_size)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+     RETURNING *`,
     [data.name, data.matchDate ?? data.date ?? null, data.status, data.location,
      data.description, data.rules ?? null, LEGACY_MAX_TEAMS,
      data.inscriptionStart ?? null, data.inscriptionEnd ?? null,
      data.draftStart ?? null, data.draftEnd ?? null, data.matchDate ?? null,
-     data.courtCount, data.halfCourt, LEGACY_GAME_DURATION_MINUTES, LEGACY_TEAM_SIZE],
+     data.courtCount, data.halfCourt, LEGACY_GAME_DURATION_MINUTES, LEGACY_TEAM_SIZE,
+     data.bracketFormat, data.bracketSize ?? null],
   );
   return toTournament(row!);
 };
@@ -101,14 +108,16 @@ export const patchTournament = async (id: string, raw: unknown) => {
        draft_end=COALESCE($12, draft_end),
        match_date=COALESCE($13, match_date),
        court_count=$14, half_court=$15,
-       hours_confirmed=COALESCE($16, hours_confirmed)
+       hours_confirmed=COALESCE($16, hours_confirmed),
+       bracket_format=$17, bracket_size=$18
      WHERE id=$1 RETURNING *`,
     [id, merged.name, merged.matchDate ?? null, merged.status, merged.location,
      merged.description, merged.rules ?? null, merged.winnerId ?? null,
      merged.inscriptionStart ?? null, merged.inscriptionEnd ?? null,
      merged.draftStart ?? null, merged.draftEnd ?? null, merged.matchDate ?? null,
      merged.courtCount, merged.halfCourt,
-     (data as { hoursConfirmed?: boolean }).hoursConfirmed ?? null],
+     (data as { hoursConfirmed?: boolean }).hoursConfirmed ?? null,
+     merged.bracketFormat, merged.bracketSize ?? null],
   );
   return toTournament(row!);
 };

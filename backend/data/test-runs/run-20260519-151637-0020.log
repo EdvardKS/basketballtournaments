@@ -1,0 +1,43 @@
+# 20260519-151637 · iter 20
+# params: {'CAPTAINS_N': '6', 'PLAYERS_N': '24', 'BRACKET_FORMAT': 'top1_plus_best2_seconds', 'LABEL': 'R-151637-6c-24p-top1-auto'}
+
+[36m▶ login admin · tester[0m
+  [32m✓[0m login OK · playerId=1b70fc35-f36b-48e9-92f3-a0ebc8d64887 · cookies_secure_stripped=0
+
+=== R-151637-6c-24p-top1-auto ===
+  captains=6  players=24  total=30
+  bracket_format=top1_plus_best2_seconds  bracket_size=None
+[36m▶ crear torneo · matchDate=2026-06-18[0m
+  [32m✓[0m id=215a46b5-3f11-41cc-bc15-64bbb177fe6f
+[36m▶ alta e inscripción de 30 jugadores[0m
+  [2m  25/30[0m
+  [2m  30/30[0m
+[36m▶ promover 6 capitanes[0m
+  [32m✓[0m CSV 2026-06-18.csv · 30 filas · 6 capitanes
+[36m▶ PATCH fechas → ventana de draft[0m
+  [32m✓[0m status=draft
+  [32m✓[0m draft activo · teamOrder n=6
+[36m▶ draft loop · 24 picks[0m
+  [32m✓[0m draft auto-cerrado · pool vacía
+[36m▶ verificar setup (grupos + calendario)[0m
+  [32m✓[0m status=setup
+  [32m✓[0m 6 partidos generados
+[36m▶ PATCH matchDate=ayer → status active[0m
+  [32m✓[0m status=active
+[36m▶ jugar fase de grupos (6 partidos)[0m
+  [2m  6/6  último: 11-7[0m
+  [2m  grupo Grupo A: gp_sum=6, líder=Team A pts=4[0m
+  [2m  grupo Grupo B: gp_sum=6, líder=Team B pts=4[0m
+  [32m✓[0m standings consultados
+  [32m✓[0m bracket generado · stages=['final', 'semifinal', 'third_place'] · matches=4
+[36m▶ jugar semifinal (2 partidos)[0m
+  [2m  semifinal: 6-12[0m
+  [2m  semifinal: 15-4[0m
+[36m▶ jugar final (1 partidos)[0m
+  [2m  final: 17-10[0m
+[36m▶ jugar third_place (1 partidos)[0m
+  [2m  third_place: 2-18[0m
+[36m▶ verificar campeón[0m
+  [32m✓[0m campeón = teamId 7695ad7b-a089-40d6-a294-bdc27a8e5858 · status=completed
+
+✓ ciclo completo · tournament=215a46b5-3f11-41cc-bc15-64bbb177fe6f
