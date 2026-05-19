@@ -55,16 +55,16 @@ Si editas un fichero aplicado se detecta **drift** y se avisa en log
 
 | Comando                       | Qué hace                                              |
 |-------------------------------|-------------------------------------------------------|
-| `npm run migrate`             | Aplica migraciones pendientes                         |
-| `npm run seed`                | Aplica seeds pendientes                               |
-| `npm run migrate:status`      | Muestra `APPLIED`/`PENDING`/`DRIFT` de **ambos**      |
-| `npm run migrate:mark <f>`    | Marca una migración como aplicada sin ejecutarla      |
-| `npm run seed:mark <f>`       | Marca un seed como aplicado sin ejecutarlo            |
+| `pnpm migrate`                | Aplica migraciones pendientes                         |
+| `pnpm seed`                   | Aplica seeds pendientes                               |
+| `pnpm migrate:status`         | Muestra `APPLIED`/`PENDING`/`DRIFT` de **ambos**      |
+| `pnpm migrate:mark <f>`       | Marca una migración como aplicada sin ejecutarla      |
+| `pnpm seed:mark <f>`          | Marca un seed como aplicado sin ejecutarlo            |
 
 Ejemplo:
 
 ```bash
-docker exec basket_backend_prod npm run migrate:status
+docker exec basket_backend_prod pnpm migrate:status
 ```
 
 Salida:

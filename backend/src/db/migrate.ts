@@ -133,12 +133,12 @@ const applyDir = async (
       }
       // Soft failure (seeds): the backend must still come up. Log the
       // conflict but continue to the next file; demo data can be loaded
-      // manually later via `npm run seed`.
+      // manually later via `pnpm seed`.
       const msg = (err as { detail?: string; message?: string }).detail
         ?? (err as Error).message
         ?? String(err);
       console.warn(`[${label}] SKIP ${filename} (${msg}). Continuing — ` +
-        `wipe the DB volume or fix the conflict and run \`npm run ${label}\`.`);
+        `wipe the DB volume or fix the conflict and run \`pnpm ${label}\`.`);
     } finally {
       client.release();
     }

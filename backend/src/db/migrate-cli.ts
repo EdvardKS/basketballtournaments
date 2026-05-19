@@ -1,10 +1,10 @@
 // CLI wrapper for migrations + seed runner.
 // Usage inside the backend container:
-//   npm run migrate               apply pending migrations
-//   npm run migrate:status        show migrations + seeds status
-//   npm run seed                  apply pending seeds
-//   npm run migrate:mark <f>      mark a migration as applied w/o running
-//   npm run seed:mark <f>         mark a seed as applied w/o running
+//   pnpm migrate               apply pending migrations
+//   pnpm migrate:status        show migrations + seeds status
+//   pnpm seed                  apply pending seeds
+//   pnpm migrate:mark <f>      mark a migration as applied w/o running
+//   pnpm seed:mark <f>         mark a seed as applied w/o running
 //
 // Delegates to the pair of exports in ./migrate.ts.
 

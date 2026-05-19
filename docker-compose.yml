@@ -39,7 +39,7 @@ services:
       - "4010:4000"
     networks:
       - basket_net
-    command: npm run dev
+    command: pnpm dev
 
   frontend:
     build: ./frontend
@@ -60,7 +60,7 @@ services:
       - "4322:4321"
     networks:
       - basket_net
-    command: npm run dev
+    command: pnpm dev
 
 networks:
   basket_net:
