@@ -9,10 +9,15 @@ servicios Docker:
 
 ## Arranque rápido
 
+**Desarrollo** (HMR, montajes de fuentes):
+
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.dev.yml up -d --build
 # abre http://localhost:4322
 ```
+
+**Producción** (default — imágenes compiladas, sin HMR): ver sección
+[Producción](#producción) más abajo. Requiere `.env.prod` copiados antes.
 
 ## Base de datos: migraciones + seeds auto-aplicados
 
@@ -225,7 +230,7 @@ bash test/e2e_full_tournament.sh
 cp db/.env.prod.example           db/.env.prod            # edita password
 cp backend/.env.prod.example      backend/.env.prod       # edita secrets
 cp frontend/.env.prod.example     frontend/.env.prod
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 ```
 
 Por defecto `db/.env.prod.example` trae `EXAMPLE_DATA=false` → la DB se
@@ -255,8 +260,8 @@ db/
   seeds/    Datos demo (sólo si EXAMPLE_DATA=true)
 docs/       Documentación
 test/       Smoke tests
-docker-compose.yml         # desarrollo (HMR, mounts)
-docker-compose.prod.yml    # producción (builds, sin mounts)
+docker-compose.yml         # producción (default — builds, sin mounts)
+docker-compose.dev.yml     # desarrollo (HMR, mounts)
 ```
 
 ## Dev

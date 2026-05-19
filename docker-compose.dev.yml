@@ -1,0 +1,78 @@
+# Development stack. Source-mounted, HMR enabled (astro dev, tsx watch).
+# Same host ports as prod (4322 / 4010 / 5434).
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d --build
+
+services:
+  db:
+    build: ./db
+    container_name: basket_db
+    restart: unless-stopped
+    env_file: ./db/.env
+    volumes:
+      - basket_pgdata:/var/lib/postgresql/data
+      # Schema + seed SQL are applied by the backend on boot (see
+      # backend/src/db/migrate.ts). No docker-entrypoint-initdb.d mount:
+      # that path only runs on *first* DB init, which breaks upgrades.
+    ports:
+      - "5434:5432"
+    networks:
+      - basket_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d basket"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: basket_backend
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      NODE_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/tsconfig.json:/app/tsconfig.json
+      - ./db/init:/app/migrations:ro
+      - ./db/seeds:/app/seeds:ro
+      - backend_node_modules:/app/node_modules
+    ports:
+      - "4010:4000"
+    networks:
+      - basket_net
+    command: pnpm dev
+
+  frontend:
+    build: ./frontend
+    container_name: basket_frontend
+    restart: unless-stopped
+    env_file: ./frontend/.env
+    environment:
+      NODE_ENV: development
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/astro.config.mjs:/app/astro.config.mjs
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "4322:4321"
+    networks:
+      - basket_net
+    command: pnpm dev
+
+networks:
+  basket_net:
+    driver: bridge
+
+volumes:
+  basket_pgdata:
+  backend_node_modules:
+  frontend_node_modules:

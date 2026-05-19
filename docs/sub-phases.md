@@ -36,8 +36,8 @@
 # en el VPS
 cd /var/www/basketballtournaments
 git pull
-docker compose -f docker-compose.prod.yml build backend frontend
-docker compose -f docker-compose.prod.yml up -d backend frontend
+docker compose build backend frontend
+docker compose up -d backend frontend
 ```
 
 ## Verificación end-to-end

@@ -13,16 +13,16 @@ Los `.env` están gitignoreados. Copia los ejemplos antes del primer build:
 cp db/.env.example db/.env
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
-docker compose up -d --build
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-## Arranque en producción (mismos puertos, build real)
+## Arranque en producción (default, mismos puertos, build real)
 
 ```bash
 cp db/.env.prod.example db/.env.prod           # edita las contraseñas
 cp backend/.env.prod.example backend/.env.prod # edita SESSION_SECRET
 cp frontend/.env.prod.example frontend/.env.prod
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 ```
 
 Diferencias con el stack de desarrollo:
@@ -51,12 +51,12 @@ Soluciones:
 
 ```bash
 # A — recrear el volumen (destructivo, sólo si no hay datos reales)
-docker compose -f docker-compose.prod.yml down
+docker compose down
 docker volume rm basketballtournaments_basket_pgdata_prod
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 
 # B — cambiar la password dentro de la DB (conserva los datos)
-docker compose -f docker-compose.prod.yml exec db \
+docker compose exec db \
   psql -U basket -d basket -c "ALTER USER basket WITH PASSWORD 'nueva';"
 # y luego actualiza backend/.env.prod con la misma password.
 ```

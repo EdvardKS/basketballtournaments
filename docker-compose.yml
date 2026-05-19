@@ -1,72 +1,73 @@
+# Production stack (default). Builds compiled images, no source mounts, no HMR.
+# Same host ports as dev (4322 / 4010 / 5434).
+#
+# Usage:
+#   cp db/.env.prod.example db/.env.prod           (edit secrets)
+#   cp backend/.env.prod.example backend/.env.prod (edit secrets)
+#   cp frontend/.env.prod.example frontend/.env.prod
+#   docker compose up -d --build
+#
+# For development (HMR, source mounts): use docker-compose.dev.yml.
+
 services:
   db:
-    build: ./db
-    container_name: basket_db
+    build:
+      context: ./db
+      dockerfile: Dockerfile.prod
+    container_name: basket_db_prod
     restart: unless-stopped
-    env_file: ./db/.env
+    env_file: ./db/.env.prod
     volumes:
-      - basket_pgdata:/var/lib/postgresql/data
+      - basket_pgdata_prod:/var/lib/postgresql/data
       # Schema + seed SQL are applied by the backend on boot (see
       # backend/src/db/migrate.ts). No docker-entrypoint-initdb.d mount:
       # that path only runs on *first* DB init, which breaks upgrades.
     ports:
       - "5434:5432"
     networks:
-      - basket_net
+      - basket_net_prod
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d basket"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
       timeout: 3s
       retries: 10
 
   backend:
-    build: ./backend
-    container_name: basket_backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: basket_backend_prod
     restart: unless-stopped
-    env_file: ./backend/.env
-    environment:
-      NODE_ENV: development
+    env_file: ./backend/.env.prod
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ./backend/src:/app/src
-      - ./backend/tsconfig.json:/app/tsconfig.json
       - ./db/init:/app/migrations:ro
       - ./db/seeds:/app/seeds:ro
-      - backend_node_modules:/app/node_modules
     ports:
       - "4010:4000"
     networks:
-      - basket_net
-    command: pnpm dev
+      - basket_net_prod
 
   frontend:
-    build: ./frontend
-    container_name: basket_frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: basket_frontend_prod
     restart: unless-stopped
-    env_file: ./frontend/.env
-    environment:
-      NODE_ENV: development
+    env_file: ./frontend/.env.prod
     depends_on:
-      - backend
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-      - ./frontend/astro.config.mjs:/app/astro.config.mjs
-      - ./frontend/tsconfig.json:/app/tsconfig.json
-      - frontend_node_modules:/app/node_modules
+      backend:
+        condition: service_healthy
     ports:
       - "4322:4321"
     networks:
-      - basket_net
-    command: pnpm dev
+      - basket_net_prod
 
 networks:
-  basket_net:
+  basket_net_prod:
     driver: bridge
 
 volumes:
-  basket_pgdata:
-  backend_node_modules:
-  frontend_node_modules:
+  basket_pgdata_prod:
