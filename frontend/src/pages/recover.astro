@@ -1,0 +1,35 @@
+---
+import Main from "../layouts/Main.astro";
+import AuthShell from "../components/auth/AuthShell.astro";
+import RecoverForm from "../islands/RecoverForm.js";
+import { loadSession } from "../lib/session.js";
+
+const session = await loadSession(Astro.request);
+
+// Already logged in? No need to recover anything.
+const ROLE_HOME: Record<string, string> = {
+  admin: "/dashboard/admin",
+  captain: "/dashboard/captain",
+  player: "/dashboard/player",
+};
+if (session.isAuthenticated) {
+  return Astro.redirect(ROLE_HOME[session.player?.role ?? "player"] ?? "/dashboard/player");
+}
+---
+<Main title="Recuperar acceso" player={null}>
+  <AuthShell title="Recupera tu acceso" subtitle="Tres datos para verificar que eres tú y volver a la cancha.">
+    <div slot="pitch" class="mt-10 space-y-4 text-sm text-court-muted">
+      <p>
+        Necesitamos coincidir tu <strong>móvil</strong>, <strong>email</strong> y
+        <strong>usuario</strong> con una cuenta existente. Si los tres son
+        correctos te dejamos crear una contraseña nueva.
+      </p>
+      <p class="text-[12px]">
+        Si los datos no coinciden, escribe al desarrollador y te ayudamos a
+        retomar el acceso manualmente.
+      </p>
+    </div>
+
+    <RecoverForm client:load />
+  </AuthShell>
+</Main>

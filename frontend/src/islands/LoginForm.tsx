@@ -80,16 +80,16 @@ export default function LoginForm({ nextUrl }: Props) {
       <div className="space-y-4">
         <NeonField
           id="identifier"
-          label="Teléfono o usuario"
+          label="Móvil, email o usuario"
           value={identifier}
           onChange={setIdentifier}
-          placeholder="600 123 456 / admin"
+          placeholder="600 123 456 / tu@email.com / admin"
           icon={<IconUser />}
           required
           autoFocus
           autoComplete="username"
           validate={(v) => v.trim().length > 0 && v.trim().length < 3 ? "Mínimo 3 caracteres" : null}
-          hint="Jugadores y capitanes: usa tu teléfono. Admin: tu usuario."
+          hint="Cualquiera de los tres vale: tu móvil, tu email o tu nombre de usuario."
         />
 
         <NeonField

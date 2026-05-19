@@ -1,8 +1,11 @@
-// Authentication routes: login/logout/register/me.
+// Authentication routes: login/logout/register/me + password recovery.
 import { Router } from "express";
 import { z } from "zod";
 import { asyncRoute, HttpError } from "../middleware/error.js";
-import { authenticate } from "../services/auth.js";
+import {
+  authenticate, createRecoveryChallenge,
+  recoverCheckIdentity, recoverResetPassword,
+} from "../services/auth.js";
 import { createPlayer } from "../services/players.js";
 import { currentPlayer } from "../middleware/auth.js";
 
@@ -53,6 +56,40 @@ authRouter.get("/me", asyncRoute(async (req, res) => {
   if (!req.session?.playerId) throw new HttpError(401, "UNAUTHENTICATED");
   const player = await currentPlayer(req);
   res.json({ player });
+}));
+
+// --- Password recovery -----------------------------------------------------
+// The flow is split in three steps so a bot has to actually parse and reply
+// to a server-issued arithmetic challenge before it can probe identities.
+
+authRouter.get("/recover/challenge", asyncRoute(async (_req, res) => {
+  res.json(createRecoveryChallenge());
+}));
+
+const recoverCheckSchema = z.object({
+  challengeId: z.string().min(1),
+  challengeAnswer: z.string().min(1).max(10),
+  mobile: z.string().min(1).max(30),
+  email: z.string().email().max(120),
+  username: z.string().min(1).max(80),
+});
+
+authRouter.post("/recover/check", asyncRoute(async (req, res) => {
+  const d = recoverCheckSchema.parse(req.body);
+  const r = await recoverCheckIdentity(
+    d.challengeId, d.challengeAnswer, d.mobile, d.email, d.username,
+  );
+  res.json(r);
+}));
+
+const recoverResetSchema = z.object({
+  recoveryToken: z.string().min(1),
+  password: z.string().min(6).max(100),
+});
+
+authRouter.post("/recover/reset", asyncRoute(async (req, res) => {
+  const d = recoverResetSchema.parse(req.body);
+  res.json(await recoverResetPassword(d.recoveryToken, d.password));
 }));
 
 // Public diagnostic endpoint: returns exactly what the backend sees about the
