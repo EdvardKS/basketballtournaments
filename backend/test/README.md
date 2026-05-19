@@ -67,6 +67,15 @@ Tras el script:
 - Torneo B queda en `active`.
 - Frontend muestra ambos: `http://localhost:4322/`.
 
+## Cookie `Secure` en producción
+
+`backend/.env.prod` suele tener `COOKIE_SECURE=true` (a la espera de
+HTTPS real). El test corre dentro del contenedor contra
+`http://localhost:4000` plano, así que tras el `login` recorre la
+cookie jar y le baja el flag `Secure`. Sin eso, `requests` se la
+guardaría pero no la enviaría sobre HTTP loopback, y todas las
+llamadas siguientes caerían en `401 UNAUTHENTICATED`.
+
 ## Variables de entorno opcionales
 
 | Var                          | Default                | Para qué |

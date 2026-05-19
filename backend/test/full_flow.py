@@ -80,7 +80,16 @@ def login_admin() -> None:
     player = r.json()["player"]
     if player["role"] != "admin":
         die(f"expected admin role, got {player['role']}")
-    ok(f"sesión iniciada · playerId={player['id']}")
+    # Prod sets COOKIE_SECURE=true, but the test runs INSIDE the container
+    # against http://localhost:4000 (plain HTTP). `requests` honours the
+    # Secure flag and would silently drop the cookie on every subsequent
+    # call. Strip it so the session cookie is reused on plain-HTTP loopback.
+    cookies_stripped = 0
+    for c in session.cookies:
+        if c.secure:
+            c.secure = False
+            cookies_stripped += 1
+    ok(f"sesión iniciada · playerId={player['id']} · cookies_secure_off={cookies_stripped}")
 
 
 def create_tournament(label: str, match_date: date,
