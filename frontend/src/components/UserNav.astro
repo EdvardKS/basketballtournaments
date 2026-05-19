@@ -1,0 +1,126 @@
+---
+import type { Player } from "../lib/types.js";
+
+interface Props {
+  player: Player;
+  currentPath?: string;
+}
+const { player, currentPath = "/" } = Astro.props;
+const role = player.role;
+
+interface Action { label: string; href: string }
+const ACTIONS: Record<string, Action[]> = {
+  admin: [
+    { label: "Mi Panel", href: "/dashboard/admin" },
+  ],
+  captain: [
+    { label: "Mi Panel", href: "/dashboard/captain" },
+  ],
+  player: [],
+};
+
+const actions = ACTIONS[role] ?? [];
+
+// Spec: if role has no actions, render nothing — the page's own panel
+// is the only surface. (Logout for those roles lives inside the panel.)
+const showNav = actions.length > 0;
+
+const ROLE_STYLE: Record<string, string> = {
+  admin:   "bg-[var(--color-neon-red)]/15 text-[var(--color-neon-red)] border-[var(--color-neon-red)]/40 shadow-[0_0_12px_rgba(255,45,45,0.45)]",
+  captain: "bg-court-gold/15 text-court-gold border-court-gold/40 shadow-[0_0_12px_rgba(245,197,24,0.45)]",
+  player:  "bg-[var(--color-neon-blue)]/15 text-[var(--color-neon-blue)] border-[var(--color-neon-blue)]/40 shadow-[0_0_12px_rgba(0,102,255,0.45)]",
+};
+const ROLE_LABEL: Record<string, string> = {
+  admin: "Admin", captain: "Capitán", player: "Jugador",
+};
+---
+{showNav && (
+  <header class="sticky top-0 z-50">
+    <div
+      class="relative border-b border-white/10"
+      style="background: linear-gradient(180deg, rgba(11,15,26,0.85) 0%, rgba(11,15,26,0.55) 100%); backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);"
+    >
+      <div
+        class="absolute bottom-0 left-0 right-0 h-px pointer-events-none"
+        style="background: linear-gradient(90deg, transparent 0%, rgba(255,107,0,0.55) 25%, rgba(255,45,45,0.55) 50%, rgba(0,102,255,0.55) 75%, transparent 100%);"
+        aria-hidden="true"
+      />
+
+      <nav class="relative max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 shrink-0">
+          <div
+            class="w-9 h-9 rounded-lg flex items-center justify-center font-hero text-xl leading-none text-white border"
+            style="background: linear-gradient(135deg, #ff6b00 0%, #ff2d2d 100%); border-color: rgba(255,107,0,0.5); box-shadow: 0 0 18px rgba(255,107,0,0.55), inset 0 1px 0 rgba(255,255,255,0.25);"
+          >V</div>
+          <div class="hidden sm:flex flex-col leading-none">
+            <span class="font-hero text-xl tracking-[0.15em] text-white">VBL</span>
+            <span class="text-[9px] uppercase tracking-[0.3em] text-court-muted mt-0.5">{ROLE_LABEL[role]} · {player.name.split(" ")[0]}</span>
+          </div>
+        </div>
+
+        <div class="hidden md:flex items-center gap-1">
+          {actions.map((a) => {
+            const isActive = currentPath === a.href || currentPath.startsWith(a.href + "/");
+            return (
+              <a href={a.href} class={`nav-link ${isActive ? "is-active" : ""}`}>{a.label}</a>
+            );
+          })}
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <span class={`hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${ROLE_STYLE[role]}`}>
+            {ROLE_LABEL[role]}
+          </span>
+          <button
+            id="btn-logout"
+            type="button"
+            class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-[var(--color-neon-red)] border border-[var(--color-neon-red)]/30 hover:bg-[var(--color-neon-red)]/10 hover:shadow-[0_0_14px_rgba(255,45,45,0.45)] transition-all cursor-pointer"
+          >
+            Salir
+          </button>
+          <script>
+            document.getElementById("btn-logout")?.addEventListener("click", async () => {
+              await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+              window.location.href = "/?welcome=logout";
+            });
+          </script>
+        </div>
+      </nav>
+    </div>
+  </header>
+)}
+
+<style>
+  .nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #a0a7b8;
+    border-radius: 0.375rem;
+    transition: color 150ms ease;
+  }
+  .nav-link:hover, .nav-link.is-active {
+    color: #fff;
+    text-shadow: 0 0 10px rgba(255,107,0,0.7);
+  }
+  .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 0.15rem;
+    width: 0;
+    height: 1px;
+    background: linear-gradient(90deg, #ff6b00, #ff2d2d);
+    box-shadow: 0 0 8px rgba(255,107,0,0.7);
+    transition: width 200ms ease, left 200ms ease;
+  }
+  .nav-link:hover::after, .nav-link.is-active::after {
+    width: 60%;
+    left: 20%;
+  }
+</style>

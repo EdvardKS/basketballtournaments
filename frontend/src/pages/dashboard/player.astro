@@ -21,11 +21,24 @@ const active = tournaments.find((t) => !["completed","upcoming"].includes(t.stat
 ---
 <Main title="Mi panel" player={player}>
   <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
-    <div class="flex items-center gap-4">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
       <div>
         <h1 class="font-display text-4xl text-white">Hola, {player.name.split(" ")[0]}</h1>
         <p class="text-court-muted text-sm">Panel del jugador</p>
       </div>
+      <button
+        id="btn-logout"
+        type="button"
+        class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider text-[var(--color-neon-red)] border border-[var(--color-neon-red)]/30 hover:bg-[var(--color-neon-red)]/10 hover:shadow-[0_0_14px_rgba(255,45,45,0.45)] transition-all cursor-pointer"
+      >
+        Salir
+      </button>
+      <script>
+        document.getElementById("btn-logout")?.addEventListener("click", async () => {
+          await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+          window.location.href = "/?welcome=logout";
+        });
+      </script>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
