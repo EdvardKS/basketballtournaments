@@ -2,10 +2,10 @@ User-agent: *
 Disallow: /
 
 # Photo galleries — explicitly off-limits for crawlers, AI scrapers, image
-# indexers. The X-Robots-Tag header on /img/fotos/* enforces this server-side
-# too (see frontend/src/middleware.ts).
+# indexers. The site-wide `Disallow: /` above already covers them, this is
+# the redundant explicit rule for image-only bots.
 User-agent: Googlebot-Image
-Disallow: /img/fotos/
+Disallow: /img/photos/
 
 User-agent: GPTBot
 Disallow: /

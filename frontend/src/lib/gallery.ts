@@ -20,9 +20,10 @@ export interface GalleryEdition {
   photos: GalleryPhoto[];
 }
 
-// Photos are served by the /foto/[...path] endpoint (not /public), so we
-// can run a UA check + X-Robots-Tag header on every request.
-const encode = (raw: string) => `/foto/${raw.replace(/ /g, "%20")}`;
+// Photos live in /public/img/photos/ so the Astro/Node static handler
+// serves them directly. Bot compliance relies on robots.txt + the noindex
+// meta tags in Main.astro (no per-file UA gate at this path).
+const encode = (raw: string) => `/img/photos/${raw.replace(/ /g, "%20")}`;
 
 // Deterministic pseudo-random so server-rendered values match.
 const seeded = (seed: number) => {

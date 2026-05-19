@@ -34,7 +34,6 @@ export default defineConfig({
           "**/package.json",
           "**/package-lock.json",
           "**/pnpm-lock.yaml",
-          "**/photos/**",
           "**/tsconfig*.json",
           "**/astro.config.*",
         ],
