@@ -12,12 +12,17 @@ COPY src ./src
 RUN pnpm build
 
 FROM node:20-alpine AS runtime
-RUN corepack enable
+# Python + requests so the prod image can also run test/full_flow.py via
+# `docker exec basket_backend_prod python3 /app/test/full_flow.py` — same
+# command surface as dev.
+RUN apk add --no-cache python3 py3-requests \
+  && corepack enable
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile --prod && pnpm store prune
 COPY --from=builder /app/dist ./dist
+COPY test ./test
 EXPOSE 4000
 
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 \

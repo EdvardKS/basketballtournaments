@@ -1,6 +1,9 @@
 FROM node:20-alpine
 
-RUN corepack enable
+# Python + requests so the E2E test (test/full_flow.py) can run with
+# `docker exec basket_backend python3 /app/test/full_flow.py`.
+RUN apk add --no-cache python3 py3-requests \
+  && corepack enable
 
 WORKDIR /app
 

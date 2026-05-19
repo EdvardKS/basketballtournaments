@@ -41,6 +41,7 @@ services:
       - ./db/init:/app/migrations:ro
       - ./db/seeds:/app/seeds:ro
       - ./backend/data:/app/data
+      - ./backend/test:/app/test:ro
       - backend_node_modules:/app/node_modules
     ports:
       - "4010:4000"

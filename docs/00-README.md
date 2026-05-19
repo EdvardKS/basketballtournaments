@@ -33,6 +33,7 @@ Todo corre en **modo desarrollo** con hot-reload por volúmenes montados.
 - [07-errores-conocidos.md](07-errores-conocidos.md) — issues y decisiones.
 - [08-frontend.md](08-frontend.md) — cómo está organizada la UI en Astro.
 - [09-changelog-2026-05-19.md](09-changelog-2026-05-19.md) — cambios cerrados en la sesión del 19 de mayo de 2026.
+- [10-testing-roadmap.md](10-testing-roadmap.md) — roadmap del E2E lineal `crear torneo → día del partido`.
 
 ## Credenciales de ejemplo
 

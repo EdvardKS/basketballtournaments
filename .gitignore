@@ -22,11 +22,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# E2E test runtime artefacts (scripts are tracked)
+# E2E test runtime artefacts (scripts under backend/test/ are tracked)
 /test/*.txt
 /test/*.json
 /test/tmp_*.txt
+backend/test/*.txt
+backend/test/*.json
+backend/test/tmp_*
 
 # Docker volumes mount points when used outside compose
 pgdata/
-test/*
