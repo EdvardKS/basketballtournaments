@@ -88,7 +88,6 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
   const [matches, setMatches] = useState<Match[]>([]);
   const [groups, setGroups] = useState<GroupWithMembers[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
   const selected = tournaments.find((t) => t.id === selectedId) ?? null;
@@ -96,6 +95,9 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
   const phase: TournamentPhase = selected ? derivePhase(selected, matches) : "pre";
   const tabs = useMemo(() => tabsForPhase(phase), [phase]);
   const [activeTab, setActiveTab] = useState<TabKey>(tabs[0]?.key ?? "config");
+  // Admin can add/edit/promote players up to (and including) match day. After
+  // matches begin, registrations freeze.
+  const canManageRegistrations = phase === "pre" || phase === "draft";
 
   // Reset tab when tournament or sub-phase changes (so opening a tournament
   // mid-knockout lands on Eliminatorias, not the previously-selected tab).
@@ -137,10 +139,11 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
       return idx >= 0 ? list.map((x, i) => i === idx ? t : x) : [t, ...list];
     });
     setSelectedId(t.id);
-    setEditOpen(false);
     setCreateOpen(false);
     loadDetail();
   };
+
+  const goToConfigTab = () => setActiveTab("config");
 
   return (
     <div className="space-y-6">
@@ -162,7 +165,12 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
               ))}
             </select>
           )}
-          <button type="button" onClick={() => setCreateOpen(true)} className="btn-neon-blue !py-2 !px-4 !text-xs">+ Nuevo torneo</button>
+          {/* "Nuevo torneo" is only available when no tournament exists yet.
+              The backend's ONE_ACTIVE_ONLY rule prevents a second live torneo
+              anyway, so the button is hidden once one is selected. */}
+          {tournaments.length === 0 && (
+            <button type="button" onClick={() => setCreateOpen(true)} className="btn-neon-blue !py-2 !px-4 !text-xs">+ Nuevo torneo</button>
+          )}
         </div>
       </header>
 
@@ -214,7 +222,7 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
 
             <button
               type="button"
-              onClick={() => setEditOpen(true)}
+              onClick={goToConfigTab}
               className="btn-neon-blue !py-2 !px-5 !text-xs shrink-0"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -283,26 +291,18 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
                 groups={groups}
                 allPlayers={allPlayers}
                 captainIds={captainIds}
+                canManageRegistrations={canManageRegistrations}
                 onChange={loadDetail}
-                onSelfEdit={() => setEditOpen(true)}
+                onTournamentSaved={onTournamentSaved}
               />
             )}
           </section>
         </>
       )}
 
-      {/* Edit modal */}
-      <Modal open={editOpen} title="Editar torneo" subtitle={selected?.name} onClose={() => setEditOpen(false)} size="lg">
-        {selected && (
-          <TournamentForm
-            tournament={selected}
-            onSaved={onTournamentSaved}
-            onCancel={() => setEditOpen(false)}
-          />
-        )}
-      </Modal>
-
-      {/* Create modal */}
+      {/* Create modal — still useful when there is NO tournament yet so the
+          empty-state CTA opens it. Once one exists, edits happen inline in
+          the Config tab. */}
       <Modal open={createOpen} title="Nuevo torneo" subtitle="Configura las fechas y el formato" onClose={() => setCreateOpen(false)} size="lg">
         <TournamentForm
           tournament={null}
@@ -315,7 +315,7 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
 }
 
 function TabContent({
-  tab, tournament, detail, matches, groups, allPlayers, captainIds, onChange, onSelfEdit,
+  tab, tournament, detail, matches, groups, allPlayers, captainIds, canManageRegistrations, onChange, onTournamentSaved,
 }: {
   tab: TabKey;
   tournament: Tournament;
@@ -324,8 +324,9 @@ function TabContent({
   groups: GroupWithMembers[];
   allPlayers: Player[];
   captainIds: Set<string>;
+  canManageRegistrations: boolean;
   onChange: () => void;
-  onSelfEdit: () => void;
+  onTournamentSaved: (t: Tournament) => void;
 }) {
   if (tab === "inscripciones") {
     return (
@@ -333,6 +334,7 @@ function TabContent({
         tournamentId={tournament.id}
         registrations={detail?.registrations ?? []}
         captainIds={captainIds}
+        canManage={canManageRegistrations}
         onChange={onChange}
       />
     );
@@ -495,19 +497,18 @@ function TabContent({
     );
   }
 
-  // config
+  // config: full editor lives inline here — no modal.
   return (
-    <div className="glass p-6">
+    <div className="glass p-4 sm:p-6">
       <p className="text-court-muted text-sm mb-4">
-        Edita el nombre, fechas, ubicación, formato y reglas del torneo.
+        Edita nombre, fechas, ubicación, formato y reglas. Los cambios
+        se guardan al pulsar “Guardar”.
       </p>
-      <button type="button" onClick={onSelfEdit} className="btn-neon">
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
-        Abrir editor de torneo
-      </button>
+      <TournamentForm
+        tournament={tournament}
+        onSaved={onTournamentSaved}
+        onCancel={onChange}
+      />
     </div>
   );
 }

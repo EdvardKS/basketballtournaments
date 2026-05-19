@@ -4,6 +4,7 @@ import { query, queryOne } from "../db/query.js";
 import { toPlayer } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
 import { computeOverall, STAT_KEYS } from "./players.js";
+import { exportTournamentRegistrationsCsv } from "./registration-backup.js";
 import type { Role } from "../types.js";
 
 const adminPatchSchema = z.object({
@@ -64,6 +65,15 @@ export const updatePlayer = async (id: string, raw: unknown, role: Role) => {
      stats.pace, stats.shooting, stats.passing,
      stats.dribbling, stats.defense, stats.physical, overall],
   );
+  // Refresh CSV for every tournament this player is registered in — their
+  // name/mobile/role/stats may all surface in the backup file.
+  const regs = await query<{ tournament_id: string }>(
+    "SELECT tournament_id FROM tournament_registrations WHERE player_id=$1",
+    [id],
+  );
+  for (const r of regs) {
+    await exportTournamentRegistrationsCsv(r.tournament_id);
+  }
   return toPlayer(row!);
 };
 
