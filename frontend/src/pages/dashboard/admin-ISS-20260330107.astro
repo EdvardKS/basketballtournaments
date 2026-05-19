@@ -1,0 +1,41 @@
+---
+import Main from "../../layouts/Main.astro";
+import { requireAuth } from "../../lib/session.ts";
+import { api, getCookieHeader } from "../../lib/api.ts";
+import type { Tournament, TournamentDetail } from "../../lib/types.ts";
+import AdminTournaments from "../../islands/AdminTournaments.tsx";
+import AdminDraftControls from "../../islands/AdminDraftControls.tsx";
+
+const { session, redirect } = await requireAuth(Astro.request);
+if (redirect) return Astro.redirect(redirect);
+if (!session.isAdmin) return Astro.redirect("/");
+const cookie = getCookieHeader(Astro.request);
+
+const tournaments = await api<Tournament[]>("/tournaments", {}, cookie);
+const focused = tournaments.find((t) => ["draft","setup"].includes(t.status));
+const focusedDetail = focused
+  ? await api<TournamentDetail>(`/tournaments/${focused.id}`, {}, cookie) : null;
+---
+<Main title="Panel admin — Villena Basket">
+  <h1 class="text-5xl text-court-accent">PANEL ADMIN</h1>
+  <p class="text-slate-400 mb-8">Crea torneos, promueve capitanes y arranca
+    fases. Los cambios se reflejan en vivo en las fichas públicas.</p>
+
+  {focusedDetail && (
+    <section class="mb-10 card border-court-accent">
+      <header class="flex justify-between mb-3">
+        <h2 class="text-2xl">{focusedDetail.tournament.name}
+          <span class="chip ml-2">{focusedDetail.tournament.status}</span></h2>
+        <a href={`/tournaments/${focusedDetail.tournament.id}`} class="text-sm">
+          Ver ficha →
+        </a>
+      </header>
+      <AdminDraftControls client:load detail={focusedDetail} />
+    </section>
+  )}
+
+  <section>
+    <h2 class="text-3xl mb-4">Torneos</h2>
+    <AdminTournaments client:load tournaments={tournaments} />
+  </section>
+</Main>

@@ -1,0 +1,42 @@
+---
+interface Row {
+  teamId: string; teamName: string;
+  points: number; gamesPlayed: number; gamesWon: number;
+  gamesLost: number; pointsFor: number; pointsAgainst: number;
+}
+interface Group { id: string; name: string; table: Row[] | null; }
+interface Props { groups: Group[]; }
+const { groups } = Astro.props;
+---
+
+{groups.length === 0 ? (
+  <p class="text-slate-500 text-sm">Los grupos aún no se han generado.</p>
+) : (
+  <div class="grid md:grid-cols-2 gap-6">
+    {groups.map((g) => (
+      <section class="card">
+        <h3 class="text-2xl mb-3">{g.name}</h3>
+        <table class="w-full text-sm">
+          <thead class="text-xs text-slate-500 uppercase">
+            <tr><th class="text-left py-1">Equipo</th>
+              <th>J</th><th>G</th><th>P</th>
+              <th>PF</th><th>PC</th><th>Pts</th></tr>
+          </thead>
+          <tbody>
+            {(g.table ?? []).map((r, i) => (
+              <tr class={`border-t border-slate-800 ${i < 2 ? "bg-court-accent/5" : ""}`}>
+                <td class="py-1">{r.teamName}</td>
+                <td class="text-center">{r.gamesPlayed}</td>
+                <td class="text-center">{r.gamesWon}</td>
+                <td class="text-center">{r.gamesLost}</td>
+                <td class="text-center">{r.pointsFor}</td>
+                <td class="text-center">{r.pointsAgainst}</td>
+                <td class="text-center font-semibold text-court-accent">{r.points}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    ))}
+  </div>
+)}

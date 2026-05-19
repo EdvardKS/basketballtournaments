@@ -1,0 +1,41 @@
+---
+import Main from "../layouts/Main.astro";
+import { api } from "../lib/api.ts";
+import type { Tournament, TournamentDetail } from "../lib/types.ts";
+import HeroBanner from "../components/HeroBanner.astro";
+import CurrentTournamentCard from "../components/CurrentTournamentCard.astro";
+import PastTournamentsTimeline from "../components/PastTournamentsTimeline.astro";
+
+const LIVE = ["open","draft","setup","scheduled","active"];
+
+const tournaments = await api<Tournament[]>("/tournaments");
+const active = tournaments.find((t) => LIVE.includes(t.status)) ?? null;
+const past = tournaments.filter((t) => t.status === "completed");
+
+let activeDetail: TournamentDetail | null = null;
+if (active) {
+  activeDetail = await api<TournamentDetail>(`/tournaments/${active.id}`)
+    .catch(() => null);
+}
+---
+<Main title="Villena Basket League">
+  <HeroBanner hasActive={!!active} activeName={active?.name} />
+
+  {active && activeDetail && (
+    <CurrentTournamentCard
+      tournament={active}
+      registrations={activeDetail.registrations.length}
+      teams={activeDetail.teams.length} />
+  )}
+
+  {!active && (
+    <section class="card mb-14 text-center">
+      <h2 class="text-3xl">Sin torneos en curso</h2>
+      <p class="text-slate-400 mt-2 text-sm">
+        Cuando un administrador abra el próximo torneo aparecerá aquí.
+      </p>
+    </section>
+  )}
+
+  <PastTournamentsTimeline tournaments={past} />
+</Main>

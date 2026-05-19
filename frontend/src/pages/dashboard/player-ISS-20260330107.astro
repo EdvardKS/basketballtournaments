@@ -1,0 +1,73 @@
+---
+import Main from "../../layouts/Main.astro";
+import { requireAuth } from "../../lib/session.ts";
+import { api, getCookieHeader } from "../../lib/api.ts";
+import type { Tournament } from "../../lib/types.ts";
+import PlayerCard from "../../components/PlayerCard.astro";
+
+const { session, redirect } = await requireAuth(Astro.request);
+if (redirect) return Astro.redirect(redirect);
+const me = session.player!;
+const cookie = getCookieHeader(Astro.request);
+const tournaments = await api<Tournament[]>("/tournaments", {}, cookie);
+const open = tournaments.filter((t) => t.status === "open");
+const mine = await api<Array<{ tournament_name: string; tournament_date: string;
+  overall: number; pace: number; shooting: number; passing: number;
+  dribbling: number; defense: number; physical: number }>>(
+  `/players/${me.id}/history`, {}, cookie).catch(() => []);
+---
+<Main title="Mi panel — Villena Basket">
+  <h1 class="text-5xl text-court-accent">HOLA {me.name.toUpperCase()}</h1>
+  <p class="text-slate-400 mb-8">Aquí tienes tu carta actual, los torneos
+    abiertos y tu evolución histórica.</p>
+
+  <section class="mb-10 grid md:grid-cols-[auto_1fr] gap-6 items-start">
+    <div class="max-w-xs">
+      <PlayerCard name={me.name} overall={me.overall} position={me.position}
+        pace={me.pace} shooting={me.shooting} passing={me.passing}
+        dribbling={me.dribbling} defense={me.defense} physical={me.physical} />
+    </div>
+    <div class="card">
+      <h2 class="text-2xl mb-2">Cómo funciona tu perfil</h2>
+      <ul class="text-sm text-slate-300 space-y-1 list-disc pl-5">
+        <li>Las stats las ajusta el admin antes de cada torneo.</li>
+        <li>El <strong>overall</strong> es la media de las 6 estadísticas.</li>
+        <li>Inscríbete a un torneo <code>open</code> con un click.</li>
+        <li>Cuando un capitán te dreafta, apareces en su equipo en la ficha
+          del torneo.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="mb-10">
+    <h2 class="text-3xl mb-3">Torneos abiertos</h2>
+    {open.length === 0 ? (
+      <p class="text-slate-500 text-sm">No hay torneos con inscripciones abiertas.</p>
+    ) : (
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {open.map((t) => (
+          <a href={`/tournaments/${t.id}`} class="card hover:border-court-accent">
+            <h3 class="text-xl">{t.name}</h3>
+            <p class="text-xs text-slate-500">{t.date} · {t.location}</p>
+          </a>
+        ))}
+      </div>
+    )}
+  </section>
+
+  <section>
+    <h2 class="text-3xl mb-3">Evolución por torneo</h2>
+    {mine.length === 0 ? (
+      <p class="text-slate-500 text-sm">Aún no hay snapshots de tus stats.</p>
+    ) : (
+      <ul class="space-y-2">
+        {mine.map((s) => (
+          <li class="card flex items-center justify-between text-sm">
+            <span>{s.tournament_name} <span class="text-slate-500">({s.tournament_date})</span></span>
+            <span class="font-display text-3xl text-court-accent">{s.overall}</span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+</Main>
