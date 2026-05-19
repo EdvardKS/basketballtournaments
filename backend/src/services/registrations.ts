@@ -22,6 +22,15 @@ export const registerForTournament = async (
   if (!["open","draft"].includes(t.status)) {
     throw new HttpError(400, "TOURNAMENT_CLOSED");
   }
+  // Admins run the tournament — they don't play in it. The admin add-player
+  // endpoint is the right path for "I want this person in the bracket".
+  const player = await queryOne<{ role: string }>(
+    "SELECT role FROM players WHERE id=$1", [playerId]);
+  if (!player) throw new HttpError(404, "PLAYER_NOT_FOUND");
+  if (player.role === "admin") {
+    throw new HttpError(403, "ADMIN_CANNOT_REGISTER",
+      "El administrador organiza el torneo; no puede inscribirse como jugador.");
+  }
   const dup = await queryOne(
     "SELECT id FROM tournament_registrations WHERE tournament_id=$1 AND player_id=$2",
     [tournamentId, playerId],

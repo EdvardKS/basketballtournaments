@@ -76,9 +76,12 @@ const championTeam = finalMatch?.winnerId
   : null;
 
 // Is the logged-in player already in the registrations list for this tournament?
+// Admins organise the bracket and can't enter as players, so we don't show
+// them the self-register CTA at all — the backend rejects POST /register too.
 const selfId = session.player?.id ?? null;
 const isSelfRegistered = !!selfId && registrations.some((r) => r.player_id === selfId);
-const canStillJoin = effective === "open" || effective === "draft";
+const canStillJoin =
+  (effective === "open" || effective === "draft") && !session.isAdmin;
 
 const liveMessage =
   phase === "draft"     ? "Draft en vivo — los capitanes están eligiendo plantilla." :
