@@ -12,6 +12,15 @@ const STATUSES = ["upcoming","open","draft","setup","scheduled","active","comple
 const LIVE_STATUSES = ["upcoming","open","draft","setup","scheduled","active"] as const;
 const dateRx = /^\d{4}-\d{2}-\d{2}$/;
 
+// Server-side defaults for legacy columns we no longer expose in the
+// create/edit form: maxTeams, teamSize, and gameDurationMinutes. The DB
+// columns are still NOT NULL, but the admin chooses captains explicitly
+// and the draft runs until every registered player is picked, so these
+// values are now bookkeeping defaults only.
+const LEGACY_MAX_TEAMS = 99;
+const LEGACY_TEAM_SIZE = 0;
+const LEGACY_GAME_DURATION_MINUTES = 20;
+
 export const tournamentSchema = z.object({
   name: z.string().min(2).max(100),
   date: z.string().regex(dateRx).optional(),
@@ -19,7 +28,6 @@ export const tournamentSchema = z.object({
   location: z.string().min(2).max(200),
   description: z.string().min(1).max(2000),
   rules: z.string().max(5000).optional().nullable(),
-  maxTeams: z.coerce.number().int().min(2).max(32).default(8),
   inscriptionStart: z.string().regex(dateRx).optional().nullable(),
   inscriptionEnd: z.string().regex(dateRx).optional().nullable(),
   draftStart: z.string().regex(dateRx).optional().nullable(),
@@ -27,8 +35,6 @@ export const tournamentSchema = z.object({
   matchDate: z.string().regex(dateRx).optional().nullable(),
   courtCount: z.coerce.number().int().min(1).max(10).default(1),
   halfCourt: z.boolean().default(true),
-  gameDurationMinutes: z.coerce.number().int().min(5).max(60).default(20),
-  teamSize: z.coerce.number().int().min(2).max(7).default(3),
 });
 
 export const updateSchema = tournamentSchema.partial().extend({
@@ -70,10 +76,10 @@ export const createTournament = async (raw: unknown) => {
         court_count, half_court, game_duration_minutes, team_size)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
     [data.name, data.matchDate ?? data.date ?? null, data.status, data.location,
-     data.description, data.rules ?? null, data.maxTeams,
+     data.description, data.rules ?? null, LEGACY_MAX_TEAMS,
      data.inscriptionStart ?? null, data.inscriptionEnd ?? null,
      data.draftStart ?? null, data.draftEnd ?? null, data.matchDate ?? null,
-     data.courtCount, data.halfCourt, data.gameDurationMinutes, data.teamSize],
+     data.courtCount, data.halfCourt, LEGACY_GAME_DURATION_MINUTES, LEGACY_TEAM_SIZE],
   );
   return toTournament(row!);
 };
@@ -88,23 +94,21 @@ export const patchTournament = async (id: string, raw: unknown) => {
   const row = await queryOne(
     `UPDATE tournaments SET
        name=$2, date=COALESCE($3, date), status=$4, location=$5,
-       description=$6, rules=$7, max_teams=$8, winner_id=$9,
-       inscription_start=COALESCE($10, inscription_start),
-       inscription_end=COALESCE($11, inscription_end),
-       draft_start=COALESCE($12, draft_start),
-       draft_end=COALESCE($13, draft_end),
-       match_date=COALESCE($14, match_date),
-       court_count=$15, half_court=$16, game_duration_minutes=$17,
-       hours_confirmed=COALESCE($18, hours_confirmed),
-       team_size=$19
+       description=$6, rules=$7, winner_id=$8,
+       inscription_start=COALESCE($9, inscription_start),
+       inscription_end=COALESCE($10, inscription_end),
+       draft_start=COALESCE($11, draft_start),
+       draft_end=COALESCE($12, draft_end),
+       match_date=COALESCE($13, match_date),
+       court_count=$14, half_court=$15,
+       hours_confirmed=COALESCE($16, hours_confirmed)
      WHERE id=$1 RETURNING *`,
     [id, merged.name, merged.matchDate ?? null, merged.status, merged.location,
-     merged.description, merged.rules ?? null, merged.maxTeams, merged.winnerId ?? null,
+     merged.description, merged.rules ?? null, merged.winnerId ?? null,
      merged.inscriptionStart ?? null, merged.inscriptionEnd ?? null,
      merged.draftStart ?? null, merged.draftEnd ?? null, merged.matchDate ?? null,
-     merged.courtCount, merged.halfCourt, merged.gameDurationMinutes,
-     (data as { hoursConfirmed?: boolean }).hoursConfirmed ?? null,
-     merged.teamSize],
+     merged.courtCount, merged.halfCourt,
+     (data as { hoursConfirmed?: boolean }).hoursConfirmed ?? null],
   );
   return toTournament(row!);
 };

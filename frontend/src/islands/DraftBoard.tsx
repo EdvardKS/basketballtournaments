@@ -14,11 +14,10 @@ interface DraftTeam {
 interface Props {
   tournamentId: string;
   myTeamId: string | null;
-  teamSize: number;
   isAdmin?: boolean;
 }
 
-export default function DraftBoard({ tournamentId, myTeamId, teamSize, isAdmin }: Props) {
+export default function DraftBoard({ tournamentId, myTeamId, isAdmin }: Props) {
   const [state, setState] = useState<DraftState | null>(null);
   const [available, setAvailable] = useState<AvailablePlayer[]>([]);
   const [teams, setTeams] = useState<DraftTeam[]>([]);
@@ -76,6 +75,11 @@ export default function DraftBoard({ tournamentId, myTeamId, teamSize, isAdmin }
     isMyTurn ||
     (isAdmin === true && actingAsCaptain && currentTeamId !== null)
   );
+  // totalPicks = picks already made + still available. Each team's player
+  // list already includes the captain, so subtract teams.length to count
+  // only drafted players (the captains were inserted on captain assignment).
+  const pickedSoFar = teams.reduce((acc, t) => acc + t.players.length, 0) - teams.length;
+  const totalPicks = Math.max(0, pickedSoFar) + available.length;
 
   return (
     <div className="space-y-4">
@@ -84,7 +88,7 @@ export default function DraftBoard({ tournamentId, myTeamId, teamSize, isAdmin }
       <DraftStatusBar
         state={state}
         teams={teams}
-        teamSize={teamSize}
+        totalPicks={totalPicks}
         myTeamId={myTeamId}
         currentTeamId={currentTeamId}
         isAdmin={isAdmin}

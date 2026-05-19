@@ -8,7 +8,7 @@ export default function AdminTournaments({ tournaments: initial }: Props) {
   const [list, setList] = useState(initial);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
-    name: "", date: "", location: "", description: "", maxTeams: 8,
+    name: "", date: "", location: "", description: "",
   });
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -25,7 +25,7 @@ export default function AdminTournaments({ tournaments: initial }: Props) {
       body: JSON.stringify(form),
     });
     if (res.ok) {
-      setForm({ name: "", date: "", location: "", description: "", maxTeams: 8 });
+      setForm({ name: "", date: "", location: "", description: "" });
       setMsg("Torneo creado.");
       await refresh();
     } else {
@@ -63,8 +63,6 @@ export default function AdminTournaments({ tournaments: initial }: Props) {
             onChange={(e) => setForm({ ...form, date: e.target.value })} />
           <input required placeholder="Sede" value={form.location}
             onChange={(e) => setForm({ ...form, location: e.target.value })} />
-          <input required type="number" min={2} max={32} value={form.maxTeams}
-            onChange={(e) => setForm({ ...form, maxTeams: Number(e.target.value) })} />
         </div>
         <textarea required placeholder="Descripción" rows={2}
           className="w-full" value={form.description}

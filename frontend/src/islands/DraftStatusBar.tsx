@@ -7,7 +7,7 @@ interface Team {
 interface Props {
   state: DraftState | null;
   teams: Team[];
-  teamSize: number;
+  totalPicks: number;
   myTeamId: string | null;
   currentTeamId: string | null;
   isAdmin?: boolean;
@@ -33,7 +33,7 @@ const Bubble = ({ name, logo, big = false, accent = false }: {
 };
 
 export default function DraftStatusBar({
-  state, teams, teamSize, myTeamId, currentTeamId,
+  state, teams, totalPicks, myTeamId, currentTeamId,
   isAdmin = false, actingAsCaptain = false,
   onPickAsCurrent, onStopActing,
 }: Props) {
@@ -51,7 +51,6 @@ export default function DraftStatusBar({
   }
 
   const isMyTurn = !!myTeamId && currentTeamId === myTeamId;
-  const totalPicks = teams.length * teamSize;
   const currentPickNumber = (state.currentRound - 1) * state.teamOrder.length + state.currentTeamIndex + 1;
   const currentTeam = teams.find((t) => t.id === currentTeamId);
   const nextIdx = state.currentTeamIndex + 1;
@@ -86,7 +85,7 @@ export default function DraftStatusBar({
           {currentTeam?.name ?? "—"}
         </p>
         <p className="text-xs text-court-muted">
-          Ronda {state.currentRound} · {currentTeam?.players.length ?? 0} / {teamSize} en plantilla
+          Ronda {state.currentRound} · {currentTeam?.players.length ?? 0} en plantilla
         </p>
       </div>
     </div>

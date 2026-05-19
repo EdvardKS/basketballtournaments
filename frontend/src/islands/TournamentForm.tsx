@@ -9,15 +9,12 @@ export default function TournamentForm({ tournament: init, onSaved, onCancel }: 
     name: init?.name ?? "",
     location: init?.location ?? "Polideportivo Norte",
     description: init?.description ?? "",
-    rules: init?.rules ?? "Formato 3x3 Media Cancha\nPartidos de 20 minutos\nReglas FIBA 3x3 adaptadas",
-    maxTeams: String(init?.maxTeams ?? 8),
-    teamSize: String(init?.teamSize ?? 3),
+    rules: init?.rules ?? "Formato 3x3 Media Cancha\nReglas FIBA 3x3 adaptadas",
     inscriptionStart: init?.inscriptionStart?.slice(0,10) ?? "",
     inscriptionEnd: init?.inscriptionEnd?.slice(0,10) ?? "",
     draftStart: init?.draftStart?.slice(0,10) ?? "",
     draftEnd: init?.draftEnd?.slice(0,10) ?? "",
     matchDate: init?.matchDate?.slice(0,10) ?? "",
-    gameDurationMinutes: String(init?.gameDurationMinutes ?? 20),
     halfCourt: init?.halfCourt ?? true,
   });
   const [error, setError] = useState<string | null>(null);
@@ -28,12 +25,7 @@ export default function TournamentForm({ tournament: init, onSaved, onCancel }: 
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(null); setLoading(true);
-    const body = {
-      ...form,
-      maxTeams: Number(form.maxTeams),
-      teamSize: Number(form.teamSize),
-      gameDurationMinutes: Number(form.gameDurationMinutes),
-    };
+    const body = { ...form };
     try {
       const saved = await api<Tournament>(
         init ? `/tournaments/${init.id}` : "/tournaments",
@@ -61,15 +53,15 @@ export default function TournamentForm({ tournament: init, onSaved, onCancel }: 
         <label className="label-text">Descripción *</label>
         <textarea className="input-field resize-none" rows={2} value={form.description} onChange={set("description")} placeholder="Descripción del torneo…" required />
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        {row("Equipos máx", "maxTeams", "number")}
-        {row("Jugadores/equipo", "teamSize", "number")}
-        {row("Duración (min)", "gameDurationMinutes", "number")}
-      </div>
       <label className="flex items-center gap-2 cursor-pointer">
         <input type="checkbox" checked={form.halfCourt} onChange={set("halfCourt")} className="accent-court-accent" />
         <span className="text-sm text-court-muted">Media cancha (2 partidos simultáneos) · formato 3x3 por defecto</span>
       </label>
+      <p className="text-[11px] text-court-muted leading-snug">
+        El número de equipos lo decide el admin nombrando capitanes; el draft
+        corre tantas rondas como hagan falta hasta repartir a todos los
+        inscritos entre los capitanes.
+      </p>
       <p className="label-text pt-2">Fechas del torneo *</p>
       <div className="grid grid-cols-2 gap-3">
         {row("Inicio inscripciones", "inscriptionStart", "date")}

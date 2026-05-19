@@ -341,7 +341,7 @@ function TabContent({
   if (tab === "draft") {
     return (
       <div className="glass p-4 sm:p-6">
-        <DraftBoard tournamentId={tournament.id} myTeamId={null} teamSize={tournament.teamSize} isAdmin />
+        <DraftBoard tournamentId={tournament.id} myTeamId={null} isAdmin />
       </div>
     );
   }
