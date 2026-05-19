@@ -86,7 +86,25 @@ class ApiClient:
     def delete(self, path: str) -> Any:
         return self.call("DELETE", path).json()
 
+    def wait_backend(self, timeout_s: int = 60) -> None:
+        """Block until /api/health responds 200, up to `timeout_s` seconds.
+        Useful when the test-runner container starts before backend's HTTP
+        server is actually listening."""
+        deadline = time.time() + timeout_s
+        last_err: str | None = None
+        while time.time() < deadline:
+            try:
+                r = self.s.get(f"{API}/health", timeout=2)
+                if r.ok:
+                    return
+                last_err = f"HTTP {r.status_code}"
+            except Exception as e:
+                last_err = str(e)
+            time.sleep(1)
+        die(f"backend no responde tras {timeout_s}s · last_err={last_err}")
+
     def login_admin(self) -> None:
+        self.wait_backend()
         step(f"login admin · {ADMIN_USER}")
         r = self.call(
             "POST", "/auth/login",

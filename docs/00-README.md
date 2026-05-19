@@ -36,6 +36,7 @@ Todo corre en **modo desarrollo** con hot-reload por volúmenes montados.
 - [10-testing-roadmap.md](10-testing-roadmap.md) — roadmap del E2E lineal `crear torneo → día del partido`.
 - [11-flujo-completo.md](11-flujo-completo.md) — explicación paso a paso (sin tecnicismos) del flujo completo de la app hasta el día del torneo.
 - [11-flujo-completo.html](11-flujo-completo.html) — versión visual con estilos del mismo roadmap; ábrela directamente en el navegador.
+- [12-eliminatorias-y-formatos.md](12-eliminatorias-y-formatos.md) — clasificación de grupos, formatos de bracket configurables, vista admin editable y test horario automatizado.
 
 ## Credenciales de ejemplo
 
