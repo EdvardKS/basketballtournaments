@@ -6,6 +6,10 @@ Todas las respuestas son JSON. Los endpoints que requieren sesión
 devuelven `401` si no hay login. Los que requieren rol `admin`
 devuelven `403` si el usuario no es admin.
 
+> Cambios recientes documentados en
+> [09-changelog-2026-05-19.md](09-changelog-2026-05-19.md) (nuevos
+> endpoints, gates de capitanía, backup CSV automático).
+
 ## Auth
 
 | Método | Path                    | Rol     | Descripción                          |
@@ -23,7 +27,8 @@ devuelven `403` si el usuario no es admin.
 |--------|--------------------------|--------|----------------------------------|
 | GET    | `/players`               | sesión | lista (según visibilidad)        |
 | GET    | `/players/:id`           | sesión | detalle                          |
-| PATCH  | `/players/:id`           | propio/admin | actualiza perfil / stats   |
+| POST   | `/players`               | admin  | alta sin tocar sesión del admin  |
+| PATCH  | `/players/:id`           | propio/admin | actualiza perfil / stats; refresca CSV de cada torneo |
 | GET    | `/players/:id/history`   | sesión | snapshots por torneo             |
 
 ## Tournaments
@@ -36,7 +41,9 @@ devuelven `403` si el usuario no es admin.
 | PATCH  | `/tournaments/:id`               | admin  | edita campos / estado      |
 | POST   | `/tournaments/:id/register`      | sesión | inscribe al player actual  |
 | DELETE | `/tournaments/:id/register`      | sesión | se da de baja              |
-| POST   | `/tournaments/:id/captains`      | admin  | marca capitán              |
+| POST   | `/tournaments/:id/captains`      | admin  | marca capitán; bloqueado fuera de `upcoming` / `open` (`CAPTAIN_EDIT_LOCKED`); `isCaptain=false` borra la `teams` row del afectado |
+| POST   | `/tournaments/:id/add-player`    | admin  | añade un player por id (refresca CSV) |
+| DELETE | `/tournaments/:id/players/:pid`  | admin  | quita player del torneo (refresca CSV) |
 
 ## Draft
 
@@ -52,8 +59,9 @@ devuelven `403` si el usuario no es admin.
 | Método | Path                         | Rol          | Descripción              |
 |--------|------------------------------|--------------|--------------------------|
 | GET    | `/teams/:id`                 | sesión       | detalle con jugadores    |
-| PATCH  | `/teams/:id`                 | capitán/admin| nombre, WhatsApp         |
+| PATCH  | `/teams/:id`                 | capitán/admin| nombre, logo, descripción, WhatsApp. Bloqueado para el capitán desde `matchDate − 1d` (`TEAM_EDIT_LOCKED`); admin pasa el gate. |
 | POST   | `/teams/:id/move-player`     | admin        | reasigna jugador         |
+| POST   | `/teams/:id/transfer-captain`| capitán/admin| `{ newCaptainPlayerId }`. Target debe estar en roster; el equipo (logo/nombre/WhatsApp/plantilla) se conserva. Errores: `NO_PICKS_YET`, `NOT_IN_TEAM`, `ALREADY_CAPTAIN`. Refresca CSV. |
 
 ## Trades
 

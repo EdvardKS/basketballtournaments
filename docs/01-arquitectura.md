@@ -23,9 +23,13 @@
 ├── db/           # Postgres 16, init.sql con schema + seed
 ├── docs/         # Esta documentación
 ├── test/         # Scripts bash para smoke-test por sprint (gitignored)
-├── docker-compose.yml
+├── docker-compose.yml       # producción por defecto
+├── docker-compose.dev.yml   # stack de desarrollo (HMR, mounts)
 └── .gitignore
 ```
+
+> Gestor de paquetes: **pnpm** (`packageManager: pnpm@10.33.3`).
+> Build dentro de los contenedores usa corepack para invocarlo.
 
 ## Capas del backend
 
@@ -59,3 +63,15 @@ frontend/src
 - La sesión vive en una cookie `basket_sid` firmada con `SESSION_SECRET`.
 - El backend sirve sólo JSON; Astro pinta el HTML inicial y cargas
   siguientes son React islands.
+
+## Persistencia en disco
+
+- Postgres → volumen `basket_pgdata` (dev) / `basket_pgdata_prod` (prod).
+- Backup CSV de inscripciones → `backend/data/csv/<matchDate>.csv`
+  (montado en `/app/data/csv`). Reescrito en cada cambio relevante.
+  Ver `services/registration-backup.ts` y
+  [09-changelog-2026-05-19.md](09-changelog-2026-05-19.md) §5.
+- Fotos de ediciones pasadas → `frontend/photos/`, montadas read-only
+  en dev (`/app/photos`) y copiadas en build de prod. No están en
+  `/public`: las sirve el endpoint `pages/foto/[...path].ts` con
+  gate de UA + `X-Robots-Tag`.

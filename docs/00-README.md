@@ -32,6 +32,7 @@ Todo corre en **modo desarrollo** con hot-reload por volúmenes montados.
 - [06-testing.md](06-testing.md) — pruebas E2E y credenciales.
 - [07-errores-conocidos.md](07-errores-conocidos.md) — issues y decisiones.
 - [08-frontend.md](08-frontend.md) — cómo está organizada la UI en Astro.
+- [09-changelog-2026-05-19.md](09-changelog-2026-05-19.md) — cambios cerrados en la sesión del 19 de mayo de 2026.
 
 ## Credenciales de ejemplo
 
