@@ -34,6 +34,7 @@ Todo corre en **modo desarrollo** con hot-reload por volúmenes montados.
 - [08-frontend.md](08-frontend.md) — cómo está organizada la UI en Astro.
 - [09-changelog-2026-05-19.md](09-changelog-2026-05-19.md) — cambios cerrados en la sesión del 19 de mayo de 2026.
 - [10-testing-roadmap.md](10-testing-roadmap.md) — roadmap del E2E lineal `crear torneo → día del partido`.
+- [11-flujo-completo.md](11-flujo-completo.md) — explicación paso a paso (sin tecnicismos) del flujo completo de la app hasta el día del torneo.
 
 ## Credenciales de ejemplo
 
