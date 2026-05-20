@@ -24,7 +24,8 @@ interface TournamentDetail {
   teams: TeamWithPlayers[];
 }
 
-type TabKey = "inscripciones" | "draft" | "jugadores" | "grupos" | "eliminatorias" | "partidos" | "resultados" | "resumen" | "config";
+type TabKey = "inscripciones" | "draft" | "jugadores" | "grupos" | "eliminatorias"
+  | "partidos" | "horarios" | "resultados" | "preview" | "resumen" | "config";
 
 interface TabDef { key: TabKey; label: string; icon: string }
 
@@ -34,9 +35,11 @@ const ICONS = {
   draft:         "M3 6h13M3 12h9M3 18h13M17 8l4 4-4 4",
   jugadores:     "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
   partidos:      "M3 10h18M3 14h18M5 6h14M5 18h14",
+  horarios:      "M12 8v4l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
   resultados:    "M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
   grupos:        "M3 3v18h18M7 14l3-3 4 4 5-5",
   eliminatorias: "M6 4v16M18 4v16M6 12h12",
+  preview:       "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 100 6 3 3 0 000-6z",
   resumen:       "M8 21h8M12 17v4M5 4h14v5a7 7 0 01-14 0V4z",
 } as const;
 
@@ -48,6 +51,13 @@ const tabsForPhase = (phase: TournamentPhase): TabDef[] => {
   if (phase === "draft") return [
     { key: "draft",         label: "Draft",         icon: ICONS.draft },
     { key: "jugadores",     label: "Jugadores",     icon: ICONS.jugadores },
+    { key: "config",        label: "Configuración", icon: ICONS.config },
+  ];
+  if (phase === "preMatchday") return [
+    { key: "grupos",        label: "Grupos",        icon: ICONS.grupos },
+    { key: "eliminatorias", label: "Eliminatorias", icon: ICONS.eliminatorias },
+    { key: "horarios",      label: "Horarios",      icon: ICONS.horarios },
+    { key: "preview",       label: "Vista previa",  icon: ICONS.preview },
     { key: "config",        label: "Configuración", icon: ICONS.config },
   ];
   if (phase === "groups") return [
@@ -76,11 +86,12 @@ const tabsForPhase = (phase: TournamentPhase): TabDef[] => {
 // Tone for the summary card — derived from the same phase signal so the
 // admin sees the same color story as the public page.
 const PHASE_TONE: Record<TournamentPhase, { color: string; label: string; live: boolean }> = {
-  pre:        { color: "#ff6b00", label: "Pre-torneo",        live: false },
-  draft:      { color: "#ff2d2d", label: "Draft en curso",    live: true  },
-  groups:     { color: "#ff6b00", label: "Fase de grupos",    live: true  },
-  knockouts:  { color: "#ff2d2d", label: "Eliminatorias",     live: true  },
-  completed:  { color: "#f5c518", label: "Finalizado",        live: false },
+  pre:         { color: "#ff6b00", label: "Pre-torneo",        live: false },
+  draft:       { color: "#ff2d2d", label: "Draft en curso",    live: true  },
+  preMatchday: { color: "#3aa0ff", label: "Pre-torneo · configuración", live: false },
+  groups:      { color: "#ff6b00", label: "Fase de grupos",    live: true  },
+  knockouts:   { color: "#ff2d2d", label: "Eliminatorias",     live: true  },
+  completed:   { color: "#f5c518", label: "Finalizado",        live: false },
 };
 
 export default function AdminPanel({ tournaments: initialTournaments, initialActiveId, allPlayers }: Props) {
@@ -296,6 +307,7 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
               <TabContent
                 key={`${selected.id}-${activeTab}`}
                 tab={activeTab}
+                phase={phase}
                 tournament={selected}
                 detail={detail}
                 matches={matches}
@@ -327,10 +339,11 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
 }
 
 function TabContent({
-  tab, tournament, detail, matches, groups, allPlayers, captainIds, canManageRegistrations,
+  tab, phase, tournament, detail, matches, groups, allPlayers, captainIds, canManageRegistrations,
   onChange, onTournamentSaved, onTournamentDeleted,
 }: {
   tab: TabKey;
+  phase: TournamentPhase;
   tournament: Tournament;
   detail: TournamentDetail | null;
   matches: Match[];
@@ -387,6 +400,16 @@ function TabContent({
         </div>
       );
     }
+    if (phase === "preMatchday") {
+      return (
+        <GroupEditor
+          tournamentId={tournament.id}
+          teams={detail?.teams ?? []}
+          groups={groups}
+          onChange={onChange}
+        />
+      );
+    }
     return (
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {groups.map((g) => (
@@ -398,7 +421,31 @@ function TabContent({
 
   if (tab === "eliminatorias") {
     return (
-      <AdminBracketEditor tournament={tournament} matches={matches} onChange={onChange} />
+      <AdminBracketEditor
+        tournament={tournament}
+        matches={matches}
+        groups={groups}
+        onChange={onChange}
+      />
+    );
+  }
+
+  if (tab === "horarios") {
+    return (
+      <div className="glass p-4 sm:p-6">
+        <h3 className="font-hero text-xl text-white mb-4">Horario de partidos</h3>
+        <p className="text-court-muted text-sm mb-4">
+          Define la hora de cada partido. Los jugadores la verán publicada en
+          la página del torneo en cuanto la guardes.
+        </p>
+        <AdminScheduleConfirm tournamentId={tournament.id} matches={matches} />
+      </div>
+    );
+  }
+
+  if (tab === "preview") {
+    return (
+      <PreviewTab tournament={tournament} matches={matches} groups={groups} />
     );
   }
 
@@ -647,10 +694,24 @@ function bracketDecisionWindow(tournament: Tournament): "early" | "open" | "lock
   return "open";
 }
 
+// Mirror of backend bracket.collectQualified() sizing: how many teams will
+// actually reach the knockout pool given current group count + chosen format.
+function qualifiedCount(groupCount: number, fmt: string): number {
+  if (groupCount <= 0) return 0;
+  if (fmt === "top2_per_group") {
+    return groupCount === 1 ? 4 : groupCount * 2;
+  }
+  if (fmt === "top1_plus_best2_seconds") {
+    return groupCount < 2 ? 0 : groupCount + 2;
+  }
+  return 0;
+}
+
 function BracketConfigPicker({
-  tournament, onApplied,
+  tournament, groupCount, onApplied,
 }: {
   tournament: Tournament;
+  groupCount: number;
   onApplied: () => void;
 }) {
   const [fmt, setFmt] = useState<string>(tournament.bracketFormat);
@@ -661,6 +722,33 @@ function BracketConfigPicker({
   const window = bracketDecisionWindow(tournament);
   const dirty = fmt !== tournament.bracketFormat
     || size !== (tournament.bracketSize == null ? "" : String(tournament.bracketSize));
+
+  // Compute which format/size combos are actually achievable with the current
+  // group count. We hide options that the backend would reject so the admin
+  // cannot pick an invalid setup.
+  const fmtOptions = useMemo(() => [
+    { value: "top2_per_group", label: "Los 2 mejores de cada grupo",
+      enabled: qualifiedCount(groupCount, "top2_per_group") >= 4 },
+    { value: "top1_plus_best2_seconds", label: "1º de cada grupo + 2 mejores 2dos",
+      enabled: qualifiedCount(groupCount, "top1_plus_best2_seconds") >= 4 },
+  ], [groupCount]);
+
+  const qCountForFmt = qualifiedCount(groupCount, fmt);
+  const sizeOptions = useMemo(() => [
+    { value: "", label: "Auto (según clasificados)", enabled: qCountForFmt >= 4 },
+    { value: "4", label: "Solo semifinales (4)",  enabled: qCountForFmt >= 4 },
+    { value: "8", label: "Desde cuartos (8)",      enabled: qCountForFmt >= 8 },
+    { value: "16", label: "Desde octavos (16)",    enabled: qCountForFmt >= 16 },
+  ], [qCountForFmt]);
+
+  // If the currently-selected size is no longer feasible after a format
+  // change, snap it back to "auto" so the picker can't submit an invalid
+  // combo.
+  useEffect(() => {
+    if (size === "") return;
+    const n = Number(size);
+    if (n > qCountForFmt) setSize("");
+  }, [qCountForFmt, size]);
 
   const apply = async () => {
     setBusy(true); setMsg(null);
@@ -719,22 +807,28 @@ function BracketConfigPicker({
             onChange={(e) => setFmt(e.target.value)}
             disabled={window === "locked"}
           >
-            <option value="top2_per_group">Los 2 mejores de cada grupo</option>
-            <option value="top1_plus_best2_seconds">1º de cada grupo + 2 mejores 2dos</option>
+            {fmtOptions.map((o) => (
+              <option key={o.value} value={o.value} disabled={!o.enabled}>
+                {o.label}{o.enabled ? "" : " · no posible con esta cantidad de grupos"}
+              </option>
+            ))}
           </select>
         </div>
         <div>
-          <label className="label-text">Cuadro inicial</label>
+          <label className="label-text">
+            Cuadro inicial <span className="text-court-muted">· {qCountForFmt} clasificados</span>
+          </label>
           <select
             className="input-field"
             value={size}
             onChange={(e) => setSize(e.target.value)}
             disabled={window === "locked"}
           >
-            <option value="">Auto (según clasificados)</option>
-            <option value="4">Solo semifinales (4)</option>
-            <option value="8">Desde cuartos (8)</option>
-            <option value="16">Desde octavos (16)</option>
+            {sizeOptions.map((o) => (
+              <option key={o.value || "auto"} value={o.value} disabled={!o.enabled}>
+                {o.label}{o.enabled ? "" : ` · faltan equipos (hay ${qCountForFmt})`}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -758,10 +852,11 @@ function BracketConfigPicker({
 }
 
 function AdminBracketEditor({
-  tournament, matches, onChange,
+  tournament, matches, groups, onChange,
 }: {
   tournament: Tournament;
   matches: Match[];
+  groups: GroupWithMembers[];
   onChange: () => void;
 }) {
   const ko = matches.filter((m) => m.stage !== "group");
@@ -771,7 +866,11 @@ function AdminBracketEditor({
 
   return (
     <div className="space-y-6">
-      <BracketConfigPicker tournament={tournament} onApplied={onChange} />
+      <BracketConfigPicker
+        tournament={tournament}
+        groupCount={groups.length}
+        onApplied={onChange}
+      />
 
       {ko.length === 0 ? (
         <div className="glass p-10 text-center">
@@ -872,3 +971,247 @@ function GroupSummaryCard({ group: g, matches }: { group: GroupWithMembers; matc
   );
 }
 
+// --- Group editor (pre-matchday only) -------------------------------------
+// Lets the admin redraw the group split while no match has been touched yet.
+// Each team carries a dropdown picking its target group; the admin can also
+// add or remove groups. "Aplicar" PUTs the whole layout to the backend,
+// which wipes existing groups + fixtures and rebuilds round-robin matches.
+
+function GroupEditor({
+  tournamentId, teams, groups, onChange,
+}: {
+  tournamentId: string;
+  teams: TeamWithPlayers[];
+  groups: GroupWithMembers[];
+  onChange: () => void;
+}) {
+  // Local state: list of group names + per-team selected group index.
+  const initialGroups = useMemo(
+    () => groups.length > 0 ? groups.map((g) => g.group.name) : ["Grupo A"],
+    [groups],
+  );
+  const [groupNames, setGroupNames] = useState<string[]>(initialGroups);
+  const [assignment, setAssignment] = useState<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    groups.forEach((g, idx) => {
+      g.members.forEach((m) => { out[m.teamId] = idx; });
+    });
+    teams.forEach((t) => { if (!(t.id in out)) out[t.id] = 0; });
+    return out;
+  });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const setGroupName = (idx: number, name: string) =>
+    setGroupNames((g) => g.map((n, i) => i === idx ? name : n));
+
+  const addGroup = () => {
+    setGroupNames((g) => {
+      const next = String.fromCharCode("A".charCodeAt(0) + g.length);
+      return [...g, `Grupo ${next}`];
+    });
+  };
+
+  const removeGroup = (idx: number) => {
+    if (groupNames.length <= 1) return;
+    // Re-assign anyone in this group to the previous one.
+    setAssignment((a) => {
+      const out: Record<string, number> = {};
+      for (const [tid, gi] of Object.entries(a)) {
+        if (gi === idx) out[tid] = Math.max(0, idx - 1);
+        else if (gi > idx) out[tid] = gi - 1;
+        else out[tid] = gi;
+      }
+      return out;
+    });
+    setGroupNames((g) => g.filter((_, i) => i !== idx));
+  };
+
+  // Pre-compute payload for both the preview and the submit handler.
+  const payload = useMemo(() =>
+    groupNames.map((name, idx) => ({
+      name,
+      teamIds: teams.filter((t) => assignment[t.id] === idx).map((t) => t.id),
+    })),
+    [groupNames, assignment, teams],
+  );
+
+  const apply = async () => {
+    // Client-side sanity: every group must have at least one team.
+    const empty = payload.find((p) => p.teamIds.length === 0);
+    if (empty) {
+      setMsg({ kind: "err", text: `El grupo "${empty.name}" no tiene equipos.` });
+      return;
+    }
+    setBusy(true); setMsg(null);
+    try {
+      await api(`/matches/tournament/${tournamentId}/groups`, {
+        method: "PUT",
+        body: JSON.stringify({ groups: payload }),
+      });
+      setMsg({ kind: "ok", text: "Grupos reasignados · fixtures regenerados" });
+      onChange();
+    } catch (e) {
+      setMsg({
+        kind: "err",
+        text: e instanceof ApiError ? e.code : "Error al guardar los grupos",
+      });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-5">
+      <header className="glass p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">
+            Configurar grupos
+          </p>
+          <p className="text-white text-sm">
+            Reasigna los {teams.length} equipos entre los grupos. Al aplicar,
+            se reescribe el calendario de fase de grupos.
+          </p>
+        </div>
+        <button type="button" onClick={addGroup} className="btn-ghost !py-1.5 !px-3 !text-xs">
+          + Añadir grupo
+        </button>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {groupNames.map((name, gi) => {
+          const groupTeams = teams.filter((t) => assignment[t.id] === gi);
+          return (
+            <div key={gi} className="glass p-4 sm:p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <input
+                  className="input-field flex-1"
+                  value={name}
+                  onChange={(e) => setGroupName(gi, e.target.value)}
+                />
+                {groupNames.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeGroup(gi)}
+                    className="text-court-danger text-xs px-2 py-1 rounded hover:bg-court-danger/10"
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-court-muted">
+                {groupTeams.length} equipos · {groupTeams.length < 2 ? "sin partidos" : `${(groupTeams.length * (groupTeams.length - 1)) / 2} partidos round-robin`}
+              </p>
+              <ul className="space-y-1">
+                {groupTeams.length === 0 && (
+                  <li className="text-xs text-court-muted italic">Sin equipos</li>
+                )}
+                {groupTeams.map((t) => (
+                  <li key={t.id} className="text-sm text-white truncate">• {t.name}</li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="glass p-4 sm:p-5 space-y-3">
+        <h4 className="font-hero text-lg text-white">Equipos disponibles</h4>
+        <p className="text-[11px] text-court-muted">
+          Cambia el grupo de cada equipo con el selector. Cada equipo va a un único grupo.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {teams.map((t) => (
+            <label key={t.id} className="flex items-center gap-2 text-sm">
+              <span className="text-white flex-1 truncate">{t.name}</span>
+              <select
+                className="input-field !py-1 !text-xs !w-auto"
+                value={assignment[t.id] ?? 0}
+                onChange={(e) =>
+                  setAssignment((a) => ({ ...a, [t.id]: Number(e.target.value) }))}
+              >
+                {groupNames.map((g, idx) => (
+                  <option key={idx} value={idx}>{g}</option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {msg && (
+        <p className={msg.kind === "ok" ? "text-court-ok text-sm" : "text-court-danger text-sm"}>
+          {msg.text}
+        </p>
+      )}
+
+      <div className="flex items-center justify-end">
+        <button type="button" onClick={apply} disabled={busy} className="btn-primary">
+          {busy ? "Aplicando…" : "Aplicar configuración de grupos"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- Preview tab (pre-matchday) -------------------------------------------
+// Read-only side-by-side: groups (no standings yet, just team list) + the
+// bracket layout the backend has already scaffolded for the chosen format.
+
+function PreviewTab({
+  tournament, matches, groups,
+}: {
+  tournament: Tournament;
+  matches: Match[];
+  groups: GroupWithMembers[];
+}) {
+  const ko = matches.filter((m) => m.stage !== "group");
+  return (
+    <div className="space-y-6">
+      <header className="glass p-4 sm:p-5">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">
+          Vista previa
+        </p>
+        <p className="text-white text-sm">
+          Cómo quedarán los grupos y las eliminatorias según la configuración actual.
+          Aquí no se editan datos: usa las pestañas de Grupos y Eliminatorias para ajustar.
+        </p>
+      </header>
+
+      <section className="space-y-3">
+        <h3 className="font-hero text-xl text-white">Grupos</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {groups.map((g) => (
+            <div key={g.group.id} className="glass p-4">
+              <h4 className="font-hero text-lg text-white mb-2">{g.group.name}</h4>
+              <ul className="space-y-1">
+                {g.members.map((m, i) => (
+                  <li key={m.id} className="text-sm text-white flex items-center gap-2">
+                    <span className="font-hero text-court-muted w-5 tabular-nums">{i + 1}.</span>
+                    <span className="truncate">{m.teamName ?? "—"}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="font-hero text-xl text-white">Eliminatorias</h3>
+        {ko.length === 0 ? (
+          <p className="text-sm text-court-muted">
+            El cuadro se generará cuando se configure el formato en la pestaña Eliminatorias.
+          </p>
+        ) : (
+          <div className="glass p-2 sm:p-4">
+            <AdminBracketView matches={ko} isAdmin={false} />
+          </div>
+        )}
+      </section>
+
+      <a href={`/tournaments/${tournament.id}`} target="_blank" rel="noopener"
+         className="btn-ghost inline-flex !py-1.5 !px-3 !text-xs">
+        Abrir vista pública ↗
+      </a>
+    </div>
+  );
+}

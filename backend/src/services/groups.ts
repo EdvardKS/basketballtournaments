@@ -60,3 +60,93 @@ export const deleteGroups = async (tournamentId: string) => {
   await query("DELETE FROM tournament_groups WHERE tournament_id=$1", [tournamentId]);
   return { ok: true };
 };
+
+// Admin-driven regroup: wipe existing groups + every match scaffolded from
+// them (group fixtures AND knockout placeholders) and rebuild from the
+// caller's payload. Refuses if any match has already been touched (started
+// or completed) — the lifecycle services own the data from then on.
+export interface RegroupGroupInput { name: string; teamIds: string[] }
+
+export const regroupTeams = async (
+  tournamentId: string, input: RegroupGroupInput[],
+) => {
+  if (!Array.isArray(input) || input.length === 0) {
+    throw new HttpError(400, "GROUPS_REQUIRED", "Debes enviar al menos un grupo.");
+  }
+  for (const g of input) {
+    if (!g || typeof g.name !== "string" || g.name.trim().length === 0) {
+      throw new HttpError(400, "GROUP_NAME_REQUIRED", "Cada grupo necesita un nombre.");
+    }
+    if (!Array.isArray(g.teamIds) || g.teamIds.length === 0) {
+      throw new HttpError(400, "GROUP_EMPTY",
+        `El grupo ${g.name} no tiene equipos.`);
+    }
+  }
+
+  // Every team must belong to exactly one group, and every team in the
+  // payload must already exist in the tournament.
+  const tournamentTeams = await query(
+    "SELECT id FROM teams WHERE tournament_id=$1", [tournamentId]);
+  const knownTeamIds = new Set(
+    tournamentTeams.map((t) => (t as { id: string }).id));
+
+  const seen = new Set<string>();
+  for (const g of input) {
+    for (const tid of g.teamIds) {
+      if (!knownTeamIds.has(tid)) {
+        throw new HttpError(400, "TEAM_NOT_IN_TOURNAMENT",
+          `El equipo ${tid} no pertenece a este torneo.`);
+      }
+      if (seen.has(tid)) {
+        throw new HttpError(400, "TEAM_IN_MULTIPLE_GROUPS",
+          "Un equipo no puede estar en dos grupos.");
+      }
+      seen.add(tid);
+    }
+  }
+  if (seen.size !== knownTeamIds.size) {
+    throw new HttpError(400, "TEAMS_MISSING_FROM_GROUPS",
+      `Faltan ${knownTeamIds.size - seen.size} equipos por asignar.`);
+  }
+
+  // Refuse the wipe if any match has been touched — admin should not be
+  // restructuring groups once the matchday has started.
+  const touched = await query(
+    "SELECT 1 FROM matches WHERE tournament_id=$1 AND status <> 'pending' LIMIT 1",
+    [tournamentId]);
+  if (touched.length > 0) {
+    throw new HttpError(409, "MATCHES_ALREADY_TOUCHED",
+      "Hay partidos en juego o finalizados; los grupos no se pueden reasignar.");
+  }
+
+  return tx(async (q) => {
+    // Wipe all matches and groups for the tournament. group_members
+    // cascades from tournament_groups; matches drop on their own.
+    await q("DELETE FROM matches WHERE tournament_id=$1", [tournamentId]);
+    await q("DELETE FROM tournament_groups WHERE tournament_id=$1", [tournamentId]);
+
+    const created = [];
+    for (const g of input) {
+      const grp = await q<Record<string, unknown>>(
+        "INSERT INTO tournament_groups (tournament_id, name) VALUES ($1,$2) RETURNING *",
+        [tournamentId, g.name.trim()]);
+      const groupId = (grp[0] as { id: string }).id;
+      for (const tid of g.teamIds) {
+        await q(
+          "INSERT INTO group_members (group_id, team_id) VALUES ($1,$2)",
+          [groupId, tid]);
+      }
+      // Round-robin fixtures inside this group.
+      for (let a = 0; a < g.teamIds.length; a++) {
+        for (let b = a + 1; b < g.teamIds.length; b++) {
+          await q(
+            `INSERT INTO matches (tournament_id, group_id, stage, home_team_id, away_team_id, status)
+             VALUES ($1,$2,'group',$3,$4,'pending')`,
+            [tournamentId, groupId, g.teamIds[a], g.teamIds[b]]);
+        }
+      }
+      created.push(toGroup(grp[0]));
+    }
+    return { ok: true, groups: created };
+  });
+};

@@ -12,6 +12,7 @@ import {
 } from "../services/matches.js";
 import { regenerateBracket } from "../services/bracket.js";
 import { updateMatchTime } from "../services/schedule.js";
+import { regroupTeams, type RegroupGroupInput } from "../services/groups.js";
 
 export const matchesRouter = Router();
 
@@ -32,6 +33,20 @@ matchesRouter.get("/tournament/:id", asyncRoute(async (req, res) => {
 matchesRouter.get("/tournament/:id/groups", asyncRoute(async (req, res) => {
   res.json(await groupsForTournament(req.params.id));
 }));
+
+// Admin-only: redraw the group split. Body: { groups: [{ name, teamIds[] }] }.
+// Wipes existing groups + all matches and rebuilds round-robin fixtures.
+const regroupSchema = z.object({
+  groups: z.array(z.object({
+    name: z.string().min(1).max(50),
+    teamIds: z.array(z.string().min(1)).min(1),
+  })).min(1),
+});
+matchesRouter.put("/tournament/:id/groups", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    const { groups } = regroupSchema.parse(req.body);
+    res.json(await regroupTeams(req.params.id, groups as RegroupGroupInput[]));
+  }));
 
 // Admin-only: rebuild group standings from scratch by replaying every
 // completed group match. Safe to call repeatedly — idempotent.
