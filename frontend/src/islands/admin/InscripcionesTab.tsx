@@ -15,6 +15,7 @@ interface Props {
   registrations: Registration[];
   captainIds: Set<string>;
   teams: TeamWithPlayers[];
+  allPlayers: Player[];
   canManage: boolean;        // admin can alta/edit/promote while open
   onChange: () => void;       // reload parent detail
 }
@@ -36,7 +37,7 @@ const POSITIONS = ["base", "escolta", "alero", "ala-pivot", "pivot"] as const;
 const DEFAULT_PASSWORD = "123123123";
 
 export default function InscripcionesTab({
-  tournamentId, registrations, captainIds, teams, canManage, onChange,
+  tournamentId, registrations, captainIds, teams, allPlayers, canManage, onChange,
 }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -122,15 +123,27 @@ export default function InscripcionesTab({
       )}
 
       {showAlta && canManage && (
-        <NewPlayerForm
-          tournamentId={tournamentId}
-          onCreated={(name) => {
-            setShowAlta(false);
-            flash("ok", `${name} dado de alta e inscrito`);
-            onChange();
-          }}
-          onError={(msg) => flash("err", msg)}
-        />
+        <div className="space-y-3">
+          <ExistingPlayerPicker
+            tournamentId={tournamentId}
+            allPlayers={allPlayers}
+            registeredIds={new Set(registrations.map((r) => r.player_id))}
+            onAdded={(name) => {
+              flash("ok", `${name} inscrito en el torneo`);
+              onChange();
+            }}
+            onError={(msg) => flash("err", msg)}
+          />
+          <NewPlayerForm
+            tournamentId={tournamentId}
+            onCreated={(name) => {
+              setShowAlta(false);
+              flash("ok", `${name} dado de alta e inscrito`);
+              onChange();
+            }}
+            onError={(msg) => flash("err", msg)}
+          />
+        </div>
       )}
 
       {registrations.length === 0 && !showAlta && (
@@ -215,6 +228,137 @@ export default function InscripcionesTab({
             );
           })}
         </ol>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Existing-player picker: surface every account already in the DB that is NOT
+// yet registered to this tournament. Admin searches across name, mobile,
+// email, position and role; one-click inscribes the player.
+
+function ExistingPlayerPicker({
+  tournamentId, allPlayers, registeredIds, onAdded, onError,
+}: {
+  tournamentId: string;
+  allPlayers: Player[];
+  registeredIds: Set<string>;
+  onAdded: (name: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const candidates = useMemo(
+    () => allPlayers.filter((p) => !registeredIds.has(p.id)),
+    [allPlayers, registeredIds],
+  );
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return candidates;
+    return candidates.filter((p) => {
+      const hay = [
+        p.name, p.mobile,
+        p.email ?? "", p.username ?? "",
+        p.position, p.role,
+        p.age == null ? "" : String(p.age),
+        String(p.overall ?? ""),
+      ].join(" ").toLowerCase();
+      return hay.includes(needle);
+    });
+  }, [candidates, q]);
+
+  const inscribe = async (p: Player) => {
+    setBusyId(p.id);
+    try {
+      await api(`/tournaments/${tournamentId}/add-player`, {
+        method: "POST",
+        body: JSON.stringify({ playerId: p.id }),
+      });
+      onAdded(p.name);
+    } catch (e) {
+      onError(e instanceof ApiError ? e.code : "Error al inscribir");
+    } finally { setBusyId(null); }
+  };
+
+  return (
+    <div className="glass p-4 sm:p-5 space-y-3">
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h4 className="font-hero text-xl text-white">Inscribir jugador existente</h4>
+          <p className="text-[11px] text-court-muted">
+            Busca entre los jugadores ya registrados en la BBDD que aún no están en este torneo.
+          </p>
+        </div>
+        <span className="text-[10px] uppercase tracking-widest text-court-muted">
+          {filtered.length} / {candidates.length} disponibles
+        </span>
+      </div>
+      <input
+        type="search"
+        placeholder="Buscar por nombre, móvil, email, posición, rol, edad…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        className="input-field"
+        autoFocus
+      />
+      {candidates.length === 0 ? (
+        <p className="text-sm text-court-muted">
+          Todos los jugadores de la BBDD ya están inscritos en este torneo.
+        </p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-court-muted">Sin coincidencias para “{q}”.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-white/10"
+             style={{ background: "rgba(20,26,44,0.6)" }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-court-muted text-[10px] uppercase tracking-wider border-b border-white/10">
+                <th className="px-3 py-2">Nombre</th>
+                <th className="px-3 py-2">Móvil</th>
+                <th className="px-3 py-2 hidden sm:table-cell">Email</th>
+                <th className="px-3 py-2 hidden md:table-cell">Posición</th>
+                <th className="px-3 py-2 hidden md:table-cell">Edad</th>
+                <th className="px-3 py-2 hidden lg:table-cell">Rol</th>
+                <th className="px-3 py-2 text-center">OVR</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {filtered.slice(0, 50).map((p) => {
+                const busy = busyId === p.id;
+                return (
+                  <tr key={p.id} className="hover:bg-white/5">
+                    <td className="px-3 py-2 text-white">{p.name}</td>
+                    <td className="px-3 py-2 text-court-muted tabular-nums">{p.mobile}</td>
+                    <td className="px-3 py-2 text-court-muted hidden sm:table-cell truncate max-w-[14rem]">{p.email ?? "—"}</td>
+                    <td className="px-3 py-2 text-court-muted hidden md:table-cell">{p.position}</td>
+                    <td className="px-3 py-2 text-court-muted hidden md:table-cell tabular-nums">{p.age ?? "—"}</td>
+                    <td className="px-3 py-2 text-court-muted hidden lg:table-cell">{p.role}</td>
+                    <td className="px-3 py-2 text-center font-hero text-[var(--color-neon-orange)] tabular-nums">{p.overall}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => inscribe(p)}
+                        disabled={busy}
+                        className="btn-neon-blue !py-1 !px-3 !text-[11px]"
+                      >
+                        {busy ? "Inscribiendo…" : "Inscribir"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {filtered.length > 50 && (
+            <p className="px-3 py-2 text-[11px] text-court-muted border-t border-white/10">
+              Mostrando los primeros 50 · refina la búsqueda para ver el resto.
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

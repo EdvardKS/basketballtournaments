@@ -349,6 +349,7 @@ function TabContent({
         registrations={detail?.registrations ?? []}
         captainIds={captainIds}
         teams={detail?.teams ?? []}
+        allPlayers={allPlayers}
         canManage={canManageRegistrations}
         onChange={onChange}
       />
