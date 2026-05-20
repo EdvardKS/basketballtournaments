@@ -463,10 +463,15 @@ const provisionBracket = async (q: typeof query, tournamentId: string) => {
   // team with more points was getting dropped behind a weaker group winner.
   qualified.sort(cmpGlobal);
 
-  const minTeams = format === "top2_single_group" ? 2 : 4;
-  if (qualified.length < minTeams) {
-    throw new HttpError(400, "TOO_FEW_TEAMS",
-      `Faltan equipos para montar un cuadro (hay ${qualified.length}, hacen falta ${minTeams} mínimo).`);
+  // Legacy path enforces a 4-team minimum (or 2 for top2_single_group); the
+  // plan path already validated qualified.length lands on 2/4/8/16, so no
+  // extra guard is needed there.
+  if (!usePlan) {
+    const minTeams = format === "top2_single_group" ? 2 : 4;
+    if (qualified.length < minTeams) {
+      throw new HttpError(400, "TOO_FEW_TEAMS",
+        `Faltan equipos para montar un cuadro (hay ${qualified.length}, hacen falta ${minTeams} mínimo).`);
+    }
   }
 
   const size: BracketSize = rawSize ?? inferSize(qualified.length, format);

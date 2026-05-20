@@ -1012,13 +1012,6 @@ function AdminBracketEditor({
                 Pulsa el icono ✎ de cada partido para meter el marcador. El ganador propaga al siguiente cruce.
               </p>
             </div>
-            <a
-              href={`/tournaments/${tournament.id}`}
-              target="_blank" rel="noopener"
-              className="btn-ghost !py-1.5 !px-3 !text-xs"
-            >
-              Vista pública ↗
-            </a>
           </header>
 
           <div className="glass p-2 sm:p-4">
@@ -1540,10 +1533,6 @@ function PreviewTab({
               {tournament.bracketSize ? <> · cuadro de <span className="text-white">{tournament.bracketSize}</span></> : null}
             </p>
           </div>
-          <a href={`/tournaments/${tournament.id}`} target="_blank" rel="noopener"
-             className="btn-ghost inline-flex !py-1.5 !px-3 !text-xs">
-            Vista pública ↗
-          </a>
         </div>
       </header>
 
