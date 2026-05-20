@@ -165,6 +165,8 @@ export default function AdminBracketView({ matches, isAdmin = true, previewMode 
 
   const hasKo = eighths.length + quarters.length + semis.length + finals.length + thirds.length > 0;
   const hasQuarters = quarters.length > 0;
+  const hasSemis = semis.length > 0;
+  const hasThird = thirds.length > 0;
 
   // Path-highlight: hovering a team pill lights up every pill with the same
   // data-team-id (the team's whole bracket trail).
@@ -209,9 +211,15 @@ export default function AdminBracketView({ matches, isAdmin = true, previewMode 
         gridTemplateColumns: "minmax(200px,1fr) 3rem minmax(200px,1.05fr) 3rem minmax(280px,1.5fr) 3rem minmax(200px,1.05fr) 3rem minmax(200px,1fr)",
         minWidth: "1100px",
       }
-    : {
+    : hasSemis
+    ? {
         gridTemplateColumns: "minmax(240px,1fr) 3rem minmax(280px,1.4fr) 3rem minmax(240px,1fr)",
         minWidth: "760px",
+      }
+    : {
+        // Final-only bracket: single centre column.
+        gridTemplateColumns: "minmax(280px,1.5fr)",
+        minWidth: "320px",
       };
 
   return (
@@ -246,12 +254,16 @@ export default function AdminBracketView({ matches, isAdmin = true, previewMode 
               <div className="bracket-spacer bracket-spacer--pair-left" />
             </>
           )}
-          <div className="bracket-single">
-            <div className="bracket-cell">
-              <BracketMatch match={sf1} size="md" isAdmin={isAdmin} previewMode={previewMode} />
-            </div>
-          </div>
-          <div className="bracket-spacer bracket-spacer--single-left" />
+          {hasSemis && (
+            <>
+              <div className="bracket-single">
+                <div className="bracket-cell">
+                  <BracketMatch match={sf1} size="md" isAdmin={isAdmin} previewMode={previewMode} />
+                </div>
+              </div>
+              <div className="bracket-spacer bracket-spacer--single-left" />
+            </>
+          )}
 
           {/* CENTER · trophy + final + 3rd */}
           <div className="bracket-center">
@@ -277,22 +289,30 @@ export default function AdminBracketView({ matches, isAdmin = true, previewMode 
             >
               <BracketMatch match={finalMatch} size="lg" isAdmin={isAdmin} previewMode={previewMode} />
             </div>
-            <p className="font-hero text-court-muted tracking-[0.35em] text-[10px] text-center mb-2">3ER PUESTO</p>
-            <div
-              className="rounded-xl border border-white/10 p-2"
-              style={{ background: "rgba(20,26,44,0.6)" }}
-            >
-              <BracketMatch match={thirdMatch} size="sm" isAdmin={isAdmin} previewMode={previewMode} />
-            </div>
+            {hasThird && (
+              <>
+                <p className="font-hero text-court-muted tracking-[0.35em] text-[10px] text-center mb-2">3ER PUESTO</p>
+                <div
+                  className="rounded-xl border border-white/10 p-2"
+                  style={{ background: "rgba(20,26,44,0.6)" }}
+                >
+                  <BracketMatch match={thirdMatch} size="sm" isAdmin={isAdmin} previewMode={previewMode} />
+                </div>
+              </>
+            )}
           </div>
 
           {/* RIGHT HALF */}
-          <div className="bracket-spacer bracket-spacer--single-right" />
-          <div className="bracket-single">
-            <div className="bracket-cell">
-              <BracketMatch match={sf2} size="md" isAdmin={isAdmin} previewMode={previewMode} />
-            </div>
-          </div>
+          {hasSemis && (
+            <>
+              <div className="bracket-spacer bracket-spacer--single-right" />
+              <div className="bracket-single">
+                <div className="bracket-cell">
+                  <BracketMatch match={sf2} size="md" isAdmin={isAdmin} previewMode={previewMode} />
+                </div>
+              </div>
+            </>
+          )}
           {hasQuarters && (
             <>
               <div className="bracket-spacer bracket-spacer--pair-right" />

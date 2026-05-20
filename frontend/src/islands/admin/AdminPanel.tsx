@@ -823,49 +823,56 @@ function BracketConfigPicker({
     : recommended ? optionKey(recommended) : "";
 
   const [picked, setPicked] = useState<string>(initialKey);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [saving, setSaving] = useState<"idle" | "syncing" | "ok" | "err">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => { setPicked(initialKey); }, [initialKey]);
 
   const window = bracketDecisionWindow(tournament);
-  const dirty = picked !== currentKey;
   const selected = options.find((o) => optionKey(o) === picked) ?? null;
 
-  const apply = async () => {
-    if (!selected) return;
-    setBusy(true); setMsg(null);
+  // Auto-save whenever the picked option changes and differs from what the
+  // tournament already has persisted. PATCH + regenerate-bracket happen
+  // back-to-back so the bracket re-renders in real time without a button.
+  const persistKey = currentKey;
+  const persist = useCallback(async (opt: BracketOption) => {
+    setSaving("syncing"); setErrorMsg(null);
     try {
       await api(`/tournaments/${tournament.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          bracketQualifiersPerGroup: selected.qualifiersPerGroup,
-          bracketWildcards: selected.wildcards,
-          bracketSize: selected.size,
-          // Keep a sensible legacy format string for backwards compat.
-          bracketFormat: selected.wildcards > 0 && selected.qualifiersPerGroup > 0
+          bracketQualifiersPerGroup: opt.qualifiersPerGroup,
+          bracketWildcards: opt.wildcards,
+          bracketSize: opt.size,
+          bracketFormat: opt.wildcards > 0 && opt.qualifiersPerGroup > 0
             ? "top1_plus_best2_seconds"
             : "top2_per_group",
         }),
       });
       try {
         await api(`/matches/tournament/${tournament.id}/regenerate-bracket`, { method: "POST" });
-        setMsg({ kind: "ok", text: "Configuración aplicada · cuadro regenerado" });
       } catch (e) {
-        if (e instanceof Error && /MATCH_HAS_SCORE|already started/i.test(e.message)) {
-          setMsg({ kind: "ok", text: "Configuración guardada (cuadro existente no se regenera porque tiene marcadores)" });
-        } else {
-          setMsg({ kind: "ok", text: "Configuración guardada · se aplicará al cerrar la fase de grupos" });
+        // Soft-fail when there's no group standings yet or KO matches already
+        // have scores; the PATCH itself still wrote the plan.
+        if (e instanceof Error && !/MATCH_HAS_SCORE|already started/i.test(e.message)) {
+          throw e;
         }
       }
+      setSaving("ok");
       onApplied();
     } catch (e) {
-      setMsg({
-        kind: "err",
-        text: e instanceof Error ? e.message : "Error al guardar la configuración",
-      });
-    } finally { setBusy(false); }
-  };
+      setSaving("err");
+      setErrorMsg(e instanceof Error ? e.message : "Error al guardar la configuración");
+    }
+  }, [tournament.id, onApplied]);
+
+  useEffect(() => {
+    if (!selected) return;
+    if (picked === persistKey) return;
+    if (window === "locked") return;
+    const handle = setTimeout(() => { void persist(selected); }, 300);
+    return () => clearTimeout(handle);
+  }, [picked, persistKey, selected, persist, window]);
 
   return (
     <div className="glass p-4 sm:p-5 space-y-3">
@@ -950,20 +957,11 @@ function BracketConfigPicker({
         </ul>
       )}
 
-      {msg && (
-        <p className={msg.kind === "ok" ? "text-court-ok text-sm" : "text-court-danger text-sm"}>
-          {msg.text}
-        </p>
+      {errorMsg && (
+        <p className="text-court-danger text-sm">{errorMsg}</p>
       )}
       <div className="flex items-center justify-end">
-        <button
-          type="button"
-          onClick={apply}
-          disabled={!dirty || busy || window === "locked" || !selected}
-          className="btn-primary"
-        >
-          {busy ? "Aplicando…" : "Aplicar configuración"}
-        </button>
+        <SaveBadge state={saving} />
       </div>
     </div>
   );
