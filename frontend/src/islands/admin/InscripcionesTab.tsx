@@ -249,6 +249,7 @@ function ExistingPlayerPicker({
 }) {
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   const candidates = useMemo(
     () => allPlayers.filter((p) => !registeredIds.has(p.id)),
@@ -285,17 +286,31 @@ function ExistingPlayerPicker({
 
   return (
     <div className="glass p-4 sm:p-5 space-y-3">
-      <div className="flex items-end justify-between flex-wrap gap-3">
-        <div>
-          <h4 className="font-hero text-xl text-white">Inscribir jugador existente</h4>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 text-left"
+      >
+        <div className="min-w-0">
+          <h4 className="font-hero text-xl text-white flex items-center gap-2">
+            <span
+              className="inline-block transition-transform"
+              style={{ transform: open ? "rotate(90deg)" : "none" }}
+              aria-hidden="true"
+            >▶</span>
+            Inscribir jugador existente
+          </h4>
           <p className="text-[11px] text-court-muted">
             Busca entre los jugadores ya registrados en la BBDD que aún no están en este torneo.
           </p>
         </div>
-        <span className="text-[10px] uppercase tracking-widest text-court-muted">
-          {filtered.length} / {candidates.length} disponibles
+        <span className="text-[10px] uppercase tracking-widest text-court-muted shrink-0">
+          {candidates.length} disponibles
         </span>
-      </div>
+      </button>
+      {!open ? null : (
+      <>
       <input
         type="search"
         placeholder="Buscar por nombre, móvil, email, posición, rol, edad…"
@@ -359,6 +374,8 @@ function ExistingPlayerPicker({
             </p>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   );
