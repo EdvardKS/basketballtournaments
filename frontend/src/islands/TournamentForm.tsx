@@ -16,8 +16,6 @@ export default function TournamentForm({ tournament: init, onSaved, onCancel }: 
     draftEnd: init?.draftEnd?.slice(0,10) ?? "",
     matchDate: init?.matchDate?.slice(0,10) ?? "",
     halfCourt: init?.halfCourt ?? true,
-    bracketFormat: init?.bracketFormat ?? "top2_per_group",
-    bracketSize: init?.bracketSize == null ? "" : String(init.bracketSize),
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,8 +26,6 @@ export default function TournamentForm({ tournament: init, onSaved, onCancel }: 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setError(null); setLoading(true);
     const body: Record<string, unknown> = { ...form };
-    // bracket_size empty string → null (auto). 4/8/16 → number.
-    body.bracketSize = form.bracketSize === "" ? null : Number(form.bracketSize);
     try {
       const saved = await api<Tournament>(
         init ? `/tournaments/${init.id}` : "/tournaments",
@@ -64,39 +60,9 @@ export default function TournamentForm({ tournament: init, onSaved, onCancel }: 
       <p className="text-[11px] text-court-muted leading-snug">
         El número de equipos lo decide el admin nombrando capitanes; el draft
         corre tantas rondas como hagan falta hasta repartir a todos los
-        inscritos entre los capitanes.
-      </p>
-
-      <p className="label-text pt-2">Cuadro de eliminatorias</p>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="label-text">Formato de clasificación</label>
-          <select
-            className="input-field"
-            value={form.bracketFormat}
-            onChange={(e) => setForm((f) => ({ ...f, bracketFormat: e.target.value as typeof form.bracketFormat }))}
-          >
-            <option value="top2_per_group">Los 2 mejores de cada grupo</option>
-            <option value="top1_plus_best2_seconds">1º de cada grupo + 2 mejores 2dos</option>
-          </select>
-        </div>
-        <div>
-          <label className="label-text">Cuadro inicial</label>
-          <select
-            className="input-field"
-            value={form.bracketSize}
-            onChange={(e) => setForm((f) => ({ ...f, bracketSize: e.target.value }))}
-          >
-            <option value="">Auto (según clasificados)</option>
-            <option value="4">Solo semifinales (4)</option>
-            <option value="8">Desde cuartos (8)</option>
-            <option value="16">Desde octavos (16)</option>
-          </select>
-        </div>
-      </div>
-      <p className="text-[11px] text-court-muted leading-snug">
-        Si eliges un cuadro mayor que los clasificados (p.ej. octavos con
-        sólo 6 equipos), la app te avisa al cerrar la fase de grupos.
+        inscritos entre los capitanes. El formato de eliminatorias
+        (cuadro y criterio de clasificación) se decide más tarde, al cerrar
+        el draft, desde la pestaña Eliminatorias.
       </p>
       <p className="label-text pt-2">Fechas del torneo *</p>
       <div className="grid grid-cols-2 gap-3">

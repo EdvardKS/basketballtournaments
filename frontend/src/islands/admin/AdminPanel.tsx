@@ -53,6 +53,7 @@ const tabsForPhase = (phase: TournamentPhase): TabDef[] => {
   if (phase === "groups") return [
     { key: "grupos",        label: "Clasificación", icon: ICONS.grupos },
     { key: "partidos",      label: "Marcador rápido", icon: ICONS.partidos },
+    { key: "eliminatorias", label: "Eliminatorias", icon: ICONS.eliminatorias },
     { key: "resultados",    label: "Resultados",    icon: ICONS.resultados },
     { key: "config",        label: "Configuración", icon: ICONS.config },
   ];
@@ -484,62 +485,189 @@ function TabContent({
 // Every match card carries MatchEditOverlay so the admin scores + finalises
 // in-place without leaving the panel.
 
+// Window in which the admin can still tweak format/size. Opens when the
+// draft closes (status='setup') and closes the day BEFORE the match day.
+function bracketDecisionWindow(tournament: Tournament): "early" | "open" | "locked" {
+  if (!tournament.matchDate) return "open";
+  const md = new Date(tournament.matchDate + "T00:00:00Z").getTime();
+  const lockAt = md - 24 * 60 * 60 * 1000;
+  if (Date.now() >= lockAt) return "locked";
+  // We're inside the window once the draft has ended (groups + KO matches
+  // generated). The page-level status check below handles the "not yet"
+  // case (the AdminBracketEditor is only mounted in the Eliminatorias tab,
+  // which is itself only visible from the knockouts phase onwards).
+  return "open";
+}
+
+function BracketConfigPicker({
+  tournament, onApplied,
+}: {
+  tournament: Tournament;
+  onApplied: () => void;
+}) {
+  const [fmt, setFmt] = useState<string>(tournament.bracketFormat);
+  const [size, setSize] = useState<string>(tournament.bracketSize == null ? "" : String(tournament.bracketSize));
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const window = bracketDecisionWindow(tournament);
+  const dirty = fmt !== tournament.bracketFormat
+    || size !== (tournament.bracketSize == null ? "" : String(tournament.bracketSize));
+
+  const apply = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      await api(`/tournaments/${tournament.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          bracketFormat: fmt,
+          bracketSize: size === "" ? null : Number(size),
+        }),
+      });
+      // Regenerate the bracket so the change actually takes effect. The
+      // backend refuses if any KO match already has a score, so the admin
+      // gets a clear error message instead of silent data loss.
+      try {
+        await api(`/matches/tournament/${tournament.id}/regenerate-bracket`, { method: "POST" });
+        setMsg({ kind: "ok", text: "Configuración aplicada · cuadro regenerado" });
+      } catch (e) {
+        if (e instanceof Error && /MATCH_HAS_SCORE|already started/i.test(e.message)) {
+          setMsg({ kind: "ok", text: "Configuración guardada (cuadro existente no se regenera porque tiene marcadores)" });
+        } else {
+          // No bracket yet (or other regenerate error): the PATCH already
+          // saved, and the bracket will use the new config when grupos
+          // closes. Treat as soft success.
+          setMsg({ kind: "ok", text: "Configuración guardada · se aplicará al cerrar la fase de grupos" });
+        }
+      }
+      onApplied();
+    } catch (e) {
+      setMsg({
+        kind: "err",
+        text: e instanceof Error ? e.message : "Error al guardar la configuración",
+      });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="glass p-4 sm:p-5 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">Configurar cuadro</p>
+          <p className="text-white text-sm">Decide ahora el formato + tamaño de las eliminatorias.</p>
+        </div>
+        {window === "locked" && (
+          <span className="chip bg-court-warn/15 text-court-warn border border-court-warn/30">
+            🔒 cerrado · ya estamos en víspera del torneo
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="label-text">Formato de clasificación</label>
+          <select
+            className="input-field"
+            value={fmt}
+            onChange={(e) => setFmt(e.target.value)}
+            disabled={window === "locked"}
+          >
+            <option value="top2_per_group">Los 2 mejores de cada grupo</option>
+            <option value="top1_plus_best2_seconds">1º de cada grupo + 2 mejores 2dos</option>
+          </select>
+        </div>
+        <div>
+          <label className="label-text">Cuadro inicial</label>
+          <select
+            className="input-field"
+            value={size}
+            onChange={(e) => setSize(e.target.value)}
+            disabled={window === "locked"}
+          >
+            <option value="">Auto (según clasificados)</option>
+            <option value="4">Solo semifinales (4)</option>
+            <option value="8">Desde cuartos (8)</option>
+            <option value="16">Desde octavos (16)</option>
+          </select>
+        </div>
+      </div>
+      {msg && (
+        <p className={msg.kind === "ok" ? "text-court-ok text-sm" : "text-court-danger text-sm"}>
+          {msg.text}
+        </p>
+      )}
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={apply}
+          disabled={!dirty || busy || window === "locked"}
+          className="btn-primary"
+        >
+          {busy ? "Aplicando…" : "Aplicar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AdminBracketEditor({
-  tournament, matches, onChange: _onChange,
+  tournament, matches, onChange,
 }: {
   tournament: Tournament;
   matches: Match[];
   onChange: () => void;
 }) {
   const ko = matches.filter((m) => m.stage !== "group");
-  if (ko.length === 0) {
-    return (
-      <div className="glass p-10 text-center">
-        <p className="text-5xl mb-3">🥊</p>
-        <p className="text-white font-hero text-2xl">Bracket no generado todavía</p>
-        <p className="text-court-muted text-sm mt-2">
-          Se crea automáticamente al cerrar el último partido de la fase de grupos.
-        </p>
-      </div>
-    );
-  }
-
   const formatLabel = tournament.bracketFormat === "top1_plus_best2_seconds"
     ? "1º de cada grupo + 2 mejores segundos"
     : "Top 2 de cada grupo";
 
   return (
     <div className="space-y-6">
-      <header className="glass p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">Eliminatorias</p>
-          <p className="text-white text-sm">
-            {ko.length} partidos · formato: <span className="text-white font-semibold">{formatLabel}</span>
-            {tournament.bracketSize
-              ? <> · cuadro fijado a <span className="text-white font-semibold">{tournament.bracketSize}</span></>
-              : <> · cuadro auto</>}
-          </p>
-          <p className="text-[11px] text-court-muted mt-1">
-            Pulsa el icono ✎ de cada partido para meter el marcador. El ganador propaga al siguiente cruce.
+      <BracketConfigPicker tournament={tournament} onApplied={onChange} />
+
+      {ko.length === 0 ? (
+        <div className="glass p-10 text-center">
+          <p className="text-5xl mb-3">🥊</p>
+          <p className="text-white font-hero text-2xl">Bracket no generado todavía</p>
+          <p className="text-court-muted text-sm mt-2">
+            Se crea automáticamente al cerrar el último partido de la fase de grupos
+            con el formato + tamaño elegidos arriba.
           </p>
         </div>
-        <a
-          href={`/tournaments/${tournament.id}`}
-          target="_blank" rel="noopener"
-          className="btn-ghost !py-1.5 !px-3 !text-xs"
-        >
-          Vista pública ↗
-        </a>
-      </header>
+      ) : (
+        <>
+          <header className="glass p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">Eliminatorias</p>
+              <p className="text-white text-sm">
+                {ko.length} partidos · formato: <span className="text-white font-semibold">{formatLabel}</span>
+                {tournament.bracketSize
+                  ? <> · cuadro fijado a <span className="text-white font-semibold">{tournament.bracketSize}</span></>
+                  : <> · cuadro auto</>}
+              </p>
+              <p className="text-[11px] text-court-muted mt-1">
+                Pulsa el icono ✎ de cada partido para meter el marcador. El ganador propaga al siguiente cruce.
+              </p>
+            </div>
+            <a
+              href={`/tournaments/${tournament.id}`}
+              target="_blank" rel="noopener"
+              className="btn-ghost !py-1.5 !px-3 !text-xs"
+            >
+              Vista pública ↗
+            </a>
+          </header>
 
-      <div className="glass p-2 sm:p-4">
-        <AdminBracketView matches={ko} isAdmin />
-      </div>
+          <div className="glass p-2 sm:p-4">
+            <AdminBracketView matches={ko} isAdmin />
+          </div>
 
-      <div className="glass p-4 sm:p-6">
-        <h3 className="font-hero text-xl text-white mb-3">Marcador rápido (eliminatorias)</h3>
-        <QuickScoreSheet matches={ko} tournamentId={tournament.id} />
-      </div>
+          <div className="glass p-4 sm:p-6">
+            <h3 className="font-hero text-xl text-white mb-3">Marcador rápido (eliminatorias)</h3>
+            <QuickScoreSheet matches={ko} tournamentId={tournament.id} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -564,20 +692,31 @@ function GroupSummaryCard({ group: g, matches }: { group: GroupWithMembers; matc
               <th className="pb-2 pr-2 text-center">PJ</th>
               <th className="pb-2 pr-2 text-center">G</th>
               <th className="pb-2 pr-2 text-center">P</th>
+              <th className="pb-2 pr-2 text-center" title="Puntos a favor">PF</th>
+              <th className="pb-2 pr-2 text-center" title="Puntos en contra">PC</th>
+              <th className="pb-2 pr-2 text-center" title="Diferencia">DIF</th>
               <th className="pb-2 text-center font-bold text-white">Pts</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {g.members.map((m, i) => (
+            {g.members.map((m, i) => {
+              const diff = m.pointsFor - m.pointsAgainst;
+              return (
               <tr key={m.id} className={i === 0 && m.gamesPlayed > 0 ? "bg-court-gold/5" : ""}>
                 <td className="py-1.5 pr-2 font-hero text-base tabular-nums text-white/70">{i + 1}</td>
                 <td className="py-1.5 pr-2 text-white truncate">{m.teamName ?? "—"}</td>
                 <td className="py-1.5 pr-2 text-center text-court-muted tabular-nums">{m.gamesPlayed}</td>
                 <td className="py-1.5 pr-2 text-center text-court-ok tabular-nums">{m.gamesWon}</td>
                 <td className="py-1.5 pr-2 text-center text-court-danger tabular-nums">{m.gamesLost}</td>
+                <td className="py-1.5 pr-2 text-center text-court-muted tabular-nums">{m.pointsFor}</td>
+                <td className="py-1.5 pr-2 text-center text-court-muted tabular-nums">{m.pointsAgainst}</td>
+                <td className={`py-1.5 pr-2 text-center tabular-nums font-semibold ${
+                  diff > 0 ? "text-court-ok" : diff < 0 ? "text-court-danger" : "text-court-muted"
+                }`}>{diff > 0 ? "+" : ""}{diff}</td>
                 <td className="py-1.5 text-center font-hero text-lg text-[var(--color-neon-orange)] tabular-nums">{m.points}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
