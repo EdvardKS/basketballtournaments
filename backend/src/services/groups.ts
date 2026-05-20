@@ -2,6 +2,7 @@
 import { query, queryOne, tx } from "../db/query.js";
 import { toGroup } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
+import { generateKnockout } from "./bracket.js";
 
 const GROUP_NAMES = ["Grupo A","Grupo B","Grupo C","Grupo D","Grupo E","Grupo F","Grupo G","Grupo H"];
 
@@ -154,6 +155,14 @@ export const regroupTeams = async (
       created.push(toGroup(grp[0]));
     }
     return { ok: true, groups: created };
+  }).then(async (out) => {
+    // Re-scaffold the knockout bracket using the new group layout so the
+    // preview shows seed labels matching the new structure. Failures here
+    // are non-fatal (e.g. format unsupported for current group count); the
+    // admin will see them when picking a format in the Eliminatorias tab.
+    try { await generateKnockout(tournamentId); }
+    catch (_e) { /* swallow */ }
+    return out;
   });
 };
 

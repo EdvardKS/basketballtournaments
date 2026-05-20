@@ -406,6 +406,7 @@ function TabContent({
           tournamentId={tournament.id}
           teams={detail?.teams ?? []}
           groups={groups}
+          allPlayers={allPlayers}
           onChange={onChange}
         />
       );
@@ -694,75 +695,114 @@ function bracketDecisionWindow(tournament: Tournament): "early" | "open" | "lock
   return "open";
 }
 
-// Mirror of backend bracket.collectQualified() sizing: how many teams will
-// actually reach the knockout pool given current group count + chosen format.
-function qualifiedCount(groupCount: number, fmt: string): number {
-  if (groupCount <= 0) return 0;
-  if (fmt === "top2_per_group") {
-    return groupCount === 1 ? 4 : groupCount * 2;
-  }
-  if (fmt === "top1_plus_best2_seconds") {
-    return groupCount < 2 ? 0 : groupCount + 2;
-  }
-  return 0;
+// Enumerate every feasible (format, size) combination given the current
+// group layout. Mirrors backend bracket.collectQualified() so the picker
+// never offers a setup that the API would reject.
+interface BracketOption {
+  format: string;
+  size: number;
+  label: string;
+  qualifiers: number;
 }
+const enumerateBracketOptions = (
+  groups: GroupWithMembers[],
+): BracketOption[] => {
+  const opts: BracketOption[] = [];
+  const G = groups.length;
+  const sizes = groups.map((g) => g.members.length);
+  const minPerGroup = sizes.length === 0 ? 0 : Math.min(...sizes);
+
+  if (G === 1) {
+    const teams = sizes[0] ?? 0;
+    if (teams >= 2) {
+      opts.push({
+        format: "top2_single_group", size: 2, qualifiers: 2,
+        label: `Final directa · los 2 mejores del ${groups[0].group.name}`,
+      });
+    }
+    if (teams >= 4) {
+      opts.push({
+        format: "top4_single_group", size: 4, qualifiers: 4,
+        label: `Semifinales · los 4 mejores del ${groups[0].group.name}`,
+      });
+    }
+  }
+
+  if (G >= 2 && minPerGroup >= 2) {
+    // top2_per_group → 2 · G qualifiers.
+    const q1 = G * 2;
+    for (const s of [4, 8, 16] as const) {
+      if (q1 >= s) {
+        opts.push({
+          format: "top2_per_group", size: s, qualifiers: q1,
+          label: `${stageLabel(s)} · top 2 de cada grupo`,
+        });
+      }
+    }
+    // top1_plus_best2_seconds → G + 2 qualifiers.
+    const q2 = G + 2;
+    for (const s of [4, 8, 16] as const) {
+      if (q2 >= s) {
+        opts.push({
+          format: "top1_plus_best2_seconds", size: s, qualifiers: q2,
+          label: `${stageLabel(s)} · 1º de cada grupo + 2 mejores 2dos`,
+        });
+      }
+    }
+  }
+
+  return opts;
+};
+
+const stageLabel = (size: number): string => {
+  if (size === 2)  return "Final directa";
+  if (size === 4)  return "Desde semifinales";
+  if (size === 8)  return "Desde cuartos";
+  if (size === 16) return "Desde octavos";
+  return `Cuadro de ${size}`;
+};
+
+const optionKey = (o: { format: string; size: number }) => `${o.format}::${o.size}`;
 
 function BracketConfigPicker({
-  tournament, groupCount, onApplied,
+  tournament, groups, onApplied,
 }: {
   tournament: Tournament;
-  groupCount: number;
+  groups: GroupWithMembers[];
   onApplied: () => void;
 }) {
-  const [fmt, setFmt] = useState<string>(tournament.bracketFormat);
-  const [size, setSize] = useState<string>(tournament.bracketSize == null ? "" : String(tournament.bracketSize));
+  const options = useMemo(() => enumerateBracketOptions(groups), [groups]);
+  const currentKey = optionKey({
+    format: tournament.bracketFormat,
+    size: tournament.bracketSize ?? -1,
+  });
+  // Pre-select the current saved combo if it's still feasible; otherwise
+  // default to the first valid option so applying does not leave the
+  // tournament with an invalid config.
+  const initialKey = options.find((o) => optionKey(o) === currentKey)
+    ? currentKey
+    : options[0] ? optionKey(options[0]) : "";
+  const [picked, setPicked] = useState<string>(initialKey);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
+  useEffect(() => { setPicked(initialKey); }, [initialKey]);
+
   const window = bracketDecisionWindow(tournament);
-  const dirty = fmt !== tournament.bracketFormat
-    || size !== (tournament.bracketSize == null ? "" : String(tournament.bracketSize));
-
-  // Compute which format/size combos are actually achievable with the current
-  // group count. We hide options that the backend would reject so the admin
-  // cannot pick an invalid setup.
-  const fmtOptions = useMemo(() => [
-    { value: "top2_per_group", label: "Los 2 mejores de cada grupo",
-      enabled: qualifiedCount(groupCount, "top2_per_group") >= 4 },
-    { value: "top1_plus_best2_seconds", label: "1º de cada grupo + 2 mejores 2dos",
-      enabled: qualifiedCount(groupCount, "top1_plus_best2_seconds") >= 4 },
-  ], [groupCount]);
-
-  const qCountForFmt = qualifiedCount(groupCount, fmt);
-  const sizeOptions = useMemo(() => [
-    { value: "", label: "Auto (según clasificados)", enabled: qCountForFmt >= 4 },
-    { value: "4", label: "Solo semifinales (4)",  enabled: qCountForFmt >= 4 },
-    { value: "8", label: "Desde cuartos (8)",      enabled: qCountForFmt >= 8 },
-    { value: "16", label: "Desde octavos (16)",    enabled: qCountForFmt >= 16 },
-  ], [qCountForFmt]);
-
-  // If the currently-selected size is no longer feasible after a format
-  // change, snap it back to "auto" so the picker can't submit an invalid
-  // combo.
-  useEffect(() => {
-    if (size === "") return;
-    const n = Number(size);
-    if (n > qCountForFmt) setSize("");
-  }, [qCountForFmt, size]);
+  const dirty = picked !== currentKey;
+  const selected = options.find((o) => optionKey(o) === picked) ?? null;
 
   const apply = async () => {
+    if (!selected) return;
     setBusy(true); setMsg(null);
     try {
       await api(`/tournaments/${tournament.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          bracketFormat: fmt,
-          bracketSize: size === "" ? null : Number(size),
+          bracketFormat: selected.format,
+          bracketSize: selected.size,
         }),
       });
-      // Regenerate the bracket so the change actually takes effect. The
-      // backend refuses if any KO match already has a score, so the admin
-      // gets a clear error message instead of silent data loss.
       try {
         await api(`/matches/tournament/${tournament.id}/regenerate-bracket`, { method: "POST" });
         setMsg({ kind: "ok", text: "Configuración aplicada · cuadro regenerado" });
@@ -770,9 +810,6 @@ function BracketConfigPicker({
         if (e instanceof Error && /MATCH_HAS_SCORE|already started/i.test(e.message)) {
           setMsg({ kind: "ok", text: "Configuración guardada (cuadro existente no se regenera porque tiene marcadores)" });
         } else {
-          // No bracket yet (or other regenerate error): the PATCH already
-          // saved, and the bracket will use the new config when grupos
-          // closes. Treat as soft success.
           setMsg({ kind: "ok", text: "Configuración guardada · se aplicará al cerrar la fase de grupos" });
         }
       }
@@ -789,8 +826,12 @@ function BracketConfigPicker({
     <div className="glass p-4 sm:p-5 space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">Configurar cuadro</p>
-          <p className="text-white text-sm">Decide ahora el formato + tamaño de las eliminatorias.</p>
+          <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">
+            Configurar eliminatorias
+          </p>
+          <p className="text-white text-sm">
+            Elige una de las opciones disponibles para tu configuración de grupos.
+          </p>
         </div>
         {window === "locked" && (
           <span className="chip bg-court-warn/15 text-court-warn border border-court-warn/30">
@@ -798,40 +839,49 @@ function BracketConfigPicker({
           </span>
         )}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="label-text">Formato de clasificación</label>
-          <select
-            className="input-field"
-            value={fmt}
-            onChange={(e) => setFmt(e.target.value)}
-            disabled={window === "locked"}
-          >
-            {fmtOptions.map((o) => (
-              <option key={o.value} value={o.value} disabled={!o.enabled}>
-                {o.label}{o.enabled ? "" : " · no posible con esta cantidad de grupos"}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="label-text">
-            Cuadro inicial <span className="text-court-muted">· {qCountForFmt} clasificados</span>
-          </label>
-          <select
-            className="input-field"
-            value={size}
-            onChange={(e) => setSize(e.target.value)}
-            disabled={window === "locked"}
-          >
-            {sizeOptions.map((o) => (
-              <option key={o.value || "auto"} value={o.value} disabled={!o.enabled}>
-                {o.label}{o.enabled ? "" : ` · faltan equipos (hay ${qCountForFmt})`}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+
+      {options.length === 0 ? (
+        <p className="text-court-danger text-sm">
+          La configuración actual de grupos no permite montar eliminatorias.
+          Reasigna equipos en la pestaña Grupos para tener al menos 2 grupos
+          con 2 equipos cada uno o un único grupo con 2+ equipos.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {options.map((o) => {
+            const k = optionKey(o);
+            const active = picked === k;
+            return (
+              <li key={k}>
+                <label
+                  className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
+                    active
+                      ? "border-[var(--color-neon-orange)] bg-[var(--color-neon-orange)]/5"
+                      : "border-white/10 bg-white/[0.02] hover:bg-white/5"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="bracket-option"
+                    value={k}
+                    checked={active}
+                    onChange={() => setPicked(k)}
+                    disabled={window === "locked"}
+                    className="accent-[var(--color-neon-orange)] shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-semibold truncate">{o.label}</p>
+                    <p className="text-[11px] text-court-muted">
+                      {o.qualifiers} clasificados · cuadro de {o.size}
+                    </p>
+                  </div>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
       {msg && (
         <p className={msg.kind === "ok" ? "text-court-ok text-sm" : "text-court-danger text-sm"}>
           {msg.text}
@@ -841,10 +891,10 @@ function BracketConfigPicker({
         <button
           type="button"
           onClick={apply}
-          disabled={!dirty || busy || window === "locked"}
+          disabled={!dirty || busy || window === "locked" || !selected}
           className="btn-primary"
         >
-          {busy ? "Aplicando…" : "Aplicar"}
+          {busy ? "Aplicando…" : "Aplicar configuración"}
         </button>
       </div>
     </div>
@@ -868,7 +918,7 @@ function AdminBracketEditor({
     <div className="space-y-6">
       <BracketConfigPicker
         tournament={tournament}
-        groupCount={groups.length}
+        groups={groups}
         onApplied={onChange}
       />
 
@@ -989,7 +1039,6 @@ interface EditableGroup {
   id: string | null;   // null while not yet persisted
   name: string;
   color: string;
-  logo: string;        // url or empty
   teamIds: string[];
 }
 
@@ -998,7 +1047,7 @@ const seedInitialGroups = (
 ): EditableGroup[] => {
   if (groups.length === 0) {
     return [{
-      id: null, name: "Grupo A", color: GROUP_PALETTE[0], logo: "",
+      id: null, name: "Grupo A", color: GROUP_PALETTE[0],
       teamIds: teams.map((t) => t.id),
     }];
   }
@@ -1006,19 +1055,35 @@ const seedInitialGroups = (
     id: g.group.id,
     name: g.group.name,
     color: g.group.color || GROUP_PALETTE[idx % GROUP_PALETTE.length],
-    logo: g.group.logo ?? "",
     teamIds: g.members.map((m) => m.teamId),
   }));
 };
 
+// Deterministic accent color per team — keeps the card identifiable even
+// when the team has no custom logo. We hash the id so the color is stable
+// across reloads and never drifts as teams are added or removed.
+const TEAM_PALETTE = [
+  "#3aa0ff", "#ff6b00", "#3ecf8e", "#f5c518",
+  "#ff2d2d", "#9b5de5", "#00bbf9", "#fb5607",
+  "#ff3a8c", "#06d6a0", "#118ab2", "#ef476f",
+];
+const teamAccent = (teamId: string): string => {
+  let h = 0;
+  for (let i = 0; i < teamId.length; i++) h = (h * 31 + teamId.charCodeAt(i)) >>> 0;
+  return TEAM_PALETTE[h % TEAM_PALETTE.length];
+};
+
 function GroupEditor({
-  tournamentId, teams, groups, onChange,
+  tournamentId, teams, groups, allPlayers, onChange,
 }: {
   tournamentId: string;
   teams: TeamWithPlayers[];
   groups: GroupWithMembers[];
+  allPlayers: Player[];
   onChange: () => void;
 }) {
+  const playerById = useMemo(() =>
+    new Map(allPlayers.map((p) => [p.id, p])), [allPlayers]);
   const [editGroups, setEditGroups] = useState<EditableGroup[]>(
     () => seedInitialGroups(groups, teams));
   const [saving, setSaving] = useState<"idle" | "syncing" | "ok" | "err">("idle");
@@ -1053,7 +1118,6 @@ function GroupEditor({
         name: g.name,
         teamIds: g.teamIds,
         color: g.color || null,
-        logo: g.logo || null,
       }));
       await api(`/matches/tournament/${tournamentId}/groups`, {
         method: "PUT", body: JSON.stringify({ groups: payload }),
@@ -1067,7 +1131,7 @@ function GroupEditor({
   }, [tournamentId, onChange]);
 
   const persistMeta = useCallback(async (
-    groupId: string, patch: { name?: string; color?: string; logo?: string },
+    groupId: string, patch: { name?: string; color?: string },
   ) => {
     setSaving("syncing"); setErrorMsg(null);
     try {
@@ -1115,7 +1179,7 @@ function GroupEditor({
       const next = [...prev, {
         id: null, name: `Grupo ${letter}`,
         color: GROUP_PALETTE[idx % GROUP_PALETTE.length],
-        logo: "", teamIds: [],
+        teamIds: [],
       }];
       // We need at least one team in every group, so don't persist until
       // a team is dropped in.
@@ -1147,7 +1211,7 @@ function GroupEditor({
     () => ({ current: new Map<string, ReturnType<typeof setTimeout>>() }),
     [],
   );
-  const scheduleMeta = (groupId: string | null, patch: { name?: string; color?: string; logo?: string }) => {
+  const scheduleMeta = (groupId: string | null, patch: { name?: string; color?: string }) => {
     if (!groupId) return;
     const prev = debounceRef.current.get(groupId);
     if (prev) clearTimeout(prev);
@@ -1224,14 +1288,11 @@ function GroupEditor({
               <div className="absolute top-0 left-0 right-0 h-1" style={{ background: g.color }} aria-hidden="true" />
               <div className="p-4 sm:p-5 space-y-3">
                 <div className="flex items-center gap-3">
-                  {/* Logo / initial circle */}
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-white/10"
+                    className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-white/10"
                     style={{ background: g.color }}
                   >
-                    {g.logo
-                      ? <img src={g.logo} alt="" className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-                      : <span className="font-hero text-xl text-white">{g.name.charAt(g.name.length - 1).toUpperCase()}</span>}
+                    <span className="font-hero text-xl text-white">{g.name.charAt(g.name.length - 1).toUpperCase()}</span>
                   </div>
                   <input
                     className="bg-transparent text-white font-hero text-xl flex-1 min-w-0 outline-none focus:bg-white/5 rounded px-2 py-1"
@@ -1266,21 +1327,7 @@ function GroupEditor({
                       }}
                       className="w-6 h-6 rounded cursor-pointer border border-white/10 bg-transparent"
                     />
-                    <span className="text-court-muted">Color</span>
-                  </label>
-                  <label className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="text-court-muted shrink-0">Logo URL</span>
-                    <input
-                      type="url"
-                      placeholder="https://…"
-                      value={g.logo}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setLocalField(gi, { logo: v });
-                        scheduleMeta(g.id, { logo: v });
-                      }}
-                      className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white flex-1 min-w-0 outline-none focus:border-white/30"
-                    />
+                    <span className="text-court-muted">Color del grupo</span>
                   </label>
                 </div>
 
@@ -1297,22 +1344,32 @@ function GroupEditor({
                   {g.teamIds.map((tid) => {
                     const t = teamById.get(tid);
                     if (!t) return null;
+                    const accent = teamAccent(t.id);
+                    const captain = t.captainId ? playerById.get(t.captainId) : null;
+                    const roster = t.players?.length ?? 0;
                     return (
                       <li
                         key={tid}
                         draggable
                         onDragStart={(e) => onDragStart(e, tid)}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-move hover:bg-white/10 transition-colors"
-                        style={{ background: "rgba(255,255,255,0.04)", borderLeft: `3px solid ${g.color}` }}
+                        className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-move hover:bg-white/10 transition-colors"
+                        style={{ background: "rgba(255,255,255,0.04)", borderLeft: `3px solid ${accent}` }}
                       >
                         <span className="text-white/30 text-xs">⋮⋮</span>
-                        {t.logo
-                          ? <img src={t.logo} alt="" className="w-6 h-6 rounded object-cover border border-white/10" />
-                          : <span
-                              className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-hero text-white"
-                              style={{ background: "rgba(255,255,255,0.1)" }}
-                            >{t.name.charAt(0).toUpperCase()}</span>}
-                        <span className="text-sm text-white truncate">{t.name}</span>
+                        <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 border border-white/10 flex items-center justify-center"
+                             style={{ background: t.logo ? "transparent" : accent }}>
+                          {t.logo
+                            ? <img src={t.logo} alt="" className="w-full h-full object-cover" />
+                            : <span className="font-hero text-sm text-white">{t.name.charAt(0).toUpperCase()}</span>}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-white truncate font-semibold">{t.name}</p>
+                          <p className="text-[10px] text-court-muted truncate">
+                            {captain ? <>👑 {captain.name}</> : "sin capitán"}
+                            <span className="mx-1">·</span>
+                            {roster} jugador{roster === 1 ? "" : "es"}
+                          </p>
+                        </div>
                       </li>
                     );
                   })}
@@ -1333,19 +1390,26 @@ function TeamChip({
   onDragStart: (e: React.DragEvent, teamId: string) => void;
   ghost?: boolean;
 }) {
+  const accent = teamAccent(team.id);
+  const roster = team.players?.length ?? 0;
   return (
     <span
       draggable
       onDragStart={(e) => onDragStart(e, team.id)}
-      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg cursor-move text-xs ${
+      className={`inline-flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-move text-xs ${
         ghost ? "border border-dashed" : "border"
       } border-white/15 bg-white/5 text-white hover:bg-white/10`}
+      style={{ borderLeft: `3px solid ${accent}` }}
     >
       <span className="text-white/30">⋮⋮</span>
-      {team.logo
-        ? <img src={team.logo} alt="" className="w-4 h-4 rounded object-cover" />
-        : null}
+      <span className="w-5 h-5 rounded overflow-hidden flex items-center justify-center"
+            style={{ background: team.logo ? "transparent" : accent }}>
+        {team.logo
+          ? <img src={team.logo} alt="" className="w-full h-full object-cover" />
+          : <span className="font-hero text-[10px] text-white">{team.name.charAt(0).toUpperCase()}</span>}
+      </span>
       <span className="truncate max-w-[10rem]">{team.name}</span>
+      <span className="text-court-muted">· {roster} jug.</span>
     </span>
   );
 }
@@ -1489,7 +1553,7 @@ function PreviewTab({
           </p>
         ) : (
           <div className="glass p-2 sm:p-4 overflow-x-auto">
-            <AdminBracketView matches={ko} isAdmin={false} />
+            <AdminBracketView matches={ko} isAdmin={false} previewMode />
           </div>
         )}
       </section>

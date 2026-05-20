@@ -3,8 +3,12 @@ export type Role = "player" | "captain" | "admin";
 export type TournamentStatus =
   | "upcoming" | "open" | "draft" | "setup" | "scheduled" | "active" | "completed";
 export type MatchStage = "group" | "eighth" | "quarterfinal" | "semifinal" | "final" | "third_place";
-export type BracketFormat = "top2_per_group" | "top1_plus_best2_seconds";
-export type BracketSize = 4 | 8 | 16;
+export type BracketFormat =
+  | "top2_per_group"
+  | "top1_plus_best2_seconds"
+  | "top2_single_group"
+  | "top4_single_group";
+export type BracketSize = 2 | 4 | 8 | 16;
 export type MatchStatus = "pending" | "in_progress" | "completed";
 
 export interface Player {
@@ -51,6 +55,7 @@ export interface Match {
   homeTeamId: string | null; awayTeamId: string | null;
   homeTeamName?: string; awayTeamName?: string;
   homeTeamLogo?: string | null; awayTeamLogo?: string | null;
+  homeSeedLabel?: string | null; awaySeedLabel?: string | null;
   homeScore: number | null; awayScore: number | null;
   winnerId: string | null; status: MatchStatus;
   scheduledAt: string | null; completedAt: string | null;

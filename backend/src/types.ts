@@ -41,6 +41,7 @@ export interface Match {
   id: string; tournamentId: string; groupId: string | null;
   stage: MatchStage; roundNumber: number | null;
   homeTeamId: string | null; awayTeamId: string | null;
+  homeSeedLabel: string | null; awaySeedLabel: string | null;
   homeScore: number | null; awayScore: number | null;
   winnerId: string | null; status: MatchStatus;
   durationMinutes: number | null;

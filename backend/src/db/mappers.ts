@@ -78,6 +78,8 @@ export const toMatch = (r: Row): Match => ({
   roundNumber: r.round_number == null ? null : Number(r.round_number),
   homeTeamId: (r.home_team_id as string | null) ?? null,
   awayTeamId: (r.away_team_id as string | null) ?? null,
+  homeSeedLabel: (r.home_seed_label as string | null) ?? null,
+  awaySeedLabel: (r.away_seed_label as string | null) ?? null,
   homeScore: r.home_score == null ? null : Number(r.home_score),
   awayScore: r.away_score == null ? null : Number(r.away_score),
   winnerId: (r.winner_id as string | null) ?? null,

@@ -28,14 +28,18 @@ import type { MatchStage } from "../types.js";
 
 export type BracketFormat =
   | "top2_per_group"
-  | "top1_plus_best2_seconds";
+  | "top1_plus_best2_seconds"
+  | "top2_single_group"
+  | "top4_single_group";
 
-export type BracketSize = 4 | 8 | 16;
+export type BracketSize = 2 | 4 | 8 | 16;
 
 interface Qualified {
   teamId: string;
   groupId: string;
+  groupName: string;
   rank: number;           // 1 = group winner, 2 = 2nd in group, etc.
+  seedLabel: string;      // human-readable slot tag ("1º Grupo A", "Mejor 2º", …)
   points: number;
   diff: number;
   pointsFor: number;
@@ -44,7 +48,7 @@ interface Qualified {
 
 // Fetch ALL members of a group, sorted with the canonical tiebreak order.
 const getGroupRanking = async (
-  q: typeof query, groupId: string,
+  q: typeof query, groupId: string, groupName: string,
 ): Promise<Qualified[]> => {
   const rows = await q<{
     team_id: string; points: number; points_for: number;
@@ -63,7 +67,9 @@ const getGroupRanking = async (
   return rows.map((r, idx) => ({
     teamId: r.team_id,
     groupId,
+    groupName,
     rank: idx + 1,
+    seedLabel: `${idx + 1}º ${groupName}`,
     points: Number(r.points),
     diff: Number(r.points_for) - Number(r.points_against),
     pointsFor: Number(r.points_for),
@@ -112,15 +118,35 @@ const seededShuffle = <T>(arr: T[], seed: number): T[] => {
 const collectQualified = async (
   q: typeof query, tournamentId: string, format: BracketFormat,
 ): Promise<Qualified[]> => {
-  const groups = await q<{ id: string }>(
-    "SELECT id FROM tournament_groups WHERE tournament_id=$1 ORDER BY name",
+  const groups = await q<{ id: string; name: string }>(
+    "SELECT id, name FROM tournament_groups WHERE tournament_id=$1 ORDER BY name",
     [tournamentId],
   );
   if (groups.length === 0) throw new HttpError(400, "NO_GROUPS");
 
   const groupRankings: Qualified[][] = [];
   for (const g of groups) {
-    groupRankings.push(await getGroupRanking(q, g.id));
+    groupRankings.push(await getGroupRanking(q, g.id, g.name));
+  }
+
+  if (format === "top2_single_group") {
+    if (groupRankings.length !== 1) {
+      throw new HttpError(400, "FORMAT_NEEDS_SINGLE_GROUP");
+    }
+    if (groupRankings[0].length < 2) {
+      throw new HttpError(400, "TOO_FEW_TEAMS");
+    }
+    return groupRankings[0].slice(0, 2);
+  }
+
+  if (format === "top4_single_group") {
+    if (groupRankings.length !== 1) {
+      throw new HttpError(400, "FORMAT_NEEDS_SINGLE_GROUP");
+    }
+    if (groupRankings[0].length < 4) {
+      throw new HttpError(400, "TOO_FEW_TEAMS");
+    }
+    return groupRankings[0].slice(0, 4);
   }
 
   if (format === "top2_per_group") {
@@ -141,7 +167,12 @@ const collectQualified = async (
     const seconds: Qualified[] = [];
     for (const ranking of groupRankings) {
       if (ranking[0]) firsts.push(ranking[0]);
-      if (ranking[1]) seconds.push(ranking[1]);
+      if (ranking[1]) {
+        // Wildcards lose their group-rank label in favour of "Mejor 2º".
+        // Keep their group reference so the cross-pair heuristic still
+        // avoids first-round groupmate matchups when possible.
+        seconds.push({ ...ranking[1], seedLabel: `Mejor 2º · ${ranking[1].groupName}` });
+      }
     }
     seconds.sort(cmpGlobal);
     return [...firsts, ...seconds.slice(0, 2)];
@@ -178,10 +209,40 @@ const crossPairsAvoidingGroupmates = (
 
 // --- Bracket provisioners by size -----------------------------------------
 
+// Insert a slot-only KO match (no team binding yet) carrying just the seed
+// labels. Used for QF/SF/Final placeholders that are filled by winners of
+// previous rounds.
+const insertSlot = async (
+  q: typeof query, tournamentId: string,
+  stage: MatchStage, round: number,
+  homeLabel: string, awayLabel: string,
+) => q(
+  `INSERT INTO matches
+     (tournament_id, stage, status, round_number,
+      home_seed_label, away_seed_label)
+   VALUES ($1,$2,'pending',$3,$4,$5)`,
+  [tournamentId, stage, round, homeLabel, awayLabel],
+);
+
+const provisionTwo = async (
+  q: typeof query, tournamentId: string, qualified: Qualified[],
+) => {
+  // Direct final from the top 2 of the single group.
+  const [home, away] = qualified;
+  await q(
+    `INSERT INTO matches
+       (tournament_id, stage, status, round_number,
+        home_team_id, away_team_id,
+        home_seed_label, away_seed_label)
+     VALUES ($1,'final','pending',1,$2,$3,$4,$5)`,
+    [tournamentId, home.teamId, away.teamId, home.seedLabel, away.seedLabel],
+  );
+  // No third-place match for a 2-team bracket.
+};
+
 const provisionFour = async (
   q: typeof query, tournamentId: string, qualified: Qualified[],
 ) => {
-  // Cross 1 vs 4 / 2 vs 3 when from same single group; otherwise 1 vs 4 / 2 vs 3 also works as a pure seeding.
   const seeds = qualified.slice(); // already sorted globally
   const pairs: Array<[Qualified, Qualified]> = [
     [seeds[0], seeds[3]],
@@ -190,25 +251,22 @@ const provisionFour = async (
   for (let i = 0; i < pairs.length; i++) {
     const [home, away] = pairs[i];
     await q(
-      `INSERT INTO matches (tournament_id, stage, status, round_number, home_team_id, away_team_id)
-       VALUES ($1,'semifinal','pending',$2,$3,$4)`,
-      [tournamentId, i + 1, home.teamId, away.teamId],
+      `INSERT INTO matches
+         (tournament_id, stage, status, round_number,
+          home_team_id, away_team_id,
+          home_seed_label, away_seed_label)
+       VALUES ($1,'semifinal','pending',$2,$3,$4,$5,$6)`,
+      [tournamentId, i + 1, home.teamId, away.teamId,
+       home.seedLabel, away.seedLabel],
     );
   }
-  await q(
-    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'final','pending',1)`,
-    [tournamentId],
-  );
-  await q(
-    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'third_place','pending',1)`,
-    [tournamentId],
-  );
+  await insertSlot(q, tournamentId, "final", 1, "Ganador SF 1", "Ganador SF 2");
+  await insertSlot(q, tournamentId, "third_place", 1, "Perdedor SF 1", "Perdedor SF 2");
 };
 
 const provisionEight = async (
   q: typeof query, tournamentId: string, qualified: Qualified[],
 ) => {
-  // Top half (seeds 1..4) vs bottom half (5..8), with groupmate avoidance.
   const sorted = qualified.slice();
   const top = sorted.slice(0, 4);
   const bot = sorted.slice(4, 8);
@@ -216,25 +274,21 @@ const provisionEight = async (
   for (let i = 0; i < pairs.length; i++) {
     const [home, away] = pairs[i];
     await q(
-      `INSERT INTO matches (tournament_id, stage, status, round_number, home_team_id, away_team_id)
-       VALUES ($1,'quarterfinal','pending',$2,$3,$4)`,
-      [tournamentId, i + 1, home.teamId, away.teamId],
+      `INSERT INTO matches
+         (tournament_id, stage, status, round_number,
+          home_team_id, away_team_id,
+          home_seed_label, away_seed_label)
+       VALUES ($1,'quarterfinal','pending',$2,$3,$4,$5,$6)`,
+      [tournamentId, i + 1, home.teamId, away.teamId,
+       home.seedLabel, away.seedLabel],
     );
   }
   for (let i = 0; i < 2; i++) {
-    await q(
-      `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'semifinal','pending',$2)`,
-      [tournamentId, i + 1],
-    );
+    await insertSlot(q, tournamentId, "semifinal", i + 1,
+      `Ganador QF ${2 * i + 1}`, `Ganador QF ${2 * i + 2}`);
   }
-  await q(
-    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'final','pending',1)`,
-    [tournamentId],
-  );
-  await q(
-    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'third_place','pending',1)`,
-    [tournamentId],
-  );
+  await insertSlot(q, tournamentId, "final", 1, "Ganador SF 1", "Ganador SF 2");
+  await insertSlot(q, tournamentId, "third_place", 1, "Perdedor SF 1", "Perdedor SF 2");
 };
 
 const provisionSixteen = async (
@@ -247,31 +301,25 @@ const provisionSixteen = async (
   for (let i = 0; i < pairs.length; i++) {
     const [home, away] = pairs[i];
     await q(
-      `INSERT INTO matches (tournament_id, stage, status, round_number, home_team_id, away_team_id)
-       VALUES ($1,'eighth','pending',$2,$3,$4)`,
-      [tournamentId, i + 1, home.teamId, away.teamId],
+      `INSERT INTO matches
+         (tournament_id, stage, status, round_number,
+          home_team_id, away_team_id,
+          home_seed_label, away_seed_label)
+       VALUES ($1,'eighth','pending',$2,$3,$4,$5,$6)`,
+      [tournamentId, i + 1, home.teamId, away.teamId,
+       home.seedLabel, away.seedLabel],
     );
   }
   for (let i = 0; i < 4; i++) {
-    await q(
-      `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'quarterfinal','pending',$2)`,
-      [tournamentId, i + 1],
-    );
+    await insertSlot(q, tournamentId, "quarterfinal", i + 1,
+      `Ganador Octavos ${2 * i + 1}`, `Ganador Octavos ${2 * i + 2}`);
   }
   for (let i = 0; i < 2; i++) {
-    await q(
-      `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'semifinal','pending',$2)`,
-      [tournamentId, i + 1],
-    );
+    await insertSlot(q, tournamentId, "semifinal", i + 1,
+      `Ganador QF ${2 * i + 1}`, `Ganador QF ${2 * i + 2}`);
   }
-  await q(
-    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'final','pending',1)`,
-    [tournamentId],
-  );
-  await q(
-    `INSERT INTO matches (tournament_id, stage, status, round_number) VALUES ($1,'third_place','pending',1)`,
-    [tournamentId],
-  );
+  await insertSlot(q, tournamentId, "final", 1, "Ganador SF 1", "Ganador SF 2");
+  await insertSlot(q, tournamentId, "third_place", 1, "Perdedor SF 1", "Perdedor SF 2");
 };
 
 // --- Public API -----------------------------------------------------------
@@ -293,7 +341,11 @@ const readBracketConfig = async (
 };
 
 // Pick a bracket size that fits the qualified pool when admin didn't choose.
-const inferSize = (n: number): BracketSize => {
+// The single-group formats lock their own size (2 or 4); other formats grow
+// to the biggest power of two that fits the pool.
+const inferSize = (n: number, format: BracketFormat): BracketSize => {
+  if (format === "top2_single_group") return 2;
+  if (format === "top4_single_group") return 4;
   if (n >= 16) return 16;
   if (n >= 8)  return 8;
   if (n >= 4)  return 4;
@@ -333,19 +385,21 @@ const provisionBracket = async (q: typeof query, tournamentId: string) => {
   // team with more points was getting dropped behind a weaker group winner.
   qualified.sort(cmpGlobal);
 
-  if (qualified.length < 4) {
+  const minTeams = format === "top2_single_group" ? 2 : 4;
+  if (qualified.length < minTeams) {
     throw new HttpError(400, "TOO_FEW_TEAMS",
-      `Faltan equipos para montar un cuadro (hay ${qualified.length}, hacen falta 4 mínimo).`);
+      `Faltan equipos para montar un cuadro (hay ${qualified.length}, hacen falta ${minTeams} mínimo).`);
   }
 
-  const size: BracketSize = rawSize ?? inferSize(qualified.length);
+  const size: BracketSize = rawSize ?? inferSize(qualified.length, format);
   if (qualified.length < size) {
     throw new HttpError(400, "TOO_FEW_FOR_SIZE",
       `Hay ${qualified.length} clasificados pero el cuadro está fijado a ${size}.`);
   }
   const pool = qualified.slice(0, size);
 
-  if (size === 4)       await provisionFour(q, tournamentId, pool);
+  if (size === 2)       await provisionTwo(q, tournamentId, pool);
+  else if (size === 4)  await provisionFour(q, tournamentId, pool);
   else if (size === 8)  await provisionEight(q, tournamentId, pool);
   else if (size === 16) await provisionSixteen(q, tournamentId, pool);
 

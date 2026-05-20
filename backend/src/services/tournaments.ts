@@ -35,10 +35,15 @@ export const tournamentSchema = z.object({
   matchDate: z.string().regex(dateRx).optional().nullable(),
   courtCount: z.coerce.number().int().min(1).max(10).default(1),
   halfCourt: z.boolean().default(true),
-  bracketFormat: z.enum(["top2_per_group", "top1_plus_best2_seconds"])
-    .default("top2_per_group"),
-  bracketSize: z.union([z.literal(4), z.literal(8), z.literal(16)])
-    .optional().nullable(),
+  bracketFormat: z.enum([
+    "top2_per_group",
+    "top1_plus_best2_seconds",
+    "top2_single_group",
+    "top4_single_group",
+  ]).default("top2_per_group"),
+  bracketSize: z.union([
+    z.literal(2), z.literal(4), z.literal(8), z.literal(16),
+  ]).optional().nullable(),
 });
 
 export const updateSchema = tournamentSchema.partial().extend({

@@ -12,11 +12,13 @@ import MatchEditOverlay from "./MatchEditOverlay.js";
 interface PillProps {
   teamId: string | null;
   name: string | null;
+  seedLabel: string | null;
   score: number | null;
   winner: boolean;
   loser: boolean;
   accent: string;
   size: "sm" | "md" | "lg";
+  previewMode: boolean;
 }
 
 const SIZE_CLASSES: Record<"sm" | "md" | "lg", {
@@ -27,8 +29,16 @@ const SIZE_CLASSES: Record<"sm" | "md" | "lg", {
   lg: { pill: "h-16 px-4 gap-3",   logo: "w-12 h-12 text-lg", name: "text-base font-bold", score: "text-3xl" },
 };
 
-function TeamPill({ teamId, name, score, winner, loser, accent, size }: PillProps) {
+function TeamPill({
+  teamId, name, seedLabel, score, winner, loser, accent, size, previewMode,
+}: PillProps) {
   const sz = SIZE_CLASSES[size];
+  // In preview mode (pre-matchday) we ALWAYS show the structural seed label
+  // instead of the placeholder team name the backend wired in from the
+  // zero-ranked pool. Outside preview we fall back to the seed label only
+  // when no team is bound yet.
+  const displayLabel = previewMode ? (seedLabel ?? name) : (name ?? seedLabel);
+  const showAsSeed = previewMode || !name;
   const style: React.CSSProperties = {
     ["--accent" as never]: accent,
     background: winner
@@ -53,20 +63,26 @@ function TeamPill({ teamId, name, score, winner, loser, accent, size }: PillProp
       data-team-id={teamId ?? ""}
       style={style}
     >
-      {name ? (
+      {displayLabel ? (
         <>
           <div
             className={`rounded-md flex items-center justify-center font-hero leading-none border shrink-0 ${sz.logo}`}
             style={logoStyle}
             aria-hidden="true"
           >
-            {name.charAt(0).toUpperCase()}
+            {showAsSeed ? "?" : displayLabel.charAt(0).toUpperCase()}
           </div>
           <span
             className={`flex-1 truncate ${sz.name} ${
-              winner ? "text-white font-bold" : loser ? "text-white/40 line-through" : "text-white/90"
+              showAsSeed
+                ? "italic text-white/60"
+                : winner
+                  ? "text-white font-bold"
+                  : loser
+                    ? "text-white/40 line-through"
+                    : "text-white/90"
             }`}
-          >{name}</span>
+          >{displayLabel}</span>
         </>
       ) : (
         <span className={`flex-1 italic text-court-muted/60 ${sz.name}`}>Por definir</span>
@@ -83,8 +99,8 @@ function TeamPill({ teamId, name, score, winner, loser, accent, size }: PillProp
 }
 
 function BracketMatch({
-  match, size = "md", isAdmin,
-}: { match: Match | null; size?: "sm" | "md" | "lg"; isAdmin: boolean }) {
+  match, size = "md", isAdmin, previewMode = false,
+}: { match: Match | null; size?: "sm" | "md" | "lg"; isAdmin: boolean; previewMode?: boolean }) {
   if (!match) {
     const sz = SIZE_CLASSES[size];
     return (
@@ -106,12 +122,16 @@ function BracketMatch({
         </div>
       )}
       <TeamPill
-        teamId={match.homeTeamId} name={match.homeTeamName ?? null} score={match.homeScore}
+        teamId={match.homeTeamId} name={match.homeTeamName ?? null}
+        seedLabel={match.homeSeedLabel ?? null} score={match.homeScore}
         winner={homeWin} loser={homeLost} accent={homeAccent} size={size}
+        previewMode={previewMode}
       />
       <TeamPill
-        teamId={match.awayTeamId} name={match.awayTeamName ?? null} score={match.awayScore}
+        teamId={match.awayTeamId} name={match.awayTeamName ?? null}
+        seedLabel={match.awaySeedLabel ?? null} score={match.awayScore}
         winner={awayWin} loser={awayLost} accent={awayAccent} size={size}
+        previewMode={previewMode}
       />
     </div>
   );
@@ -121,9 +141,9 @@ function findByRound(list: Match[], round: number): Match | null {
   return list.find((m) => m.roundNumber === round) ?? null;
 }
 
-interface Props { matches: Match[]; isAdmin?: boolean }
+interface Props { matches: Match[]; isAdmin?: boolean; previewMode?: boolean }
 
-export default function AdminBracketView({ matches, isAdmin = true }: Props) {
+export default function AdminBracketView({ matches, isAdmin = true, previewMode = false }: Props) {
   const eighths    = matches.filter((m) => m.stage === "eighth");
   const quarters   = matches.filter((m) => m.stage === "quarterfinal");
   const semis      = matches.filter((m) => m.stage === "semifinal");
@@ -204,7 +224,7 @@ export default function AdminBracketView({ matches, isAdmin = true }: Props) {
           </header>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {eighthsSorted.map((m) => (
-              <BracketMatch key={m.id} match={m} size="sm" isAdmin={isAdmin} />
+              <BracketMatch key={m.id} match={m} size="sm" isAdmin={isAdmin} previewMode={previewMode} />
             ))}
           </div>
         </section>
@@ -217,10 +237,10 @@ export default function AdminBracketView({ matches, isAdmin = true }: Props) {
             <>
               <div className="bracket-pair">
                 <div className="bracket-cell">
-                  <BracketMatch match={qf1} size="sm" isAdmin={isAdmin} />
+                  <BracketMatch match={qf1} size="sm" isAdmin={isAdmin} previewMode={previewMode} />
                 </div>
                 <div className="bracket-cell">
-                  <BracketMatch match={qf2} size="sm" isAdmin={isAdmin} />
+                  <BracketMatch match={qf2} size="sm" isAdmin={isAdmin} previewMode={previewMode} />
                 </div>
               </div>
               <div className="bracket-spacer bracket-spacer--pair-left" />
@@ -228,7 +248,7 @@ export default function AdminBracketView({ matches, isAdmin = true }: Props) {
           )}
           <div className="bracket-single">
             <div className="bracket-cell">
-              <BracketMatch match={sf1} size="md" isAdmin={isAdmin} />
+              <BracketMatch match={sf1} size="md" isAdmin={isAdmin} previewMode={previewMode} />
             </div>
           </div>
           <div className="bracket-spacer bracket-spacer--single-left" />
@@ -255,14 +275,14 @@ export default function AdminBracketView({ matches, isAdmin = true }: Props) {
                 boxShadow: "0 0 40px rgba(245,197,24,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
               }}
             >
-              <BracketMatch match={finalMatch} size="lg" isAdmin={isAdmin} />
+              <BracketMatch match={finalMatch} size="lg" isAdmin={isAdmin} previewMode={previewMode} />
             </div>
             <p className="font-hero text-court-muted tracking-[0.35em] text-[10px] text-center mb-2">3ER PUESTO</p>
             <div
               className="rounded-xl border border-white/10 p-2"
               style={{ background: "rgba(20,26,44,0.6)" }}
             >
-              <BracketMatch match={thirdMatch} size="sm" isAdmin={isAdmin} />
+              <BracketMatch match={thirdMatch} size="sm" isAdmin={isAdmin} previewMode={previewMode} />
             </div>
           </div>
 
@@ -270,7 +290,7 @@ export default function AdminBracketView({ matches, isAdmin = true }: Props) {
           <div className="bracket-spacer bracket-spacer--single-right" />
           <div className="bracket-single">
             <div className="bracket-cell">
-              <BracketMatch match={sf2} size="md" isAdmin={isAdmin} />
+              <BracketMatch match={sf2} size="md" isAdmin={isAdmin} previewMode={previewMode} />
             </div>
           </div>
           {hasQuarters && (
@@ -278,10 +298,10 @@ export default function AdminBracketView({ matches, isAdmin = true }: Props) {
               <div className="bracket-spacer bracket-spacer--pair-right" />
               <div className="bracket-pair">
                 <div className="bracket-cell">
-                  <BracketMatch match={qf3} size="sm" isAdmin={isAdmin} />
+                  <BracketMatch match={qf3} size="sm" isAdmin={isAdmin} previewMode={previewMode} />
                 </div>
                 <div className="bracket-cell">
-                  <BracketMatch match={qf4} size="sm" isAdmin={isAdmin} />
+                  <BracketMatch match={qf4} size="sm" isAdmin={isAdmin} previewMode={previewMode} />
                 </div>
               </div>
             </>
