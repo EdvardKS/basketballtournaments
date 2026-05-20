@@ -63,7 +63,7 @@ export interface GroupMember {
 }
 
 export interface GroupWithMembers {
-  group: { id: string; name: string };
+  group: { id: string; name: string; color?: string | null; logo?: string | null };
   members: GroupMember[];
 }
 

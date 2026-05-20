@@ -65,7 +65,12 @@ export const deleteGroups = async (tournamentId: string) => {
 // them (group fixtures AND knockout placeholders) and rebuild from the
 // caller's payload. Refuses if any match has already been touched (started
 // or completed) — the lifecycle services own the data from then on.
-export interface RegroupGroupInput { name: string; teamIds: string[] }
+export interface RegroupGroupInput {
+  name: string;
+  teamIds: string[];
+  color?: string | null;
+  logo?: string | null;
+}
 
 export const regroupTeams = async (
   tournamentId: string, input: RegroupGroupInput[],
@@ -128,8 +133,9 @@ export const regroupTeams = async (
     const created = [];
     for (const g of input) {
       const grp = await q<Record<string, unknown>>(
-        "INSERT INTO tournament_groups (tournament_id, name) VALUES ($1,$2) RETURNING *",
-        [tournamentId, g.name.trim()]);
+        `INSERT INTO tournament_groups (tournament_id, name, color, logo)
+         VALUES ($1,$2,$3,$4) RETURNING *`,
+        [tournamentId, g.name.trim(), g.color ?? null, g.logo ?? null]);
       const groupId = (grp[0] as { id: string }).id;
       for (const tid of g.teamIds) {
         await q(
@@ -149,4 +155,36 @@ export const regroupTeams = async (
     }
     return { ok: true, groups: created };
   });
+};
+
+// Cosmetic-only update for a single group: name, color, logo. Does not touch
+// fixtures or membership, so safe to call repeatedly while the admin tweaks
+// the visual identity. The tournament guard mirrors regroupTeams: refuse if
+// any match has already been played, so we don't rewrite history.
+export const updateGroupMeta = async (
+  tournamentId: string, groupId: string,
+  patch: { name?: string; color?: string | null; logo?: string | null },
+) => {
+  const owner = await queryOne(
+    "SELECT id FROM tournament_groups WHERE id=$1 AND tournament_id=$2",
+    [groupId, tournamentId]);
+  if (!owner) throw new HttpError(404, "GROUP_NOT_FOUND");
+
+  const sets: string[] = [];
+  const args: unknown[] = [];
+  let i = 1;
+  if (patch.name !== undefined) {
+    const n = patch.name.trim();
+    if (n.length === 0) throw new HttpError(400, "GROUP_NAME_REQUIRED");
+    sets.push(`name=$${i++}`); args.push(n);
+  }
+  if (patch.color !== undefined) { sets.push(`color=$${i++}`); args.push(patch.color); }
+  if (patch.logo  !== undefined) { sets.push(`logo=$${i++}`);  args.push(patch.logo);  }
+  if (sets.length === 0) return { ok: true };
+
+  args.push(groupId);
+  const row = await queryOne(
+    `UPDATE tournament_groups SET ${sets.join(", ")} WHERE id=$${i} RETURNING *`,
+    args);
+  return { ok: true, group: row ? toGroup(row) : null };
 };

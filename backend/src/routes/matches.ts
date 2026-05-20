@@ -12,7 +12,7 @@ import {
 } from "../services/matches.js";
 import { regenerateBracket } from "../services/bracket.js";
 import { updateMatchTime } from "../services/schedule.js";
-import { regroupTeams, type RegroupGroupInput } from "../services/groups.js";
+import { regroupTeams, updateGroupMeta, type RegroupGroupInput } from "../services/groups.js";
 
 export const matchesRouter = Router();
 
@@ -40,12 +40,27 @@ const regroupSchema = z.object({
   groups: z.array(z.object({
     name: z.string().min(1).max(50),
     teamIds: z.array(z.string().min(1)).min(1),
+    color: z.string().max(20).optional().nullable(),
+    logo: z.string().max(2000).optional().nullable(),
   })).min(1),
 });
 matchesRouter.put("/tournament/:id/groups", requireRole("admin"),
   asyncRoute(async (req, res) => {
     const { groups } = regroupSchema.parse(req.body);
     res.json(await regroupTeams(req.params.id, groups as RegroupGroupInput[]));
+  }));
+
+// Cosmetic-only update for a single group (name / color / logo). Does not
+// rebuild fixtures, so it's cheap enough to fire on every input change.
+const groupMetaSchema = z.object({
+  name:  z.string().min(1).max(50).optional(),
+  color: z.string().max(20).optional().nullable(),
+  logo:  z.string().max(2000).optional().nullable(),
+});
+matchesRouter.patch("/tournament/:tid/groups/:gid", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    const patch = groupMetaSchema.parse(req.body);
+    res.json(await updateGroupMeta(req.params.tid, req.params.gid, patch));
   }));
 
 // Admin-only: rebuild group standings from scratch by replaying every

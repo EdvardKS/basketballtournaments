@@ -109,7 +109,10 @@ export const toDraftHistory = (r: Row): DraftHistoryEntry => ({
 
 export const toGroup = (r: Row): Group => ({
   id: r.id as string, tournamentId: r.tournament_id as string,
-  name: r.name as string, createdAt: toIso(r.created_at),
+  name: r.name as string,
+  color: (r.color as string | null) ?? null,
+  logo: (r.logo as string | null) ?? null,
+  createdAt: toIso(r.created_at),
 });
 
 export const toGroupMember = (r: Row): GroupMember => ({

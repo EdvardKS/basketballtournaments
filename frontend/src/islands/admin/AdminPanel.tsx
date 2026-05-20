@@ -973,9 +973,43 @@ function GroupSummaryCard({ group: g, matches }: { group: GroupWithMembers; matc
 
 // --- Group editor (pre-matchday only) -------------------------------------
 // Lets the admin redraw the group split while no match has been touched yet.
-// Each team carries a dropdown picking its target group; the admin can also
-// add or remove groups. "Aplicar" PUTs the whole layout to the backend,
-// which wipes existing groups + fixtures and rebuilds round-robin matches.
+// Teams are drag-and-drop between group cards; layout changes auto-save via
+// PUT /matches/tournament/:id/groups (full wipe + rebuild). Cosmetic changes
+// (name / color / logo) save via PATCH so fixtures aren't rebuilt every keystroke.
+
+const GROUP_PALETTE = [
+  "#3aa0ff", "#ff6b00", "#3ecf8e", "#f5c518",
+  "#ff2d2d", "#9b5de5", "#00bbf9", "#fb5607",
+];
+
+const groupTone = (g: { color?: string | null }, idx: number): string =>
+  g.color || GROUP_PALETTE[idx % GROUP_PALETTE.length];
+
+interface EditableGroup {
+  id: string | null;   // null while not yet persisted
+  name: string;
+  color: string;
+  logo: string;        // url or empty
+  teamIds: string[];
+}
+
+const seedInitialGroups = (
+  groups: GroupWithMembers[], teams: TeamWithPlayers[],
+): EditableGroup[] => {
+  if (groups.length === 0) {
+    return [{
+      id: null, name: "Grupo A", color: GROUP_PALETTE[0], logo: "",
+      teamIds: teams.map((t) => t.id),
+    }];
+  }
+  return groups.map((g, idx) => ({
+    id: g.group.id,
+    name: g.group.name,
+    color: g.group.color || GROUP_PALETTE[idx % GROUP_PALETTE.length],
+    logo: g.group.logo ?? "",
+    teamIds: g.members.map((m) => m.teamId),
+  }));
+};
 
 function GroupEditor({
   tournamentId, teams, groups, onChange,
@@ -985,170 +1019,355 @@ function GroupEditor({
   groups: GroupWithMembers[];
   onChange: () => void;
 }) {
-  // Local state: list of group names + per-team selected group index.
-  const initialGroups = useMemo(
-    () => groups.length > 0 ? groups.map((g) => g.group.name) : ["Grupo A"],
-    [groups],
-  );
-  const [groupNames, setGroupNames] = useState<string[]>(initialGroups);
-  const [assignment, setAssignment] = useState<Record<string, number>>(() => {
-    const out: Record<string, number> = {};
-    groups.forEach((g, idx) => {
-      g.members.forEach((m) => { out[m.teamId] = idx; });
-    });
-    teams.forEach((t) => { if (!(t.id in out)) out[t.id] = 0; });
-    return out;
-  });
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [editGroups, setEditGroups] = useState<EditableGroup[]>(
+    () => seedInitialGroups(groups, teams));
+  const [saving, setSaving] = useState<"idle" | "syncing" | "ok" | "err">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const teamById = useMemo(() =>
+    new Map(teams.map((t) => [t.id, t])), [teams]);
 
-  const setGroupName = (idx: number, name: string) =>
-    setGroupNames((g) => g.map((n, i) => i === idx ? name : n));
+  // Re-seed if parent props change (e.g. after a successful PUT reload).
+  // We compare by signature so user typing into a name input doesn't get
+  // clobbered when matches reload mid-edit.
+  const propsSignature = useMemo(
+    () => groups.map((g) =>
+      `${g.group.id}:${g.group.name}:${g.group.color ?? ""}:${g.group.logo ?? ""}:${g.members.map((m) => m.teamId).join(",")}`,
+    ).join("|"),
+    [groups]);
+  const [lastSeenSig, setLastSeenSig] = useState(propsSignature);
+  useEffect(() => {
+    if (propsSignature !== lastSeenSig) {
+      setEditGroups(seedInitialGroups(groups, teams));
+      setLastSeenSig(propsSignature);
+    }
+  }, [propsSignature, groups, teams, lastSeenSig]);
+
+  // Persist team-layout changes (drag & drop, add/remove group). Backend
+  // wipes + rebuilds fixtures every call, so we debounce to coalesce a
+  // burst of drag moves.
+  const persistLayout = useCallback(async (snapshot: EditableGroup[]) => {
+    setSaving("syncing"); setErrorMsg(null);
+    try {
+      const payload = snapshot.map((g) => ({
+        name: g.name,
+        teamIds: g.teamIds,
+        color: g.color || null,
+        logo: g.logo || null,
+      }));
+      await api(`/matches/tournament/${tournamentId}/groups`, {
+        method: "PUT", body: JSON.stringify({ groups: payload }),
+      });
+      setSaving("ok");
+      onChange();
+    } catch (e) {
+      setSaving("err");
+      setErrorMsg(e instanceof ApiError ? e.code : "Error al guardar los grupos");
+    }
+  }, [tournamentId, onChange]);
+
+  const persistMeta = useCallback(async (
+    groupId: string, patch: { name?: string; color?: string; logo?: string },
+  ) => {
+    setSaving("syncing"); setErrorMsg(null);
+    try {
+      await api(`/matches/tournament/${tournamentId}/groups/${groupId}`, {
+        method: "PATCH", body: JSON.stringify(patch),
+      });
+      setSaving("ok");
+    } catch (e) {
+      setSaving("err");
+      setErrorMsg(e instanceof ApiError ? e.code : "Error al guardar el grupo");
+    }
+  }, [tournamentId]);
+
+  // Drag & drop handlers. dataTransfer carries the team id.
+  const onDragStart = (e: React.DragEvent, teamId: string) => {
+    e.dataTransfer.setData("text/plain", teamId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onDragOver = (e: React.DragEvent, gi: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOver !== gi) setDragOver(gi);
+  };
+  const onDragLeave = () => setDragOver(null);
+  const onDrop = (e: React.DragEvent, targetIdx: number) => {
+    e.preventDefault();
+    setDragOver(null);
+    const teamId = e.dataTransfer.getData("text/plain");
+    if (!teamId) return;
+    setEditGroups((prev) => {
+      const next = prev.map((g) => ({ ...g, teamIds: g.teamIds.filter((id) => id !== teamId) }));
+      // Bail if the team was already in target group (no-op move).
+      if (prev[targetIdx]?.teamIds.includes(teamId)) return prev;
+      next[targetIdx] = { ...next[targetIdx], teamIds: [...next[targetIdx].teamIds, teamId] };
+      // Fire-and-forget persist after state commit.
+      void persistLayout(next);
+      return next;
+    });
+  };
 
   const addGroup = () => {
-    setGroupNames((g) => {
-      const next = String.fromCharCode("A".charCodeAt(0) + g.length);
-      return [...g, `Grupo ${next}`];
+    setEditGroups((prev) => {
+      const idx = prev.length;
+      const letter = String.fromCharCode("A".charCodeAt(0) + idx);
+      const next = [...prev, {
+        id: null, name: `Grupo ${letter}`,
+        color: GROUP_PALETTE[idx % GROUP_PALETTE.length],
+        logo: "", teamIds: [],
+      }];
+      // We need at least one team in every group, so don't persist until
+      // a team is dropped in.
+      return next;
     });
   };
 
   const removeGroup = (idx: number) => {
-    if (groupNames.length <= 1) return;
-    // Re-assign anyone in this group to the previous one.
-    setAssignment((a) => {
-      const out: Record<string, number> = {};
-      for (const [tid, gi] of Object.entries(a)) {
-        if (gi === idx) out[tid] = Math.max(0, idx - 1);
-        else if (gi > idx) out[tid] = gi - 1;
-        else out[tid] = gi;
+    if (editGroups.length <= 1) return;
+    if (!confirm(`¿Quitar "${editGroups[idx].name}"? Los equipos volverán al grupo anterior.`)) return;
+    setEditGroups((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      // Reassign orphan teams to the closest neighbour group.
+      const orphans = prev[idx]?.teamIds ?? [];
+      const target = Math.max(0, idx - 1);
+      if (next[target]) {
+        next[target] = { ...next[target], teamIds: [...next[target].teamIds, ...orphans] };
       }
-      return out;
+      void persistLayout(next);
+      return next;
     });
-    setGroupNames((g) => g.filter((_, i) => i !== idx));
   };
 
-  // Pre-compute payload for both the preview and the submit handler.
-  const payload = useMemo(() =>
-    groupNames.map((name, idx) => ({
-      name,
-      teamIds: teams.filter((t) => assignment[t.id] === idx).map((t) => t.id),
-    })),
-    [groupNames, assignment, teams],
+  const setLocalField = (idx: number, patch: Partial<EditableGroup>) =>
+    setEditGroups((prev) => prev.map((g, i) => i === idx ? { ...g, ...patch } : g));
+
+  // Track in-flight name/color timers per group to debounce typing.
+  const debounceRef = useMemo(
+    () => ({ current: new Map<string, ReturnType<typeof setTimeout>>() }),
+    [],
   );
-
-  const apply = async () => {
-    // Client-side sanity: every group must have at least one team.
-    const empty = payload.find((p) => p.teamIds.length === 0);
-    if (empty) {
-      setMsg({ kind: "err", text: `El grupo "${empty.name}" no tiene equipos.` });
-      return;
-    }
-    setBusy(true); setMsg(null);
-    try {
-      await api(`/matches/tournament/${tournamentId}/groups`, {
-        method: "PUT",
-        body: JSON.stringify({ groups: payload }),
-      });
-      setMsg({ kind: "ok", text: "Grupos reasignados · fixtures regenerados" });
-      onChange();
-    } catch (e) {
-      setMsg({
-        kind: "err",
-        text: e instanceof ApiError ? e.code : "Error al guardar los grupos",
-      });
-    } finally { setBusy(false); }
+  const scheduleMeta = (groupId: string | null, patch: { name?: string; color?: string; logo?: string }) => {
+    if (!groupId) return;
+    const prev = debounceRef.current.get(groupId);
+    if (prev) clearTimeout(prev);
+    const handle = setTimeout(() => {
+      void persistMeta(groupId, patch);
+      debounceRef.current.delete(groupId);
+    }, 600);
+    debounceRef.current.set(groupId, handle);
   };
+
+  const totalAssigned = editGroups.reduce((n, g) => n + g.teamIds.length, 0);
+  const unassigned = teams.filter((t) => !editGroups.some((g) => g.teamIds.includes(t.id)));
 
   return (
     <div className="space-y-5">
-      <header className="glass p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">
-            Configurar grupos
+      <header className="rounded-2xl border border-white/10 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3"
+              style={{ background: "linear-gradient(135deg, rgba(58,160,255,0.10) 0%, rgba(20,26,44,0.85) 60%)" }}>
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.3em] text-[#3aa0ff] font-bold mb-1">
+            Configuración de grupos
           </p>
-          <p className="text-white text-sm">
-            Reasigna los {teams.length} equipos entre los grupos. Al aplicar,
-            se reescribe el calendario de fase de grupos.
+          <h3 className="font-hero text-2xl text-white leading-none">Arrastra equipos entre grupos</h3>
+          <p className="text-court-muted text-xs mt-1.5">
+            Pincha y arrastra cualquier equipo al grupo destino. Los cambios se guardan solos.
+            {" "}<span className="text-white/70">{totalAssigned}/{teams.length} equipos asignados</span>.
           </p>
         </div>
-        <button type="button" onClick={addGroup} className="btn-ghost !py-1.5 !px-3 !text-xs">
-          + Añadir grupo
-        </button>
+        <div className="flex items-center gap-2">
+          <SaveBadge state={saving} />
+          <button type="button" onClick={addGroup} className="btn-ghost !py-1.5 !px-3 !text-xs">
+            + Añadir grupo
+          </button>
+        </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {groupNames.map((name, gi) => {
-          const groupTeams = teams.filter((t) => assignment[t.id] === gi);
+      {errorMsg && (
+        <div className="rounded-lg border border-court-danger/40 bg-court-danger/10 px-3 py-2 text-court-danger text-sm">
+          {errorMsg}
+        </div>
+      )}
+
+      {unassigned.length > 0 && (
+        <div className="rounded-2xl border border-white/10 p-4 space-y-2"
+             style={{ background: "rgba(255,107,0,0.08)", borderColor: "rgba(255,107,0,0.35)" }}>
+          <p className="text-[11px] uppercase tracking-widest text-[var(--color-neon-orange)] font-bold">
+            Equipos sin asignar · arrástralos a un grupo
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {unassigned.map((t) => (
+              <TeamChip key={t.id} team={t} onDragStart={onDragStart} ghost />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+        {editGroups.map((g, gi) => {
+          const isOver = dragOver === gi;
+          const teamCount = g.teamIds.length;
+          const matchCount = teamCount < 2 ? 0 : (teamCount * (teamCount - 1)) / 2;
           return (
-            <div key={gi} className="glass p-4 sm:p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <input
-                  className="input-field flex-1"
-                  value={name}
-                  onChange={(e) => setGroupName(gi, e.target.value)}
-                />
-                {groupNames.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeGroup(gi)}
-                    className="text-court-danger text-xs px-2 py-1 rounded hover:bg-court-danger/10"
+            <div
+              key={g.id ?? `tmp-${gi}`}
+              onDragOver={(e) => onDragOver(e, gi)}
+              onDragLeave={onDragLeave}
+              onDrop={(e) => onDrop(e, gi)}
+              className="relative rounded-2xl border overflow-hidden transition-all"
+              style={{
+                background: `linear-gradient(180deg, ${g.color}1A 0%, rgba(12,17,32,0.95) 60%)`,
+                borderColor: isOver ? g.color : "rgba(255,255,255,0.08)",
+                boxShadow: isOver ? `0 0 0 2px ${g.color}, 0 0 24px ${g.color}55` : undefined,
+              }}
+            >
+              <div className="absolute top-0 left-0 right-0 h-1" style={{ background: g.color }} aria-hidden="true" />
+              <div className="p-4 sm:p-5 space-y-3">
+                <div className="flex items-center gap-3">
+                  {/* Logo / initial circle */}
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 overflow-hidden border border-white/10"
+                    style={{ background: g.color }}
                   >
-                    Quitar
-                  </button>
-                )}
+                    {g.logo
+                      ? <img src={g.logo} alt="" className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                      : <span className="font-hero text-xl text-white">{g.name.charAt(g.name.length - 1).toUpperCase()}</span>}
+                  </div>
+                  <input
+                    className="bg-transparent text-white font-hero text-xl flex-1 min-w-0 outline-none focus:bg-white/5 rounded px-2 py-1"
+                    value={g.name}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setLocalField(gi, { name: v });
+                      scheduleMeta(g.id, { name: v });
+                    }}
+                  />
+                  {editGroups.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeGroup(gi)}
+                      title="Quitar grupo"
+                      className="text-court-danger text-xs px-2 py-1 rounded hover:bg-court-danger/10"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3 text-[11px]">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="color"
+                      value={g.color}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setLocalField(gi, { color: v });
+                        scheduleMeta(g.id, { color: v });
+                      }}
+                      className="w-6 h-6 rounded cursor-pointer border border-white/10 bg-transparent"
+                    />
+                    <span className="text-court-muted">Color</span>
+                  </label>
+                  <label className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-court-muted shrink-0">Logo URL</span>
+                    <input
+                      type="url"
+                      placeholder="https://…"
+                      value={g.logo}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setLocalField(gi, { logo: v });
+                        scheduleMeta(g.id, { logo: v });
+                      }}
+                      className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white flex-1 min-w-0 outline-none focus:border-white/30"
+                    />
+                  </label>
+                </div>
+
+                <p className="text-[11px] text-court-muted">
+                  {teamCount} equipos · {matchCount} partidos round-robin
+                </p>
+
+                <ul className="space-y-1.5 min-h-[3.5rem]">
+                  {teamCount === 0 && (
+                    <li className="text-xs text-court-muted italic border border-dashed border-white/10 rounded-lg px-3 py-3 text-center">
+                      Suelta aquí un equipo
+                    </li>
+                  )}
+                  {g.teamIds.map((tid) => {
+                    const t = teamById.get(tid);
+                    if (!t) return null;
+                    return (
+                      <li
+                        key={tid}
+                        draggable
+                        onDragStart={(e) => onDragStart(e, tid)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-move hover:bg-white/10 transition-colors"
+                        style={{ background: "rgba(255,255,255,0.04)", borderLeft: `3px solid ${g.color}` }}
+                      >
+                        <span className="text-white/30 text-xs">⋮⋮</span>
+                        {t.logo
+                          ? <img src={t.logo} alt="" className="w-6 h-6 rounded object-cover border border-white/10" />
+                          : <span
+                              className="w-6 h-6 rounded flex items-center justify-center text-[10px] font-hero text-white"
+                              style={{ background: "rgba(255,255,255,0.1)" }}
+                            >{t.name.charAt(0).toUpperCase()}</span>}
+                        <span className="text-sm text-white truncate">{t.name}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
-              <p className="text-[11px] text-court-muted">
-                {groupTeams.length} equipos · {groupTeams.length < 2 ? "sin partidos" : `${(groupTeams.length * (groupTeams.length - 1)) / 2} partidos round-robin`}
-              </p>
-              <ul className="space-y-1">
-                {groupTeams.length === 0 && (
-                  <li className="text-xs text-court-muted italic">Sin equipos</li>
-                )}
-                {groupTeams.map((t) => (
-                  <li key={t.id} className="text-sm text-white truncate">• {t.name}</li>
-                ))}
-              </ul>
             </div>
           );
         })}
       </div>
-
-      <div className="glass p-4 sm:p-5 space-y-3">
-        <h4 className="font-hero text-lg text-white">Equipos disponibles</h4>
-        <p className="text-[11px] text-court-muted">
-          Cambia el grupo de cada equipo con el selector. Cada equipo va a un único grupo.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {teams.map((t) => (
-            <label key={t.id} className="flex items-center gap-2 text-sm">
-              <span className="text-white flex-1 truncate">{t.name}</span>
-              <select
-                className="input-field !py-1 !text-xs !w-auto"
-                value={assignment[t.id] ?? 0}
-                onChange={(e) =>
-                  setAssignment((a) => ({ ...a, [t.id]: Number(e.target.value) }))}
-              >
-                {groupNames.map((g, idx) => (
-                  <option key={idx} value={idx}>{g}</option>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {msg && (
-        <p className={msg.kind === "ok" ? "text-court-ok text-sm" : "text-court-danger text-sm"}>
-          {msg.text}
-        </p>
-      )}
-
-      <div className="flex items-center justify-end">
-        <button type="button" onClick={apply} disabled={busy} className="btn-primary">
-          {busy ? "Aplicando…" : "Aplicar configuración de grupos"}
-        </button>
-      </div>
     </div>
+  );
+}
+
+function TeamChip({
+  team, onDragStart, ghost,
+}: {
+  team: TeamWithPlayers;
+  onDragStart: (e: React.DragEvent, teamId: string) => void;
+  ghost?: boolean;
+}) {
+  return (
+    <span
+      draggable
+      onDragStart={(e) => onDragStart(e, team.id)}
+      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg cursor-move text-xs ${
+        ghost ? "border border-dashed" : "border"
+      } border-white/15 bg-white/5 text-white hover:bg-white/10`}
+    >
+      <span className="text-white/30">⋮⋮</span>
+      {team.logo
+        ? <img src={team.logo} alt="" className="w-4 h-4 rounded object-cover" />
+        : null}
+      <span className="truncate max-w-[10rem]">{team.name}</span>
+    </span>
+  );
+}
+
+function SaveBadge({ state }: { state: "idle" | "syncing" | "ok" | "err" }) {
+  if (state === "idle") return null;
+  const map = {
+    syncing: { dot: "#3aa0ff", text: "Guardando…" },
+    ok:      { dot: "#3ecf8e", text: "Guardado" },
+    err:     { dot: "#ff2d2d", text: "Error" },
+  } as const;
+  const m = map[state];
+  return (
+    <span className="inline-flex items-center gap-2 text-[11px] text-court-muted">
+      <span className="relative inline-flex w-2 h-2">
+        {state === "syncing" && (
+          <span className="absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping" style={{ background: m.dot }} />
+        )}
+        <span className="relative inline-flex w-2 h-2 rounded-full" style={{ background: m.dot }} />
+      </span>
+      {m.text}
+    </span>
   );
 }
 
@@ -1164,54 +1383,147 @@ function PreviewTab({
   groups: GroupWithMembers[];
 }) {
   const ko = matches.filter((m) => m.stage !== "group");
+  const groupMatches = matches.filter((m) => m.stage === "group");
+  const formatLabel = tournament.bracketFormat === "top1_plus_best2_seconds"
+    ? "1º de cada grupo + 2 mejores 2dos"
+    : "Top 2 de cada grupo";
+
   return (
     <div className="space-y-6">
-      <header className="glass p-4 sm:p-5">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">
-          Vista previa
-        </p>
-        <p className="text-white text-sm">
-          Cómo quedarán los grupos y las eliminatorias según la configuración actual.
-          Aquí no se editan datos: usa las pestañas de Grupos y Eliminatorias para ajustar.
-        </p>
+      {/* Hero header */}
+      <header
+        className="relative overflow-hidden rounded-2xl border border-white/10 p-5 sm:p-6"
+        style={{ background: "linear-gradient(135deg, rgba(58,160,255,0.10) 0%, rgba(20,26,44,0.92) 60%)" }}
+      >
+        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full opacity-25 blur-3xl pointer-events-none" style={{ background: "#3aa0ff" }} aria-hidden="true" />
+        <div className="relative flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#3aa0ff] font-bold mb-1">
+              Vista previa · tal y como lo verán
+            </p>
+            <h3 className="font-hero text-3xl text-white leading-none">
+              {tournament.name}
+            </h3>
+            <p className="text-court-muted text-xs mt-2">
+              {groups.length} grupos · {groupMatches.length} partidos de fase · {ko.length} eliminatorias ·
+              formato <span className="text-white">{formatLabel}</span>
+              {tournament.bracketSize ? <> · cuadro de <span className="text-white">{tournament.bracketSize}</span></> : null}
+            </p>
+          </div>
+          <a href={`/tournaments/${tournament.id}`} target="_blank" rel="noopener"
+             className="btn-ghost inline-flex !py-1.5 !px-3 !text-xs">
+            Vista pública ↗
+          </a>
+        </div>
       </header>
 
+      {/* Groups */}
       <section className="space-y-3">
-        <h3 className="font-hero text-xl text-white">Grupos</h3>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {groups.map((g) => (
-            <div key={g.group.id} className="glass p-4">
-              <h4 className="font-hero text-lg text-white mb-2">{g.group.name}</h4>
-              <ul className="space-y-1">
-                {g.members.map((m, i) => (
-                  <li key={m.id} className="text-sm text-white flex items-center gap-2">
-                    <span className="font-hero text-court-muted w-5 tabular-nums">{i + 1}.</span>
-                    <span className="truncate">{m.teamName ?? "—"}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <div className="flex items-baseline justify-between">
+          <h3 className="font-hero text-2xl text-white">Fase de grupos</h3>
+          <span className="text-[10px] uppercase tracking-widest text-court-muted">
+            {groups.length} grupos
+          </span>
         </div>
-      </section>
-
-      <section className="space-y-3">
-        <h3 className="font-hero text-xl text-white">Eliminatorias</h3>
-        {ko.length === 0 ? (
-          <p className="text-sm text-court-muted">
-            El cuadro se generará cuando se configure el formato en la pestaña Eliminatorias.
+        {groups.length === 0 ? (
+          <p className="text-sm text-court-muted glass p-4">
+            Configura los grupos en la pestaña Grupos para verlos aquí.
           </p>
         ) : (
-          <div className="glass p-2 sm:p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {groups.map((g, idx) => {
+              const color = groupTone(g.group, idx);
+              return (
+                <article
+                  key={g.group.id}
+                  className="relative overflow-hidden rounded-2xl border border-white/10"
+                  style={{ background: `linear-gradient(180deg, ${color}1A 0%, rgba(12,17,32,0.95) 70%)` }}
+                >
+                  <div className="absolute top-0 left-0 right-0 h-1" style={{ background: color }} aria-hidden="true" />
+                  <header className="flex items-center gap-3 px-4 pt-4">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/10 shrink-0 flex items-center justify-center"
+                         style={{ background: color }}>
+                      {g.group.logo
+                        ? <img src={g.group.logo} alt="" className="w-full h-full object-cover" />
+                        : <span className="font-hero text-lg text-white">{g.group.name.slice(-1).toUpperCase()}</span>}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-hero text-lg text-white truncate">{g.group.name}</h4>
+                      <p className="text-[10px] uppercase tracking-widest text-court-muted">
+                        {g.members.length} equipos
+                      </p>
+                    </div>
+                  </header>
+                  <ol className="px-2 pb-3 pt-2 space-y-0.5">
+                    {g.members.map((m, i) => (
+                      <li key={m.id} className="flex items-center gap-2 px-2 py-1.5 rounded">
+                        <span className="w-5 text-center font-hero text-sm tabular-nums"
+                              style={{ color: i < 2 ? color : "rgba(255,255,255,0.4)" }}>{i + 1}</span>
+                        {m.teamLogo
+                          ? <img src={m.teamLogo} alt="" className="w-5 h-5 rounded object-cover border border-white/10" />
+                          : <span className="w-5 h-5 rounded text-[10px] font-hero text-white/80 flex items-center justify-center bg-white/5">
+                              {(m.teamName ?? "?").charAt(0).toUpperCase()}
+                            </span>}
+                        <span className="text-sm text-white truncate flex-1">{m.teamName ?? "—"}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Knockouts */}
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h3 className="font-hero text-2xl text-white">Eliminatorias</h3>
+          <span className="text-[10px] uppercase tracking-widest text-court-muted">
+            {ko.length} partidos
+          </span>
+        </div>
+        {ko.length === 0 ? (
+          <p className="text-sm text-court-muted glass p-4">
+            Configura el formato en la pestaña Eliminatorias para ver el cuadro aquí.
+          </p>
+        ) : (
+          <div className="glass p-2 sm:p-4 overflow-x-auto">
             <AdminBracketView matches={ko} isAdmin={false} />
           </div>
         )}
       </section>
 
-      <a href={`/tournaments/${tournament.id}`} target="_blank" rel="noopener"
-         className="btn-ghost inline-flex !py-1.5 !px-3 !text-xs">
-        Abrir vista pública ↗
-      </a>
+      {/* Schedule strip */}
+      {groupMatches.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h3 className="font-hero text-2xl text-white">Calendario</h3>
+            <span className="text-[10px] uppercase tracking-widest text-court-muted">
+              {groupMatches.filter((m) => m.scheduledAt).length}/{groupMatches.length} con hora
+            </span>
+          </div>
+          <ul className="glass p-4 grid grid-cols-1 md:grid-cols-2 gap-2">
+            {groupMatches.slice(0, 8).map((m) => (
+              <li key={m.id} className="flex items-center justify-between text-sm gap-2">
+                <span className="text-white truncate">
+                  {m.homeTeamName ?? "?"} <span className="text-white/30">vs</span> {m.awayTeamName ?? "?"}
+                </span>
+                <span className="text-court-muted text-xs tabular-nums shrink-0">
+                  {m.scheduledAt
+                    ? new Date(m.scheduledAt).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+                    : "sin hora"}
+                </span>
+              </li>
+            ))}
+            {groupMatches.length > 8 && (
+              <li className="text-[11px] text-court-muted italic md:col-span-2">
+                +{groupMatches.length - 8} partidos más (configura horarios en la pestaña Horarios).
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

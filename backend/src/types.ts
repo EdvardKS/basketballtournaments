@@ -62,7 +62,9 @@ export interface DraftHistoryEntry {
 }
 
 export interface Group {
-  id: string; tournamentId: string; name: string; createdAt: string;
+  id: string; tournamentId: string; name: string;
+  color: string | null; logo: string | null;
+  createdAt: string;
 }
 
 export interface GroupMember {
