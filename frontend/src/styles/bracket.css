@@ -1,0 +1,178 @@
+/* Bracket layout shared by:
+   - frontend/src/components/KnockoutBracketView.astro  (public bracket)
+   - frontend/src/islands/admin/AdminBracketView.tsx    (admin embedded)
+   Both render the same DOM under the .bracket-root class so the
+   geometry + connector lines + path-highlight stay identical. */
+
+.bracket-root {
+  padding: 1.5rem 0 2rem;
+}
+
+.bracket-grid {
+  display: grid;
+  align-items: stretch;
+  column-gap: 0;
+  row-gap: 0;
+  min-height: 36rem;
+}
+
+/* PAIRS: two matches each take exactly half the column height; their
+   vertical centres land at 25% and 75% of the parent. */
+.bracket-pair {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 30rem;
+  position: relative;
+}
+.bracket-pair > .bracket-cell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+/* SINGLE-MATCH columns (SF, Final): centred vertically. */
+.bracket-single {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.bracket-single > .bracket-cell {
+  width: 100%;
+  position: relative;
+}
+
+/* CENTER stack */
+.bracket-center {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+}
+
+/* ===== CONNECTOR LINES ===== */
+
+.bracket-spacer {
+  position: relative;
+  height: 100%;
+}
+.bracket-spacer::before,
+.bracket-spacer::after,
+.bracket-cell::after {
+  background: rgba(255,255,255,0.22);
+  box-shadow: 0 0 4px rgba(255,255,255,0.12);
+}
+
+/* === LEFT HALF === */
+.bracket-spacer--pair-left::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 25%; bottom: 25%;
+  width: 2px;
+  transform-origin: top;
+  animation: bracket-draw-v 0.55s ease-out 0.1s both;
+}
+.bracket-spacer--pair-left::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 2px;
+  transform-origin: left;
+  animation: bracket-draw-h 0.45s ease-out 0.65s both;
+}
+.bracket-grid > .bracket-pair:first-child > .bracket-cell::after {
+  content: "";
+  position: absolute;
+  right: -3rem; top: 50%;
+  width: 3rem; height: 2px;
+  transform-origin: left;
+  animation: bracket-draw-h 0.45s ease-out 0s both;
+}
+.bracket-spacer--single-left::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 2px;
+  transform-origin: left;
+  animation: bracket-draw-h 0.55s ease-out 1.1s both;
+}
+.bracket-grid > .bracket-single:nth-of-type(1) > .bracket-cell::after {
+  content: "";
+  position: absolute;
+  right: -3rem; top: 50%;
+  width: 3rem; height: 2px;
+  transform-origin: left;
+  animation: bracket-draw-h 0.45s ease-out 0.85s both;
+}
+
+/* === RIGHT HALF === */
+.bracket-spacer--single-right::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 2px;
+  transform-origin: right;
+  animation: bracket-draw-h 0.55s ease-out 1.1s both;
+}
+.bracket-grid > .bracket-single:nth-of-type(2) > .bracket-cell::after {
+  content: "";
+  position: absolute;
+  left: -3rem; top: 50%;
+  width: 3rem; height: 2px;
+  transform-origin: right;
+  animation: bracket-draw-h 0.45s ease-out 0.85s both;
+}
+.bracket-spacer--pair-right::before {
+  content: "";
+  position: absolute;
+  right: 0; top: 25%; bottom: 25%;
+  width: 2px;
+  transform-origin: top;
+  animation: bracket-draw-v 0.55s ease-out 0.1s both;
+}
+.bracket-spacer--pair-right::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 2px;
+  transform-origin: right;
+  animation: bracket-draw-h 0.45s ease-out 0.65s both;
+}
+.bracket-grid > .bracket-pair:last-child > .bracket-cell::after {
+  content: "";
+  position: absolute;
+  left: -3rem; top: 50%;
+  width: 3rem; height: 2px;
+  transform-origin: right;
+  animation: bracket-draw-h 0.45s ease-out 0s both;
+}
+
+@keyframes bracket-draw-h {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes bracket-draw-v {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+/* Hover path highlight */
+.team-pill.path-active {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent, #ff6b00) 50%, transparent),
+    color-mix(in srgb, var(--accent, #ff6b00) 12%, transparent)) !important;
+  border-color: var(--accent, #ff6b00) !important;
+  box-shadow: 0 0 26px var(--accent, #ff6b00),
+              inset 0 0 16px rgba(255,255,255,0.10) !important;
+  transform: translateY(-1px) scale(1.015);
+  z-index: 5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bracket-spacer::before,
+  .bracket-spacer::after,
+  .bracket-cell::after {
+    animation: none !important;
+  }
+}

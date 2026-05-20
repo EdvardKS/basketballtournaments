@@ -6,7 +6,7 @@ import { derivePhase, type TournamentPhase } from "../../lib/tournamentPhase.js"
 import Modal from "./Modal.js";
 import InscripcionesTab, { type Registration } from "./InscripcionesTab.js";
 import QuickScoreSheet from "./QuickScoreSheet.js";
-import MatchEditOverlay from "./MatchEditOverlay.js";
+import AdminBracketView from "./AdminBracketView.js";
 import TournamentForm from "../TournamentForm.js";
 import DraftBoard from "../DraftBoard.js";
 import AdminScheduleConfirm from "../AdminScheduleConfirm.js";
@@ -479,58 +479,10 @@ function TabContent({
 }
 
 // --- Admin bracket editor -------------------------------------------------
-// Renders the bracket inline in the Eliminatorias tab, grouped by stage.
-// Every match card carries the existing MatchEditOverlay pencil so the admin
-// can score / finalise / regenerate without leaving the tab. Works for
-// 4 / 8 / 16-team brackets (eighth → quarterfinal → semifinal → final +
-// third place).
-
-const STAGE_ORDER = ["eighth", "quarterfinal", "semifinal", "final", "third_place"] as const;
-const STAGE_TITLES: Record<string, string> = {
-  eighth: "Octavos de final",
-  quarterfinal: "Cuartos de final",
-  semifinal: "Semifinales",
-  final: "Final",
-  third_place: "Tercer puesto",
-};
-
-function BracketMatchCard({ match }: { match: Match }) {
-  const winner = match.winnerId;
-  return (
-    <div className="rounded-xl border border-white/10 bg-court-bg/70 px-3 py-2.5 hover:border-white/20 transition-colors relative">
-      <div className="absolute top-1.5 right-1.5">
-        <MatchEditOverlay match={match} />
-      </div>
-      <div className="flex items-center justify-between gap-2 pr-7">
-        <span className={`flex-1 truncate text-sm ${winner === match.homeTeamId ? "text-white font-semibold" : "text-court-muted"}`}>
-          {match.homeTeamName ?? "TBD"}
-        </span>
-        <span className={`font-display text-lg tabular-nums ${winner === match.homeTeamId ? "text-court-ok" : "text-court-muted"}`}>
-          {match.homeScore ?? "—"}
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-2 pr-7 mt-1">
-        <span className={`flex-1 truncate text-sm ${winner === match.awayTeamId ? "text-white font-semibold" : "text-court-muted"}`}>
-          {match.awayTeamName ?? "TBD"}
-        </span>
-        <span className={`font-display text-lg tabular-nums ${winner === match.awayTeamId ? "text-court-ok" : "text-court-muted"}`}>
-          {match.awayScore ?? "—"}
-        </span>
-      </div>
-      {match.scheduledAt && (
-        <p className="text-[10px] text-court-muted mt-1.5">
-          {new Date(match.scheduledAt).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-          {" · "}
-          <span className={`uppercase tracking-widest ${
-            match.status === "completed" ? "text-court-ok"
-              : match.status === "in_progress" ? "text-[var(--color-neon-orange)]"
-              : "text-court-muted"
-          }`}>{match.status}</span>
-        </p>
-      )}
-    </div>
-  );
-}
+// Renders the Champions-League style bracket inline in the Eliminatorias tab
+// via AdminBracketView (React port of components/KnockoutBracketView.astro).
+// Every match card carries MatchEditOverlay so the admin scores + finalises
+// in-place without leaving the panel.
 
 function AdminBracketEditor({
   tournament, matches, onChange: _onChange,
@@ -563,7 +515,12 @@ function AdminBracketEditor({
           <p className="text-[10px] uppercase tracking-[0.3em] text-court-muted font-bold mb-1">Eliminatorias</p>
           <p className="text-white text-sm">
             {ko.length} partidos · formato: <span className="text-white font-semibold">{formatLabel}</span>
-            {tournament.bracketSize ? <> · cuadro fijado a <span className="text-white font-semibold">{tournament.bracketSize}</span></> : <> · cuadro auto</>}
+            {tournament.bracketSize
+              ? <> · cuadro fijado a <span className="text-white font-semibold">{tournament.bracketSize}</span></>
+              : <> · cuadro auto</>}
+          </p>
+          <p className="text-[11px] text-court-muted mt-1">
+            Pulsa el icono ✎ de cada partido para meter el marcador. El ganador propaga al siguiente cruce.
           </p>
         </div>
         <a
@@ -575,19 +532,9 @@ function AdminBracketEditor({
         </a>
       </header>
 
-      {STAGE_ORDER.map((stage) => {
-        const ms = ko.filter((m) => m.stage === stage)
-          .sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0));
-        if (ms.length === 0) return null;
-        return (
-          <section key={stage} className="glass p-4 sm:p-5">
-            <h3 className="font-hero text-xl text-white mb-3">{STAGE_TITLES[stage]}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {ms.map((m) => <BracketMatchCard key={m.id} match={m} />)}
-            </div>
-          </section>
-        );
-      })}
+      <div className="glass p-2 sm:p-4">
+        <AdminBracketView matches={ko} isAdmin />
+      </div>
 
       <div className="glass p-4 sm:p-6">
         <h3 className="font-hero text-xl text-white mb-3">Marcador rápido (eliminatorias)</h3>
