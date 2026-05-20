@@ -70,31 +70,6 @@ services:
       - basket_net
     command: pnpm dev
 
-  # Hourly randomized E2E test runner. Opt-in via the `runner` profile:
-  #   docker compose -f docker-compose.dev.yml --profile runner up -d test-runner
-  # Use the same backend image so python3 + requests are already installed.
-  # Shares ./backend/data with the backend so test-runs/ logs land on the host.
-  test-runner:
-    profiles: ["runner"]
-    image: basketballtournaments-backend
-    container_name: basket_test_runner
-    depends_on:
-      backend:
-        condition: service_started
-    networks:
-      - basket_net
-    volumes:
-      - ./backend/data:/app/data
-      - ./backend/test:/app/test:ro
-    environment:
-      API_BASE: http://backend:4000/api
-      BOOTSTRAP_ADMIN_USERNAME: tester
-      BOOTSTRAP_ADMIN_PASSWORD: test1234
-      CYCLE_INTERVAL: "3600"
-      PYTHONUNBUFFERED: "1"
-    command: ["python3", "-u", "/app/test/runner.py", "--loop"]
-    restart: unless-stopped
-
 networks:
   basket_net:
     driver: bridge
