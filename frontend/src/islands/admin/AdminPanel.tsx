@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "../../lib/api.js";
+import { api, ApiError } from "../../lib/api.js";
 import type { Tournament, TeamWithPlayers, GroupWithMembers, Match, Player } from "../../lib/types.js";
 import { formatDate } from "../../lib/display.js";
 import { derivePhase, type TournamentPhase } from "../../lib/tournamentPhase.js";
@@ -146,6 +146,15 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
   };
 
   const goToConfigTab = () => setActiveTab("config");
+
+  const onTournamentDeleted = (deletedId: string) => {
+    setTournaments((list) => list.filter((t) => t.id !== deletedId));
+    setSelectedId((prev) => {
+      if (prev !== deletedId) return prev;
+      const next = tournaments.find((t) => t.id !== deletedId);
+      return next ? next.id : null;
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -296,6 +305,7 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
                 canManageRegistrations={canManageRegistrations}
                 onChange={loadDetail}
                 onTournamentSaved={onTournamentSaved}
+                onTournamentDeleted={onTournamentDeleted}
               />
             )}
           </section>
@@ -317,7 +327,8 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
 }
 
 function TabContent({
-  tab, tournament, detail, matches, groups, allPlayers, captainIds, canManageRegistrations, onChange, onTournamentSaved,
+  tab, tournament, detail, matches, groups, allPlayers, captainIds, canManageRegistrations,
+  onChange, onTournamentSaved, onTournamentDeleted,
 }: {
   tab: TabKey;
   tournament: Tournament;
@@ -329,6 +340,7 @@ function TabContent({
   canManageRegistrations: boolean;
   onChange: () => void;
   onTournamentSaved: (t: Tournament) => void;
+  onTournamentDeleted: (id: string) => void;
 }) {
   if (tab === "inscripciones") {
     return (
@@ -465,17 +477,152 @@ function TabContent({
 
   // config: full editor lives inline here — no modal.
   return (
-    <div className="glass p-4 sm:p-6">
-      <p className="text-court-muted text-sm mb-4">
-        Edita nombre, fechas, ubicación, formato y reglas. Los cambios
-        se guardan al pulsar “Guardar”.
-      </p>
-      <TournamentForm
-        tournament={tournament}
-        onSaved={onTournamentSaved}
-        onCancel={onChange}
-      />
+    <div className="space-y-6">
+      <div className="glass p-4 sm:p-6">
+        <p className="text-court-muted text-sm mb-4">
+          Edita nombre, fechas, ubicación, formato y reglas. Los cambios
+          se guardan al pulsar “Guardar”.
+        </p>
+        <TournamentForm
+          tournament={tournament}
+          onSaved={onTournamentSaved}
+          onCancel={onChange}
+        />
+      </div>
+      <DangerZone tournament={tournament} onDeleted={onTournamentDeleted} />
     </div>
+  );
+}
+
+// --- Danger zone: soft-delete the tournament with double confirmation ------
+// Step 1: user clicks "Eliminar torneo" → confirmation modal opens.
+// Step 2: user types the exact tournament name AND ticks the box → can submit.
+// Backend re-validates both, so a missed click cannot wipe a torneo.
+// Registered players remain in the DB; only the tournament row is hidden.
+function DangerZone({
+  tournament, onDeleted,
+}: {
+  tournament: Tournament;
+  onDeleted: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const close = () => {
+    if (busy) return;
+    setOpen(false);
+    setTyped("");
+    setAcknowledged(false);
+    setError(null);
+  };
+
+  const canSubmit = typed === tournament.name && acknowledged && !busy;
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setBusy(true); setError(null);
+    try {
+      await api(`/tournaments/${tournament.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ confirm: "DELETE", name: tournament.name }),
+      });
+      onDeleted(tournament.id);
+      setOpen(false);
+    } catch (e) {
+      const msg = e instanceof ApiError
+        ? (e.code === "NAME_MISMATCH"
+            ? "El nombre introducido no coincide con el del torneo."
+            : e.code === "CONFIRMATION_REQUIRED"
+            ? "Falta la confirmación exigida por el servidor."
+            : e.code)
+        : "Error al eliminar el torneo";
+      setError(msg);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <div className="glass p-4 sm:p-6 border border-court-danger/30">
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-court-danger font-bold mb-1">
+              Zona de peligro
+            </p>
+            <p className="text-white text-sm">
+              Eliminar el torneo lo oculta de la app de forma permanente.
+              Los jugadores inscritos <span className="text-white font-semibold">se mantienen</span>;
+              sólo desaparece el torneo del listado y de las páginas públicas.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="btn-ghost !py-2 !px-4 !text-xs text-court-danger border border-court-danger/40 hover:bg-court-danger/10 shrink-0"
+          >
+            Eliminar torneo
+          </button>
+        </div>
+      </div>
+
+      <Modal
+        open={open}
+        title="¿Eliminar este torneo?"
+        subtitle="Doble confirmación requerida"
+        onClose={close}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-court-muted text-sm">
+            Esta acción oculta el torneo <span className="text-white font-semibold">{tournament.name}</span> de
+            la app. Los jugadores inscritos seguirán existiendo. Para confirmar,
+            escribe exactamente el nombre del torneo y marca la casilla.
+          </p>
+          <div>
+            <label className="label-text">Escribe el nombre del torneo</label>
+            <input
+              className="input-field"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={tournament.name}
+              autoFocus
+            />
+          </div>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+              className="accent-court-danger mt-0.5"
+            />
+            <span className="text-sm text-court-muted">
+              Entiendo que el torneo dejará de aparecer en la app.
+            </span>
+          </label>
+          {error && <p className="text-court-danger text-sm">{error}</p>}
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              className="btn-ghost flex-1 justify-center"
+              onClick={close}
+              disabled={busy}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!canSubmit}
+              className="btn-primary flex-1 justify-center !bg-court-danger hover:!bg-court-danger disabled:opacity-50"
+            >
+              {busy ? "Eliminando…" : "Eliminar definitivamente"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }
 

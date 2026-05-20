@@ -5,6 +5,7 @@ import { asyncRoute, HttpError } from "../middleware/error.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import {
   listTournaments, getTournament, createTournament, patchTournament,
+  softDeleteTournament,
 } from "../services/tournaments.js";
 import {
   listRegistrations, registerForTournament,
@@ -34,6 +35,12 @@ tournamentsRouter.post("/", requireRole("admin"), asyncRoute(async (req, res) =>
 
 tournamentsRouter.patch("/:id", requireRole("admin"), asyncRoute(async (req, res) => {
   res.json(await patchTournament(req.params.id, req.body));
+}));
+
+// Soft-delete with double confirmation. Body must include
+// { confirm: "DELETE", name: "<exact tournament name>" }.
+tournamentsRouter.delete("/:id", requireRole("admin"), asyncRoute(async (req, res) => {
+  res.json(await softDeleteTournament(req.params.id, req.body));
 }));
 
 tournamentsRouter.post("/:id/register", requireAuth, asyncRoute(async (req, res) => {

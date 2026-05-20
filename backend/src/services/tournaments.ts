@@ -50,7 +50,8 @@ const assertSingleLive = async (nextStatus: string, excludeId?: string) => {
   if (nextStatus === "completed") return;
   const rows = await query(
     `SELECT id, name FROM tournaments
-     WHERE status = ANY($1::text[]) AND ($2::text IS NULL OR id <> $2)`,
+     WHERE status = ANY($1::text[]) AND deleted_at IS NULL
+       AND ($2::text IS NULL OR id <> $2)`,
     [LIVE_STATUSES as unknown as string[], excludeId ?? null]);
   if (rows.length > 0) {
     throw new HttpError(409, "ONE_ACTIVE_ONLY",
@@ -59,15 +60,42 @@ const assertSingleLive = async (nextStatus: string, excludeId?: string) => {
 };
 
 export const listTournaments = async () => {
-  const rows = await query("SELECT * FROM tournaments ORDER BY date DESC");
+  const rows = await query(
+    "SELECT * FROM tournaments WHERE deleted_at IS NULL ORDER BY date DESC");
   return rows.map(toTournament);
 };
 
 export const getTournament = async (id: string) => {
   await transitionTournament(id);
-  const row = await queryOne("SELECT * FROM tournaments WHERE id=$1", [id]);
+  const row = await queryOne(
+    "SELECT * FROM tournaments WHERE id=$1 AND deleted_at IS NULL", [id]);
   if (!row) throw new HttpError(404, "TOURNAMENT_NOT_FOUND");
   return toTournament(row);
+};
+
+// Soft-delete with double confirmation: caller must echo the exact
+// tournament name and the literal string "DELETE". Registrations and
+// players remain in the DB — only the tournament row is hidden.
+export const softDeleteTournament = async (
+  id: string, raw: unknown,
+): Promise<{ ok: true }> => {
+  const body = raw as { confirm?: unknown; name?: unknown } | null | undefined;
+  const confirm = body?.confirm;
+  const name = body?.name;
+  if (confirm !== "DELETE" || typeof name !== "string" || name.length === 0) {
+    throw new HttpError(400, "CONFIRMATION_REQUIRED",
+      "Falta confirmación (confirm='DELETE' y name=<nombre del torneo>).");
+  }
+  const row = await queryOne(
+    "SELECT name FROM tournaments WHERE id=$1 AND deleted_at IS NULL", [id]);
+  if (!row) throw new HttpError(404, "TOURNAMENT_NOT_FOUND");
+  if ((row as { name: string }).name !== name) {
+    throw new HttpError(400, "NAME_MISMATCH",
+      "El nombre introducido no coincide con el del torneo.");
+  }
+  await queryOne(
+    "UPDATE tournaments SET deleted_at = NOW() WHERE id=$1 RETURNING id", [id]);
+  return { ok: true };
 };
 
 export const createTournament = async (raw: unknown) => {
