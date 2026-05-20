@@ -57,6 +57,10 @@ export const toTournament = (r: Row): Tournament => ({
   teamSize: Number(r.team_size ?? 3),
   bracketFormat: (r.bracket_format as Tournament["bracketFormat"]) ?? "top2_per_group",
   bracketSize: r.bracket_size == null ? null : Number(r.bracket_size) as Tournament["bracketSize"],
+  bracketQualifiersPerGroup: r.bracket_qualifiers_per_group == null
+    ? null : Number(r.bracket_qualifiers_per_group),
+  bracketWildcards: r.bracket_wildcards == null
+    ? null : Number(r.bracket_wildcards),
 });
 
 export const toTeam = (r: Row): Team => ({

@@ -44,6 +44,11 @@ export const tournamentSchema = z.object({
   bracketSize: z.union([
     z.literal(2), z.literal(4), z.literal(8), z.literal(16),
   ]).optional().nullable(),
+  // Generic bracket plan — takes precedence over (format, size) when both
+  // are provided. qualifiersPerGroup * G + wildcards must land on a
+  // supported bracket size (2, 4, 8, 16).
+  bracketQualifiersPerGroup: z.coerce.number().int().min(0).max(99).optional().nullable(),
+  bracketWildcards: z.coerce.number().int().min(0).max(99).optional().nullable(),
 });
 
 export const updateSchema = tournamentSchema.partial().extend({
@@ -111,15 +116,17 @@ export const createTournament = async (raw: unknown) => {
        (name, date, status, location, description, rules, max_teams,
         inscription_start, inscription_end, draft_start, draft_end, match_date,
         court_count, half_court, game_duration_minutes, team_size,
-        bracket_format, bracket_size)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        bracket_format, bracket_size,
+        bracket_qualifiers_per_group, bracket_wildcards)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
      RETURNING *`,
     [data.name, data.matchDate ?? data.date ?? null, data.status, data.location,
      data.description, data.rules ?? null, LEGACY_MAX_TEAMS,
      data.inscriptionStart ?? null, data.inscriptionEnd ?? null,
      data.draftStart ?? null, data.draftEnd ?? null, data.matchDate ?? null,
      data.courtCount, data.halfCourt, LEGACY_GAME_DURATION_MINUTES, LEGACY_TEAM_SIZE,
-     data.bracketFormat, data.bracketSize ?? null],
+     data.bracketFormat, data.bracketSize ?? null,
+     data.bracketQualifiersPerGroup ?? null, data.bracketWildcards ?? null],
   );
   return toTournament(row!);
 };
@@ -142,7 +149,8 @@ export const patchTournament = async (id: string, raw: unknown) => {
        match_date=COALESCE($13, match_date),
        court_count=$14, half_court=$15,
        hours_confirmed=COALESCE($16, hours_confirmed),
-       bracket_format=$17, bracket_size=$18
+       bracket_format=$17, bracket_size=$18,
+       bracket_qualifiers_per_group=$19, bracket_wildcards=$20
      WHERE id=$1 RETURNING *`,
     [id, merged.name, merged.matchDate ?? null, merged.status, merged.location,
      merged.description, merged.rules ?? null, merged.winnerId ?? null,
@@ -150,7 +158,9 @@ export const patchTournament = async (id: string, raw: unknown) => {
      merged.draftStart ?? null, merged.draftEnd ?? null, merged.matchDate ?? null,
      merged.courtCount, merged.halfCourt,
      (data as { hoursConfirmed?: boolean }).hoursConfirmed ?? null,
-     merged.bracketFormat, merged.bracketSize ?? null],
+     merged.bracketFormat, merged.bracketSize ?? null,
+     merged.bracketQualifiersPerGroup ?? null,
+     merged.bracketWildcards ?? null],
   );
   return toTournament(row!);
 };

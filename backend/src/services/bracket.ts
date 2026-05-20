@@ -324,20 +324,39 @@ const provisionSixteen = async (
 
 // --- Public API -----------------------------------------------------------
 
+interface BracketConfig {
+  format: BracketFormat;
+  size: BracketSize | null;
+  qualifiersPerGroup: number | null;
+  wildcards: number | null;
+}
+
 const readBracketConfig = async (
   q: typeof query, tournamentId: string,
-): Promise<{ format: BracketFormat; size: BracketSize | null }> => {
+): Promise<BracketConfig> => {
   const row = await q<{
     bracket_format: string | null; bracket_size: number | null;
+    bracket_qualifiers_per_group: number | null;
+    bracket_wildcards: number | null;
   }>(
-    "SELECT bracket_format, bracket_size FROM tournaments WHERE id=$1",
+    `SELECT bracket_format, bracket_size,
+            bracket_qualifiers_per_group, bracket_wildcards
+       FROM tournaments WHERE id=$1`,
     [tournamentId],
   );
   if (row.length === 0) throw new HttpError(404, "TOURNAMENT_NOT_FOUND");
-  const format = (row[0].bracket_format ?? "top2_per_group") as BracketFormat;
-  const rawSize = row[0].bracket_size;
-  const size = rawSize === 4 || rawSize === 8 || rawSize === 16 ? rawSize : null;
-  return { format, size };
+  const r = row[0];
+  const format = (r.bracket_format ?? "top2_per_group") as BracketFormat;
+  const rawSize = r.bracket_size;
+  const size = rawSize === 2 || rawSize === 4 || rawSize === 8 || rawSize === 16
+    ? rawSize : null;
+  return {
+    format, size,
+    qualifiersPerGroup: r.bracket_qualifiers_per_group == null
+      ? null : Number(r.bracket_qualifiers_per_group),
+    wildcards: r.bracket_wildcards == null
+      ? null : Number(r.bracket_wildcards),
+  };
 };
 
 // Pick a bracket size that fits the qualified pool when admin didn't choose.
@@ -376,9 +395,68 @@ export const regenerateBracket = async (tournamentId: string) => {
   });
 };
 
+// Plan-based qualifier selection. Pulls the top `perGroup` from every group
+// then fills `wildcards` from the global pool of remaining teams sorted by
+// points. Used when both fields are persisted on the tournament; otherwise
+// we fall back to the named-format path.
+const collectQualifiedByPlan = async (
+  q: typeof query, tournamentId: string,
+  perGroup: number, wildcards: number,
+): Promise<Qualified[]> => {
+  const groups = await q<{ id: string; name: string }>(
+    "SELECT id, name FROM tournament_groups WHERE tournament_id=$1 ORDER BY name",
+    [tournamentId],
+  );
+  if (groups.length === 0) throw new HttpError(400, "NO_GROUPS");
+
+  const groupRankings: Qualified[][] = [];
+  for (const g of groups) {
+    groupRankings.push(await getGroupRanking(q, g.id, g.name));
+  }
+
+  const direct: Qualified[] = [];
+  const remaining: Qualified[] = [];
+  for (const ranking of groupRankings) {
+    if (perGroup < 0) throw new HttpError(400, "PLAN_INVALID");
+    if (perGroup > 0 && ranking.length < perGroup) {
+      throw new HttpError(400, "PLAN_GROUP_TOO_SMALL",
+        `El grupo ${ranking[0]?.groupName ?? "?"} no tiene ${perGroup} equipos.`);
+    }
+    direct.push(...ranking.slice(0, perGroup));
+    remaining.push(...ranking.slice(perGroup));
+  }
+  remaining.sort(cmpGlobal);
+  if (wildcards > remaining.length) {
+    throw new HttpError(400, "PLAN_TOO_FEW_WILDCARDS",
+      `Se piden ${wildcards} wildcards pero solo quedan ${remaining.length} disponibles.`);
+  }
+  const wild = remaining.slice(0, wildcards).map((r) => ({
+    ...r, seedLabel: `Mejor wildcard · ${r.groupName}`,
+  }));
+  return [...direct, ...wild];
+};
+
 const provisionBracket = async (q: typeof query, tournamentId: string) => {
-  const { format, size: rawSize } = await readBracketConfig(q, tournamentId);
-  const qualified = await collectQualified(q, tournamentId, format);
+  const cfg = await readBracketConfig(q, tournamentId);
+  const usePlan = cfg.qualifiersPerGroup != null && cfg.wildcards != null;
+  const qualified = usePlan
+    ? await collectQualifiedByPlan(q, tournamentId,
+        cfg.qualifiersPerGroup!, cfg.wildcards!)
+    : await collectQualified(q, tournamentId, cfg.format);
+  const format = cfg.format;
+  // With a plan, the qualifier count drives the bracket size directly. With
+  // the legacy format-only path we fall back to the explicit size column.
+  let rawSize: BracketSize | null;
+  if (usePlan) {
+    if (qualified.length !== 2 && qualified.length !== 4
+        && qualified.length !== 8 && qualified.length !== 16) {
+      throw new HttpError(400, "PLAN_INVALID_SIZE",
+        `El plan produce ${qualified.length} clasificados; debe sumar 2, 4, 8 o 16.`);
+    }
+    rawSize = qualified.length as BracketSize;
+  } else {
+    rawSize = cfg.size;
+  }
 
   // Global tiebreak: the qualified list lands here sorted by group rank;
   // re-sort GLOBALLY by points to fix the seeding bug where a 2nd-place

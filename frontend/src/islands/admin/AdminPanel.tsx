@@ -695,74 +695,107 @@ function bracketDecisionWindow(tournament: Tournament): "early" | "open" | "lock
   return "open";
 }
 
-// Enumerate every feasible (format, size) combination given the current
-// group layout. Mirrors backend bracket.collectQualified() so the picker
-// never offers a setup that the API would reject.
+// Enumerate every (qualifiersPerGroup, wildcards) plan whose total qualifier
+// count lands on a power-of-two bracket size (2, 4, 8, 16). Works for any
+// group layout — single group with 2+ teams gets a direct final, dozens of
+// uneven groups still produce all the wildcards-fill combos that are
+// mathematically achievable. Each option carries a human label and a score
+// the recommender uses to pick a sensible default.
 interface BracketOption {
-  format: string;
+  qualifiersPerGroup: number;
+  wildcards: number;
   size: number;
   label: string;
-  qualifiers: number;
+  detail: string;
+  score: number;     // higher = better fit; recommender picks the top one
 }
-const enumerateBracketOptions = (
-  groups: GroupWithMembers[],
-): BracketOption[] => {
-  const opts: BracketOption[] = [];
-  const G = groups.length;
-  const sizes = groups.map((g) => g.members.length);
-  const minPerGroup = sizes.length === 0 ? 0 : Math.min(...sizes);
-
-  if (G === 1) {
-    const teams = sizes[0] ?? 0;
-    if (teams >= 2) {
-      opts.push({
-        format: "top2_single_group", size: 2, qualifiers: 2,
-        label: `Final directa · los 2 mejores del ${groups[0].group.name}`,
-      });
-    }
-    if (teams >= 4) {
-      opts.push({
-        format: "top4_single_group", size: 4, qualifiers: 4,
-        label: `Semifinales · los 4 mejores del ${groups[0].group.name}`,
-      });
-    }
-  }
-
-  if (G >= 2 && minPerGroup >= 2) {
-    // top2_per_group → 2 · G qualifiers.
-    const q1 = G * 2;
-    for (const s of [4, 8, 16] as const) {
-      if (q1 >= s) {
-        opts.push({
-          format: "top2_per_group", size: s, qualifiers: q1,
-          label: `${stageLabel(s)} · top 2 de cada grupo`,
-        });
-      }
-    }
-    // top1_plus_best2_seconds → G + 2 qualifiers.
-    const q2 = G + 2;
-    for (const s of [4, 8, 16] as const) {
-      if (q2 >= s) {
-        opts.push({
-          format: "top1_plus_best2_seconds", size: s, qualifiers: q2,
-          label: `${stageLabel(s)} · 1º de cada grupo + 2 mejores 2dos`,
-        });
-      }
-    }
-  }
-
-  return opts;
-};
 
 const stageLabel = (size: number): string => {
   if (size === 2)  return "Final directa";
-  if (size === 4)  return "Desde semifinales";
-  if (size === 8)  return "Desde cuartos";
-  if (size === 16) return "Desde octavos";
+  if (size === 4)  return "Semifinales";
+  if (size === 8)  return "Cuartos";
+  if (size === 16) return "Octavos";
   return `Cuadro de ${size}`;
 };
 
-const optionKey = (o: { format: string; size: number }) => `${o.format}::${o.size}`;
+const enumerateBracketOptions = (
+  groups: GroupWithMembers[],
+): BracketOption[] => {
+  const G = groups.length;
+  if (G === 0) return [];
+  const sizes = groups.map((g) => g.members.length);
+  const N = sizes.reduce((a, b) => a + b, 0);
+  const minPerGroup = Math.min(...sizes);
+  const candidateSizes = [2, 4, 8, 16].filter((s) => s <= N);
+
+  const out: BracketOption[] = [];
+  const seen = new Set<string>();
+
+  for (const K of candidateSizes) {
+    // Iterate every qualifiersPerGroup from 0 to the smallest group size.
+    // Each combination is unique because wildcards = K - perGroup * G is
+    // determined.
+    for (let perGroup = 0; perGroup <= minPerGroup; perGroup++) {
+      const wildcards = K - perGroup * G;
+      if (wildcards < 0) break;             // perGroup too high for this K
+      // Wildcards must come from teams not already qualified in their group.
+      const remainingPool = sizes
+        .map((tCount) => Math.max(0, tCount - perGroup))
+        .reduce((a, b) => a + b, 0);
+      if (wildcards > remainingPool) continue;
+      // Skip degenerate plan: 0 from group + 0 wildcards = empty bracket.
+      if (perGroup === 0 && wildcards === 0) continue;
+      // Single-group must use perGroup > 0 (no wildcards exist).
+      if (G === 1 && wildcards > 0 && perGroup > 0) continue;
+
+      // Human label.
+      let label: string;
+      let detail: string;
+      if (G === 1) {
+        label = `${stageLabel(K)} · top ${perGroup} del ${groups[0].group.name}`;
+        detail = `${perGroup} clasificados`;
+      } else if (wildcards === 0) {
+        label = `${stageLabel(K)} · top ${perGroup} de cada grupo`;
+        detail = `${perGroup * G} clasificados`;
+      } else if (perGroup === 0) {
+        label = `${stageLabel(K)} · ${wildcards} mejores globales`;
+        detail = `${wildcards} wildcards`;
+      } else {
+        label = `${stageLabel(K)} · top ${perGroup} de cada grupo + ${wildcards} mejor${wildcards === 1 ? "" : "es"} wildcard${wildcards === 1 ? "" : "s"}`;
+        detail = `${perGroup * G} directos + ${wildcards} wildcards`;
+      }
+
+      const key = `${perGroup}|${wildcards}|${K}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      // Recommendation score: prefer bigger brackets, prefer plans that
+      // are "fair" (more direct qualifiers per group, fewer wildcards),
+      // penalise plans where we wouldn't fill the bracket with at least one
+      // team from every group.
+      const evenBonus = wildcards === 0 ? 50 : 0;
+      const wildcardPenalty = wildcards * 3;
+      const score = K * 10 + perGroup * 5 + evenBonus - wildcardPenalty;
+
+      out.push({ qualifiersPerGroup: perGroup, wildcards, size: K, label, detail, score });
+    }
+  }
+
+  // Sort: bracket size desc, then perGroup desc, then fewer wildcards.
+  out.sort((a, b) =>
+    b.size - a.size
+    || b.qualifiersPerGroup - a.qualifiersPerGroup
+    || a.wildcards - b.wildcards);
+  return out;
+};
+
+const recommendOption = (opts: BracketOption[]): BracketOption | null => {
+  if (opts.length === 0) return null;
+  return [...opts].sort((a, b) => b.score - a.score)[0];
+};
+
+const optionKey = (o: { qualifiersPerGroup: number; wildcards: number; size: number }) =>
+  `${o.qualifiersPerGroup}::${o.wildcards}::${o.size}`;
 
 function BracketConfigPicker({
   tournament, groups, onApplied,
@@ -772,16 +805,23 @@ function BracketConfigPicker({
   onApplied: () => void;
 }) {
   const options = useMemo(() => enumerateBracketOptions(groups), [groups]);
-  const currentKey = optionKey({
-    format: tournament.bracketFormat,
-    size: tournament.bracketSize ?? -1,
-  });
-  // Pre-select the current saved combo if it's still feasible; otherwise
-  // default to the first valid option so applying does not leave the
-  // tournament with an invalid config.
+  const recommended = useMemo(() => recommendOption(options), [options]);
+
+  // Pre-select the current saved plan if it's still feasible; otherwise the
+  // recommended one so the picker can never submit an invalid combo.
+  const currentKey = tournament.bracketQualifiersPerGroup != null
+      && tournament.bracketWildcards != null
+      && tournament.bracketSize != null
+    ? optionKey({
+        qualifiersPerGroup: tournament.bracketQualifiersPerGroup,
+        wildcards: tournament.bracketWildcards,
+        size: tournament.bracketSize,
+      })
+    : "";
   const initialKey = options.find((o) => optionKey(o) === currentKey)
     ? currentKey
-    : options[0] ? optionKey(options[0]) : "";
+    : recommended ? optionKey(recommended) : "";
+
   const [picked, setPicked] = useState<string>(initialKey);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -799,8 +839,13 @@ function BracketConfigPicker({
       await api(`/tournaments/${tournament.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          bracketFormat: selected.format,
+          bracketQualifiersPerGroup: selected.qualifiersPerGroup,
+          bracketWildcards: selected.wildcards,
           bracketSize: selected.size,
+          // Keep a sensible legacy format string for backwards compat.
+          bracketFormat: selected.wildcards > 0 && selected.qualifiersPerGroup > 0
+            ? "top1_plus_best2_seconds"
+            : "top2_per_group",
         }),
       });
       try {
@@ -830,31 +875,47 @@ function BracketConfigPicker({
             Configurar eliminatorias
           </p>
           <p className="text-white text-sm">
-            Elige una de las opciones disponibles para tu configuración de grupos.
+            El algoritmo calcula todas las eliminatorias que caben con
+            <span className="text-white font-semibold"> {groups.length} grupos</span> y
+            <span className="text-white font-semibold"> {groups.reduce((n, g) => n + g.members.length, 0)} equipos</span>.
+            {options.length > 0 && <> · <span className="text-court-muted">{options.length} opciones posibles</span></>}
           </p>
         </div>
-        {window === "locked" && (
-          <span className="chip bg-court-warn/15 text-court-warn border border-court-warn/30">
-            🔒 cerrado · ya estamos en víspera del torneo
-          </span>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {recommended && (
+            <button
+              type="button"
+              onClick={() => setPicked(optionKey(recommended))}
+              disabled={window === "locked"}
+              title={`Recomendado: ${recommended.label}`}
+              className="btn-ghost !py-1.5 !px-3 !text-xs border border-[var(--color-neon-orange)]/40 text-[var(--color-neon-orange)] hover:bg-[var(--color-neon-orange)]/10"
+            >
+              ★ Usar recomendado
+            </button>
+          )}
+          {window === "locked" && (
+            <span className="chip bg-court-warn/15 text-court-warn border border-court-warn/30">
+              🔒 cerrado · víspera del torneo
+            </span>
+          )}
+        </div>
       </div>
 
       {options.length === 0 ? (
         <p className="text-court-danger text-sm">
-          La configuración actual de grupos no permite montar eliminatorias.
-          Reasigna equipos en la pestaña Grupos para tener al menos 2 grupos
-          con 2 equipos cada uno o un único grupo con 2+ equipos.
+          La configuración actual de grupos no permite montar eliminatorias
+          (mínimo 2 equipos en total). Añade equipos o reasigna grupos.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {options.map((o) => {
             const k = optionKey(o);
             const active = picked === k;
+            const isRecommended = recommended && optionKey(recommended) === k;
             return (
               <li key={k}>
                 <label
-                  className={`flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
+                  className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-all ${
                     active
                       ? "border-[var(--color-neon-orange)] bg-[var(--color-neon-orange)]/5"
                       : "border-white/10 bg-white/[0.02] hover:bg-white/5"
@@ -867,12 +928,19 @@ function BracketConfigPicker({
                     checked={active}
                     onChange={() => setPicked(k)}
                     disabled={window === "locked"}
-                    className="accent-[var(--color-neon-orange)] shrink-0"
+                    className="accent-[var(--color-neon-orange)] shrink-0 mt-0.5"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-semibold truncate">{o.label}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-white text-sm font-semibold">{o.label}</p>
+                      {isRecommended && (
+                        <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded text-[var(--color-neon-orange)] border border-[var(--color-neon-orange)]/40 bg-[var(--color-neon-orange)]/10">
+                          ★ Recomendado
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-court-muted">
-                      {o.qualifiers} clasificados · cuadro de {o.size}
+                      {o.detail} · cuadro de {o.size}
                     </p>
                   </div>
                 </label>
