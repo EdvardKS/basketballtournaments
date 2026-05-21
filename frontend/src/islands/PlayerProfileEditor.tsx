@@ -5,21 +5,7 @@ import NeonInput from "../components/ui/NeonInput.js";
 import NeonSelect from "../components/ui/NeonSelect.js";
 import NeonButton from "../components/ui/NeonButton.js";
 import { useRevealStagger, successBurst, errorShake } from "../lib/neon.js";
-
-const resizeImage = (file: File, maxPx = 240): Promise<string> =>
-  new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const s = Math.min(maxPx / img.width, maxPx / img.height, 1);
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width * s; canvas.height = img.height * s;
-      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL("image/jpeg", 0.78));
-    };
-    img.src = url;
-  });
+import { processAvatar, AvatarBgRemovalError } from "../lib/avatar.js";
 
 const POSITIONS = [
   ["base", "Base"], ["escolta", "Escolta"], ["alero", "Alero"],
@@ -40,6 +26,8 @@ export default function PlayerProfileEditor({ player, onDone }: Props) {
   const [showPwd, setShowPwd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok"|"err"; text: string } | null>(null);
+  const [avatarProgress, setAvatarProgress] = useState<number | null>(null);
+  const [avatarHint, setAvatarHint] = useState<string | null>(null);
   const saveBtn = useRef<HTMLButtonElement>(null);
   const pwdBtn = useRef<HTMLButtonElement>(null);
 
@@ -51,7 +39,25 @@ export default function PlayerProfileEditor({ player, onDone }: Props) {
   const onAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    set("avatar", await resizeImage(file));
+    setAvatarProgress(0); setAvatarHint(null);
+    try {
+      const url = await processAvatar(file, {
+        onProgress: (pct) => setAvatarProgress(pct),
+      });
+      set("avatar", url);
+    } catch (err) {
+      if (err instanceof AvatarBgRemovalError) {
+        // Plain resize fallback so the user keeps their photo.
+        const url = await processAvatar(file, { skipBgRemoval: true });
+        set("avatar", url);
+        setAvatarHint("No se pudo recortar el fondo — foto guardada sin recorte.");
+      } else {
+        setAvatarHint("No se pudo procesar la imagen.");
+      }
+    } finally {
+      setAvatarProgress(null);
+      e.target.value = "";
+    }
   };
 
   const save = async () => {
@@ -115,9 +121,26 @@ export default function PlayerProfileEditor({ player, onDone }: Props) {
             <input type="file" accept="image/*" onChange={onAvatar} className="hidden" />
           </label>
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] uppercase tracking-[0.25em] text-court-muted">Avatar del cromo</p>
           <p className="text-white text-sm">Pulsa el icono para subir o reemplazar tu foto.</p>
+          <p className="text-[10px] text-court-muted mt-1">El fondo se recorta automáticamente.</p>
+          {avatarProgress != null && (
+            <div className="mt-2">
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-150"
+                  style={{
+                    width: `${Math.max(4, Math.round(avatarProgress * 100))}%`,
+                    background: "linear-gradient(90deg, #ff6b00, #ff2d2d)",
+                    boxShadow: "0 0 8px rgba(255,107,0,0.55)",
+                  }} />
+              </div>
+              <p className="text-[10px] text-court-muted mt-1">
+                Procesando imagen… {Math.round(avatarProgress * 100)}%
+              </p>
+            </div>
+          )}
+          {avatarHint && <p className="text-[10px] text-court-warn mt-1">{avatarHint}</p>}
         </div>
       </section>
 

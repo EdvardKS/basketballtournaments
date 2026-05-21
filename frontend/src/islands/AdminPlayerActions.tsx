@@ -7,6 +7,7 @@ import NeonInput from "../components/ui/NeonInput.js";
 import NeonSelect from "../components/ui/NeonSelect.js";
 import NeonSlider from "../components/ui/NeonSlider.js";
 import NeonButton from "../components/ui/NeonButton.js";
+import { loadGsap, prefersReducedMotion } from "../lib/neon.js";
 
 interface Tournament { id: string; name: string }
 interface Props {
@@ -57,15 +58,32 @@ export default function AdminPlayerActions({ player: p, onClose, onChanged }: Pr
     })();
   }, [p.id]);
 
-  // Slide tab indicator on tab change.
+  // Slide tab indicator on tab change. Use a GSAP timeline so left + width
+  // tween together for that satisfying NBA-segment-bar feel.
   useEffect(() => {
     if (!tabBarRef.current || !indicatorRef.current) return;
     const active = tabBarRef.current.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
     if (!active) return;
     const barRect = tabBarRef.current.getBoundingClientRect();
     const r = active.getBoundingClientRect();
-    indicatorRef.current.style.left = `${r.left - barRect.left}px`;
-    indicatorRef.current.style.width = `${r.width}px`;
+    const left = r.left - barRect.left;
+    const width = r.width;
+    if (prefersReducedMotion()) {
+      indicatorRef.current.style.left = `${left}px`;
+      indicatorRef.current.style.width = `${width}px`;
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const gsap = await loadGsap();
+      if (cancelled || !indicatorRef.current) return;
+      gsap.to(indicatorRef.current, {
+        left, width,
+        duration: 0.36,
+        ease: "expo.out",
+      });
+    })();
+    return () => { cancelled = true; };
   }, [tab]);
 
   const wrap = async (fn: () => Promise<void>, ok: string) => {
@@ -198,11 +216,11 @@ export default function AdminPlayerActions({ player: p, onClose, onChanged }: Pr
             </div>
             <NeonButton variant="primary" size="sm" disabled={busy} onClick={grant}>Otorgar premio</NeonButton>
 
-            <ul className="space-y-1.5">
+            <ul className="space-y-1">
               {achievements.filter((a) => a.id).map((a) => {
                 const l = kindLabel[a.kind] ?? { emoji: "🏅", text: a.kind };
                 return (
-                  <li key={a.id} className="flex items-center gap-3 text-xs bg-court-bg/40 border border-court-border rounded px-3 py-2">
+                  <li key={a.id} className="neon-row flex items-center gap-3 text-xs border border-court-border rounded-lg pl-4 pr-2 py-2">
                     <span className="text-lg">{l.emoji}</span>
                     <span className="flex-1">{a.kind === "custom" ? a.label : l.text} · {a.tournamentName} ({a.year})</span>
                     <NeonButton variant="danger" size="sm" onClick={() => revoke(a.id!)}>Revocar</NeonButton>

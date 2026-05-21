@@ -28,7 +28,7 @@ const stats = [
   <!-- Tier badge top-right -->
   <div class="cromo-tier">{theme.tierLabel}</div>
 
-  <!-- Avatar (centered) -->
+  <!-- Avatar (cut-out, transparent) -->
   <div class="cromo-photo">
     {p.avatar ? (
       <img src={p.avatar} alt="" />
@@ -37,8 +37,9 @@ const stats = [
     )}
   </div>
 
-  <!-- Name + stats footer -->
+  <!-- Footer: divider, name, stats -->
   <div class="cromo-footer">
+    <div class="cromo-divider-line" aria-hidden="true"></div>
     <p class="cromo-name">{p.name}</p>
     <div class="cromo-stats">
       {stats.map(([k, v]) => (
@@ -54,124 +55,175 @@ const stats = [
 <style>
   .cromo {
     position: relative;
-    width: 100%;
-    max-width: 320px;
+    width: clamp(260px, 86vw, 340px);
     margin: 0 auto;
-    aspect-ratio: 2 / 3;
-    border-radius: 18px;
+    aspect-ratio: 3 / 4;
+    border-radius: 22px;
     overflow: hidden;
     isolation: isolate;
     color: white;
     box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.06) inset,
-      0 18px 40px -10px rgba(0, 0, 0, 0.55),
-      0 0 40px -10px var(--cromo-glow, transparent);
+      0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+      0 22px 50px -12px rgba(0, 0, 0, 0.65),
+      0 0 50px -10px var(--cromo-glow, transparent);
   }
+
+  /* Background gradient + tier glow + subtle vertical court-line texture */
   .cromo-bg {
     position: absolute; inset: 0;
     background:
       radial-gradient(ellipse at 50% 0%, var(--cromo-c2) 0%, transparent 55%),
+      radial-gradient(ellipse at 50% 100%, var(--cromo-c2) 0%, transparent 60%),
       linear-gradient(160deg, var(--cromo-c1) 0%, var(--cromo-c3) 100%);
     z-index: 0;
   }
+  .cromo-bg::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      105deg,
+      transparent 0 22px,
+      rgba(255, 255, 255, 0.035) 22px 24px
+    );
+    pointer-events: none;
+  }
   .cromo-shine {
     position: absolute; inset: 0;
-    background:
-      repeating-linear-gradient(115deg,
-        transparent 0 14px,
-        rgba(255,255,255,0.04) 14px 16px),
-      radial-gradient(ellipse at 30% 110%, rgba(255,255,255,0.18), transparent 55%);
+    background: radial-gradient(ellipse at 25% 110%, rgba(255,255,255,0.20), transparent 55%);
     mix-blend-mode: screen;
     z-index: 1;
     pointer-events: none;
   }
+
+  /* --- Top corners --- */
   .cromo-corner {
-    position: absolute; top: 14px; left: 16px; z-index: 3;
+    position: absolute; top: 18px; left: 22px; z-index: 3;
     display: flex; flex-direction: column; align-items: center;
-    gap: 2px;
+    gap: 4px;
   }
   .cromo-overall {
     font-family: var(--font-display, "Bebas Neue", sans-serif);
-    font-size: 52px; line-height: 0.85;
+    font-size: 64px;
+    line-height: 0.82;
     font-weight: 900;
     letter-spacing: -0.02em;
-    text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+    text-shadow: 0 3px 14px rgba(0,0,0,0.55);
   }
   .cromo-position {
     font-family: var(--font-display, "Bebas Neue", sans-serif);
-    font-size: 16px; letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.92);
-    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    font-size: 18px;
+    letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.95);
+    margin-top: 4px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.55);
   }
   .cromo-divider {
-    width: 28px; height: 2px; margin-top: 4px;
+    width: 30px; height: 2px;
     background: linear-gradient(90deg, transparent, currentColor, transparent);
-    opacity: 0.5;
+    opacity: 0.55;
+    margin-top: 4px;
   }
+
   .cromo-tier {
-    position: absolute; top: 14px; right: 16px; z-index: 3;
-    font-size: 10px; letter-spacing: 0.3em;
-    padding: 4px 8px;
-    border: 1px solid rgba(255,255,255,0.25);
+    position: absolute; top: 18px; right: 18px; z-index: 3;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    padding: 5px 10px;
+    border: 1px solid rgba(255,255,255,0.28);
     border-radius: 999px;
-    background: rgba(0,0,0,0.25);
+    background: rgba(0,0,0,0.28);
     backdrop-filter: blur(4px);
     text-transform: uppercase;
   }
+
+  /* --- Avatar area (cut-out person on gradient, no card behind) --- */
   .cromo-photo {
-    position: absolute; top: 10%; left: 50%; transform: translateX(-50%);
-    width: 70%; aspect-ratio: 1;
+    position: absolute;
+    top: 13%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 64%;
+    aspect-ratio: 1;
     z-index: 2;
-    display: flex; align-items: center; justify-content: center;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
   }
   .cromo-photo img {
-    width: 100%; height: 100%;
-    object-fit: cover;
-    border-radius: 12px;
-    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.5));
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+    filter:
+      drop-shadow(0 18px 22px rgba(0, 0, 0, 0.55))
+      drop-shadow(0 0 4px rgba(0, 0, 0, 0.4));
   }
   .cromo-photo-fallback {
-    width: 100%; height: 100%;
-    border-radius: 12px;
-    background: rgba(255,255,255,0.08);
+    width: 76%;
+    aspect-ratio: 1;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
     display: flex; align-items: center; justify-content: center;
     font-family: var(--font-display, "Bebas Neue", sans-serif);
-    font-size: 80px; color: rgba(255,255,255,0.55);
+    font-size: 88px; color: rgba(255,255,255,0.55);
   }
+
+  /* --- Footer band: divider line, name, stats grid --- */
   .cromo-footer {
-    position: absolute; left: 0; right: 0; bottom: 0;
-    padding: 14px 16px 18px;
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 14px 20px 22px;
     z-index: 3;
-    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.8) 100%);
+    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.30) 30%, rgba(0,0,0,0.72) 100%);
+  }
+  .cromo-divider-line {
+    width: 70%;
+    height: 1px;
+    margin: 0 auto 14px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
   }
   .cromo-name {
     font-family: var(--font-display, "Bebas Neue", sans-serif);
-    font-size: 22px; line-height: 1;
-    letter-spacing: 0.04em;
+    font-size: 22px;
+    line-height: 1;
+    letter-spacing: 0.05em;
     text-align: center;
-    margin: 0 0 10px;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    margin: 0 0 14px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.55);
+    text-transform: uppercase;
+    color: #fff;
   }
   .cromo-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 4px 14px;
-    text-align: center;
+    gap: 6px 8px;
   }
   .cromo-stat {
-    display: flex; align-items: baseline; justify-content: center; gap: 4px;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 4px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px;
     font-family: var(--font-display, "Bebas Neue", sans-serif);
   }
   .cromo-stat-val {
-    font-size: 18px; font-weight: 800;
+    font-size: 22px;
+    font-weight: 800;
     color: #fff;
+    line-height: 1;
   }
   .cromo-stat-key {
-    font-size: 10px; letter-spacing: 0.12em;
+    font-size: 10px;
+    letter-spacing: 0.18em;
     color: rgba(255,255,255,0.7);
   }
 
-  /* Tier palettes (one per year). v5+ collapses everything beyond year 4. */
+  /* --- Tier palettes (one per year) --- */
   .frame-v1 {
     --cromo-c1: #4a4035;
     --cromo-c2: #c08a4b;

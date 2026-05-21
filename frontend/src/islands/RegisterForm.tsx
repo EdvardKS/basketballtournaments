@@ -1,21 +1,7 @@
 import { useMemo, useState } from "react";
 import { api, ApiError } from "../lib/api.js";
 import NeonField from "./auth/NeonField.js";
-
-const resizeImage = (file: File, maxPx = 200): Promise<string> =>
-  new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const s = Math.min(maxPx / img.width, maxPx / img.height, 1);
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width * s; canvas.height = img.height * s;
-      canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL("image/jpeg", 0.72));
-    };
-    img.src = url;
-  });
+import { processAvatar, AvatarBgRemovalError } from "../lib/avatar.js";
 
 const IconUser = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -76,6 +62,8 @@ export default function RegisterForm({ nextUrl, joinTournamentId }: Props) {
   const [confirm, setConfirm] = useState("");
   const [gdpr, setGdpr] = useState(false);
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [avatarProgress, setAvatarProgress] = useState<number | null>(null);
+  const [avatarHint, setAvatarHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shake, setShake] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -85,7 +73,25 @@ export default function RegisterForm({ nextUrl, joinTournamentId }: Props) {
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setAvatar(await resizeImage(file));
+    if (!file) return;
+    setAvatarProgress(0); setAvatarHint(null);
+    try {
+      const url = await processAvatar(file, {
+        onProgress: (pct) => setAvatarProgress(pct),
+      });
+      setAvatar(url);
+    } catch (err) {
+      if (err instanceof AvatarBgRemovalError) {
+        const url = await processAvatar(file, { skipBgRemoval: true });
+        setAvatar(url);
+        setAvatarHint("No se pudo recortar el fondo — foto guardada sin recorte.");
+      } else {
+        setAvatarHint("No se pudo procesar la imagen.");
+      }
+    } finally {
+      setAvatarProgress(null);
+      e.target.value = "";
+    }
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -227,6 +233,23 @@ export default function RegisterForm({ nextUrl, joinTournamentId }: Props) {
               {avatar ? "Cambiar foto" : "Subir foto de perfil"}
             </label>
           </div>
+          <p className="text-[10px] text-court-muted mt-1.5">El fondo se recorta automáticamente.</p>
+          {avatarProgress != null && (
+            <div className="mt-1.5">
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-150"
+                  style={{
+                    width: `${Math.max(4, Math.round(avatarProgress * 100))}%`,
+                    background: "linear-gradient(90deg, #ff6b00, #ff2d2d)",
+                    boxShadow: "0 0 8px rgba(255,107,0,0.55)",
+                  }} />
+              </div>
+              <p className="text-[10px] text-court-muted mt-1">
+                Procesando imagen… {Math.round(avatarProgress * 100)}%
+              </p>
+            </div>
+          )}
+          {avatarHint && <p className="text-[10px] text-court-warn mt-1">{avatarHint}</p>}
         </div>
       </div>
 
