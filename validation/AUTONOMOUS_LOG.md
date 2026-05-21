@@ -71,3 +71,15 @@ Append-only narrative of what each hourly self-run actually did. Keep it terse �
 **Commit:** `(this push)` — log only.
 
 **Next:** keep waiting. Once the live tournament moves to `completed` (or the admin soft-deletes it), the next wake-up will reach `tournament/create` and we'll find out what the remaining failure modes look like.
+
+## 2026-05-21 18:28 Z
+
+**Did:** Pulled, ran suite.
+
+**Found:** Still blocked. `LK-46251` remains `status=setup` after 3 hours. Run JSON: `validation/runs/run-2026-05-21T18-28-39-427Z.json`. 2 OK / 3.
+
+**Fixed:** Nothing.
+
+**Commit:** `(this push)` — log only.
+
+**Next:** keep the watch. No code changes warranted.
