@@ -6,7 +6,7 @@ import type { Match, MatchStage } from "../lib/types.js";
 // admin can set / nudge a start time before matchday — even KO slots where
 // the teams aren't bound yet (we show the seed label "1º Grupo A", "Ganador
 // SF 1", etc.).
-interface Props { tournamentId: string; matches: Match[] }
+interface Props { tournamentId: string; matches: Match[]; matchDate: string | null }
 
 const STAGE_ORDER: Record<MatchStage, number> = {
   group: 0, eighth: 1, quarterfinal: 2, semifinal: 3, final: 4, third_place: 5,
@@ -24,7 +24,7 @@ const sideLabel = (
   teamName: string | undefined | null, seed: string | null | undefined,
 ): string => teamName ?? seed ?? "Por definir";
 
-export default function AdminScheduleConfirm({ matches }: Props) {
+export default function AdminScheduleConfirm({ matches, matchDate }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTime, setEditTime] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -51,11 +51,12 @@ export default function AdminScheduleConfirm({ matches }: Props) {
 
   const saveTime = async (matchId: string) => {
     if (!editTime) return;
+    if (!matchDate) { setMsg("Falta el día del torneo (Configuración)"); return; }
     setLoading(true); setMsg(null);
     try {
-      // <input type="datetime-local"> emits a naive local time. Convert it
-      // to ISO so the server gets a deterministic value.
-      const iso = new Date(editTime).toISOString();
+      // Input is HH:MM only; the date comes from the tournament's matchDate
+      // so the admin never has to retype something the system already knows.
+      const iso = new Date(`${matchDate}T${editTime}:00`).toISOString();
       await api(`/matches/${matchId}/time`, {
         method: "PATCH",
         body: JSON.stringify({ scheduledAt: iso }),
@@ -113,8 +114,9 @@ export default function AdminScheduleConfirm({ matches }: Props) {
                   {editing ? (
                     <div className="flex items-center gap-1">
                       <input
-                        type="datetime-local"
-                        className="input-field !py-1 !px-2 text-xs w-44"
+                        type="time"
+                        step={60}
+                        className="input-field !py-1 !px-2 text-xs w-24"
                         value={editTime}
                         onChange={(e) => setEditTime(e.target.value)}
                       />
@@ -140,16 +142,16 @@ export default function AdminScheduleConfirm({ matches }: Props) {
                       onClick={() => {
                         setEditingId(m.id);
                         const seed = m.scheduledAt
-                          ? new Date(m.scheduledAt).toISOString().slice(0, 16)
-                          : "";
+                          ? new Date(m.scheduledAt).toLocaleTimeString("es-ES",
+                              { hour: "2-digit", minute: "2-digit", hour12: false })
+                          : "09:00";
                         setEditTime(seed);
                       }}
-                      className="text-xs px-2 py-1 rounded hover:bg-white/5 text-court-accent shrink-0"
+                      className="text-xs px-2 py-1 rounded hover:bg-white/5 text-court-accent shrink-0 tabular-nums"
                     >
                       {m.scheduledAt
-                        ? new Date(m.scheduledAt).toLocaleString("es-ES", {
-                            day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
-                          })
+                        ? new Date(m.scheduledAt).toLocaleTimeString("es-ES",
+                            { hour: "2-digit", minute: "2-digit" })
                         : "+ asignar hora"}
                     </button>
                   )}

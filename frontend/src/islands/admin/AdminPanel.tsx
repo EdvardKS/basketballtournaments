@@ -444,7 +444,7 @@ function TabContent({
           Define la hora de cada partido. Los jugadores la verán publicada en
           la página del torneo en cuanto la guardes.
         </p>
-        <AdminScheduleConfirm tournamentId={tournament.id} matches={matches} />
+        <AdminScheduleConfirm tournamentId={tournament.id} matches={matches} matchDate={tournament.matchDate} />
       </div>
     );
   }
@@ -464,7 +464,7 @@ function TabContent({
         </div>
         <div className="glass p-4 sm:p-6 self-start">
           <h3 className="font-hero text-xl text-white mb-4">Horario de partidos</h3>
-          <AdminScheduleConfirm tournamentId={tournament.id} matches={matches} />
+          <AdminScheduleConfirm tournamentId={tournament.id} matches={matches} matchDate={tournament.matchDate} />
         </div>
       </div>
     );
