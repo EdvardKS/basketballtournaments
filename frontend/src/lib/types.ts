@@ -36,6 +36,15 @@ export interface Achievement {
   awardedAt: string | null;
 }
 
+export interface TournamentPhoto {
+  id: string;
+  tournamentId: string;
+  image: string;
+  caption: string | null;
+  uploadedBy: string | null;
+  uploadedAt: string;
+}
+
 // Minimum visible info when anonymous
 export interface PublicPlayer {
   id: string; avatar: string | null; position: string; overall: number;

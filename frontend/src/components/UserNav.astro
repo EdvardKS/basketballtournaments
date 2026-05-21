@@ -11,12 +11,17 @@ const role = player.role;
 interface Action { label: string; href: string }
 const ACTIONS: Record<string, Action[]> = {
   admin: [
-    { label: "Mi Panel", href: "/dashboard/admin" },
+    { label: "Mi Panel",  href: "/dashboard/admin" },
+    { label: "Usuarios",  href: "/dashboard/usuarios" },
+    { label: "Historial", href: "/dashboard/historial" },
   ],
   captain: [
-    { label: "Mi Panel", href: "/dashboard/captain" },
+    { label: "Mi Panel",  href: "/dashboard/captain" },
+    { label: "Mi Equipo", href: "/dashboard/equipo" },
   ],
-  player: [],
+  player: [
+    { label: "Mi Panel",  href: "/dashboard/player" },
+  ],
 };
 
 const actions = ACTIONS[role] ?? [];

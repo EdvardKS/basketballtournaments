@@ -1,0 +1,24 @@
+---
+import Main from "../../layouts/Main.astro";
+import AdminHistorial from "../../islands/AdminHistorial.tsx";
+import { requireRole } from "../../lib/session.js";
+import { api, getCookieHeader } from "../../lib/api.js";
+import type { Tournament } from "../../lib/types.js";
+
+const { redirect, session } = await requireRole(Astro.request, "admin");
+if (redirect) return Astro.redirect(redirect);
+
+const cookie = getCookieHeader(Astro.request);
+let tournaments: Tournament[] = [];
+try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
+---
+<Main title="Historial de torneos" player={session.player}>
+  <div class="max-w-7xl mx-auto px-4 py-8 space-y-4">
+    <div>
+      <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-orange)] font-bold mb-1">Historial</p>
+      <h1 class="font-hero text-3xl text-white leading-none">EDICIONES <span class="text-neon-orange">PASADAS</span></h1>
+      <p class="text-court-muted text-sm mt-2">Selecciona una edición para ver grupos, eliminatorias y subir fotos a la galería pública.</p>
+    </div>
+    <AdminHistorial tournaments={tournaments} client:load />
+  </div>
+</Main>

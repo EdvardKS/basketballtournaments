@@ -1,0 +1,58 @@
+---
+import Main from "../../layouts/Main.astro";
+import DraftBoard from "../../islands/DraftBoard.js";
+import CaptainTeamPicker, { type CaptainTeam } from "../../islands/CaptainTeamPicker.tsx";
+import { requireRole } from "../../lib/session.js";
+import { api, getCookieHeader } from "../../lib/api.js";
+import type { Tournament } from "../../lib/types.js";
+
+const { redirect, session } = await requireRole(Astro.request, "captain");
+if (redirect) return Astro.redirect(redirect);
+
+const cookie = getCookieHeader(Astro.request);
+const player = session.player!;
+
+let tournaments: Tournament[] = [];
+try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
+const active = tournaments.find((t) => !["completed","upcoming"].includes(t.status)) ?? null;
+const isDraft = active?.status === "draft";
+
+let captainTeams: CaptainTeam[] = [];
+try { captainTeams = await api<CaptainTeam[]>(`/players/${player.id}/captain-teams`, {}, cookie); } catch { /* empty */ }
+
+const activeTeam = active ? captainTeams.find((t) => t.tournamentId === active.id) ?? null : null;
+---
+<Main title="Mi equipo" player={player}>
+  <div class="max-w-5xl mx-auto px-4 py-8 space-y-6">
+    <div>
+      <h1 class="font-display text-4xl text-white">Mi equipo</h1>
+      <p class="text-court-muted text-sm">Configuración del equipo y draft.</p>
+    </div>
+
+    <CaptainTeamPicker teams={captainTeams} selfPlayerId={player.id} client:load />
+
+    {active && (
+      <section class="space-y-3">
+        <div class="flex items-center gap-3">
+          <h2 class="font-display text-2xl text-white">{active.name}</h2>
+          <a href={`/tournaments/${active.id}`} class="btn-ghost text-xs">Ver torneo</a>
+        </div>
+        {isDraft && (
+          <div>
+            <h3 class="font-display text-xl text-white mb-3">Draft en vivo</h3>
+            <DraftBoard
+              tournamentId={active.id}
+              myTeamId={activeTeam?.teamId ?? null}
+              client:load
+            />
+          </div>
+        )}
+        {!isDraft && !activeTeam && (
+          <div class="card text-center py-6">
+            <p class="text-court-muted text-sm">El administrador te asignará un equipo cuando comience el draft.</p>
+          </div>
+        )}
+      </section>
+    )}
+  </div>
+</Main>

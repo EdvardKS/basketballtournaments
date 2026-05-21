@@ -13,8 +13,24 @@ import {
 } from "../services/registrations.js";
 import { listTeamsForTournament } from "../services/teams.js";
 import { exportTournamentRegistrationsCsv } from "../services/registration-backup.js";
+import { listPhotos, uploadPhoto, deletePhoto } from "../services/tournament-photos.js";
 
 export const tournamentsRouter = Router();
+
+tournamentsRouter.get("/:id/photos", asyncRoute(async (req, res) => {
+  res.json(await listPhotos(req.params.id));
+}));
+
+tournamentsRouter.post("/:id/photos", requireRole("admin"), asyncRoute(async (req, res) => {
+  const uploaderId = req.session!.playerId!;
+  const photo = await uploadPhoto(req.params.id, uploaderId, req.body);
+  res.status(201).json(photo);
+}));
+
+tournamentsRouter.delete("/:id/photos/:photoId", requireRole("admin"), asyncRoute(async (req, res) => {
+  await deletePhoto(req.params.photoId);
+  res.status(204).end();
+}));
 
 tournamentsRouter.get("/", asyncRoute(async (_req, res) => {
   res.json(await listTournaments());
