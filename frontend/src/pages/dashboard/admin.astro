@@ -1,6 +1,7 @@
 ---
 import Main from "../../layouts/Main.astro";
 import AdminPanel from "../../islands/admin/AdminPanel.js";
+import AdminUsersManager from "../../islands/AdminUsersManager.tsx";
 import { requireRole } from "../../lib/session.js";
 import { api, getCookieHeader } from "../../lib/api.js";
 import { computeEffectiveStatus } from "../../lib/display.js";
@@ -27,15 +28,25 @@ const initialActive =
   null;
 ---
 <Main title="Panel admin" player={session.player}>
-  <div class="max-w-7xl mx-auto px-4 py-8">
-    <div class="mb-4 flex justify-end">
-      <a href="/dashboard/usuarios" class="btn-ghost text-xs">Gestión de usuarios →</a>
-    </div>
+  <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
     <AdminPanel
       tournaments={tournaments}
       initialActiveId={initialActive?.id ?? null}
       allPlayers={allPlayers}
       client:load
     />
+
+    <section class="space-y-3">
+      <div class="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-orange)] font-bold mb-1">Usuarios registrados</p>
+          <h2 class="font-hero text-3xl text-white leading-none">GESTIÓN <span class="text-neon-orange">GLOBAL</span></h2>
+          <p class="text-court-muted text-sm mt-2">Todos los jugadores, esten o no inscritos en un torneo. Sanciones, premios y CRUD.</p>
+        </div>
+      </div>
+      <div class="card">
+        <AdminUsersManager initial={allPlayers} client:visible />
+      </div>
+    </section>
   </div>
 </Main>
