@@ -1,5 +1,16 @@
 # Validation Status
 
+> **Cron job id**: `5f8cc742` · fires every hour at `:17` local time. Created
+> 2026-05-21 evening. Session-only (the Claude REPL must stay open for it to
+> fire). Auto-expires 7 days from creation.
+
+> **Backend requirement**: the runner hits `http://localhost:4000` by default.
+> Make sure `docker compose -f docker-compose.dev.yml up` (or the prod
+> equivalent) is running, otherwise every run will fail at `admin/login`
+> with `ECONNREFUSED` and the agent will mark the issue as "backend
+> unreachable" without trying to fix it.
+
+
 Single source of truth across hourly self-runs. **Always read this file first**, then act, then update it.
 
 ## How to use this file (for the agent on every wake-up)
