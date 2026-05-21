@@ -124,6 +124,10 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
     try {
       const d = await api<TournamentDetail>(`/tournaments/${selectedId}`);
       setDetail(d);
+      // Keep the tournaments list in sync with the freshly-fetched data so
+      // `selected` reflects the latest bracketLockedAt / format / size etc.
+      setTournaments((list) =>
+        list.map((t) => t.id === d.tournament.id ? d.tournament : t));
     } catch { setDetail(null); }
     try {
       const m = await api<Match[]>(`/matches/tournament/${selectedId}`);
