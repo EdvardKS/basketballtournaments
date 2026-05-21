@@ -56,6 +56,14 @@ Single source of truth across hourly self-runs. **Always read this file first**,
 
 ## Run log
 
+### 2026-05-21 17:28 Z — Wake-up #3
+
+- **Reached step**: `slot/ensure` (blocked).
+- **All OK**: ❌
+- **Steps OK / total**: 2 / 3.
+- **Latest JSON**: `validation/runs/run-2026-05-21T17-28-32-902Z.json`.
+- **Action taken**: none beyond logging. `LK-46251` still in `setup`.
+
 ### 2026-05-21 16:30 Z — Wake-up #2
 
 - **Reached step**: `slot/ensure` (blocked).

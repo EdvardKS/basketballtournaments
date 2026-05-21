@@ -59,3 +59,15 @@ Append-only narrative of what each hourly self-run actually did. Keep it terse �
 **Commit:** `(this push)`
 
 **Next:** loop will stay blocked at `slot/ensure` until the user completes or deletes `LK-46251`. Subsequent wake-ups should keep recording "still blocked" entries without touching anything beyond the log.
+
+## 2026-05-21 17:28 Z
+
+**Did:** Pulled, ran the suite.
+
+**Found:** Same blocker. `LK-46251` is still `status=setup`. Run JSON: `validation/runs/run-2026-05-21T17-28-32-902Z.json`. 2 OK / 3 steps.
+
+**Fixed:** Nothing — per contract, I do not touch user-owned state.
+
+**Commit:** `(this push)` — log only.
+
+**Next:** keep waiting. Once the live tournament moves to `completed` (or the admin soft-deletes it), the next wake-up will reach `tournament/create` and we'll find out what the remaining failure modes look like.
