@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>VBL · Validation Dashboard</title>
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --bg2: #141a2c;
+    --border: #21283b;
+    --muted: #7c849a;
+    --text: #e7ecf5;
+    --orange: #ff6b00;
+    --red: #ff2d2d;
+    --blue: #3aa0ff;
+    --green: #16d39b;
+    --gold: #f5c518;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: radial-gradient(ellipse at top, #1a2236 0%, #0b0f1a 60%);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--border);
+    background:
+      linear-gradient(180deg, rgba(255,107,0,0.06) 0%, transparent 100%),
+      rgba(11, 15, 26, 0.8);
+    position: relative;
+  }
+  header::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,107,0,0.55) 25%, rgba(255,45,45,0.55) 50%, rgba(58,160,255,0.55) 75%, transparent);
+  }
+  h1 { margin: 0; font-size: 28px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 900; }
+  h1 span { color: var(--orange); }
+  .overline { font-size: 11px; letter-spacing: 0.4em; color: var(--orange); font-weight: 700; text-transform: uppercase; margin-bottom: 6px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 32px 80px; }
+  .grid { display: grid; gap: 16px; }
+  .grid.kpis { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .grid.split { grid-template-columns: 1fr 1fr; }
+  .card {
+    background: linear-gradient(180deg, rgba(20,26,44,0.85), rgba(11,15,26,0.95));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: "";
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255,107,0,0.45), transparent);
+  }
+  .kpi-label { font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted); }
+  .kpi-value { font-size: 30px; font-weight: 900; line-height: 1; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi-trend { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .ok    { color: var(--green); }
+  .fail  { color: var(--red); }
+  .warn  { color: var(--gold); }
+  .muted { color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:hover td { background: rgba(255,107,0,0.04); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; }
+  .badge-ok { background: rgba(22,211,155,0.15); color: var(--green); border: 1px solid rgba(22,211,155,0.35); }
+  .badge-fail { background: rgba(255,45,45,0.15); color: var(--red); border: 1px solid rgba(255,45,45,0.35); }
+  details { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 6px 0; }
+  details summary { cursor: pointer; font-weight: 600; }
+  pre { background: #060912; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 11px; overflow-x: auto; }
+  .spark { display: flex; gap: 2px; align-items: end; height: 60px; }
+  .spark > span { flex: 1; min-width: 3px; border-radius: 2px; }
+  .spark > span.ok { background: linear-gradient(180deg, #1bf2b3, #168a64); }
+  .spark > span.fail { background: linear-gradient(180deg, #ff5050, #8b1f1f); }
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .step-list { display: grid; gap: 4px; }
+  .step { display: flex; gap: 8px; align-items: center; padding: 6px 8px; background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 12px; }
+  .step .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .step .dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .step .dot.fail { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .step .name { flex: 1; font-weight: 600; }
+  .step .at { color: var(--muted); font-size: 10px; }
+  button.tab { background: transparent; border: 0; color: var(--muted); padding: 8px 14px; cursor: pointer; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 600; border-bottom: 2px solid transparent; }
+  button.tab.active { color: var(--text); border-bottom-color: var(--orange); }
+  .tabbar { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <p class="overline">VBL · Autonomous Validation</p>
+  <h1>END-TO-END <span>HEALTHCHECK</span></h1>
+  <p class="muted" style="margin-top:6px;font-size:13px">
+    Resultados acumulados de la suite e2e que se ejecuta cada hora contra el
+    backend en vivo. Cada barra del sparkline es una ejecución. Verde = OK,
+    rojo = FAIL.
+  </p>
+</header>
+<main>
+  <div class="tabbar">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="runs">Runs</button>
+    <button class="tab" data-tab="steps">Steps stats</button>
+  </div>
+
+  <section id="tab-overview">
+    <div class="grid kpis" id="kpis"></div>
+    <div class="card" style="margin-top:16px">
+      <p class="kpi-label">Sparkline · últimas 50 ejecuciones</p>
+      <div class="spark" id="spark"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <p class="kpi-label">Última ejecución · pasos</p>
+      <div id="last-steps" class="step-list"></div>
+    </div>
+  </section>
+
+  <section id="tab-runs" hidden>
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th>Run</th><th>Inicio</th><th>Duración</th><th>Pasos OK / total</th><th>Resultado</th>
+        </tr></thead>
+        <tbody id="runs-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-steps" hidden>
+    <div class="card">
+      <p class="kpi-label">Tasa de éxito por paso</p>
+      <table id="steps-table">
+        <thead><tr>
+          <th>Paso</th><th>OK</th><th>FAIL</th><th>Tasa OK</th><th>Último error</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+const fmt = (n) => new Intl.NumberFormat("es").format(n);
+const ms = (n) => {
+  if (n < 1000) return `${n} ms`;
+  if (n < 60000) return `${(n / 1000).toFixed(1)} s`;
+  return `${(n / 60000).toFixed(1)} min`;
+};
+
+const loadIndex = async () => {
+  try {
+    const r = await fetch("./runs/index.json", { cache: "no-store" });
+    if (!r.ok) return [];
+    return await r.json();
+  } catch { return []; }
+};
+const loadRun = async (name) => {
+  try {
+    const r = await fetch(`./runs/${name}`, { cache: "no-store" });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+};
+
+const KPI = (label, value, trend, klass = "") =>
+  `<div class="card"><p class="kpi-label">${label}</p>` +
+  `<p class="kpi-value ${klass}">${value}</p>` +
+  `<p class="kpi-trend">${trend ?? ""}</p></div>`;
+
+const render = async () => {
+  const names = await loadIndex();
+  if (names.length === 0) {
+    document.querySelector("main").innerHTML =
+      `<div class="empty"><h2>Sin ejecuciones todavía</h2><p>El primer run aparecerá aquí en cuanto el runner haya corrido.</p></div>`;
+    return;
+  }
+
+  // Load the 50 newest runs.
+  const recent = names.slice(0, 50);
+  const runs = (await Promise.all(recent.map(loadRun))).filter(Boolean);
+  const last = runs[0];
+
+  const total = runs.length;
+  const okCount = runs.filter((r) => r.allOk).length;
+  const failCount = total - okCount;
+  const successRate = total ? Math.round((okCount / total) * 100) : 0;
+  const avgDuration = total
+    ? runs.reduce((a, r) => a + (r.durationMs ?? 0), 0) / total : 0;
+  const tokenIn = runs.reduce((a, r) => a + (r.tokens?.in ?? 0), 0);
+  const tokenOut = runs.reduce((a, r) => a + (r.tokens?.out ?? 0), 0);
+
+  // KPIs.
+  const kpis = document.getElementById("kpis");
+  kpis.innerHTML =
+    KPI("Tasa OK", successRate + "%",
+      `${okCount} OK · ${failCount} FAIL`,
+      successRate === 100 ? "ok" : successRate >= 70 ? "warn" : "fail")
+    + KPI("Última", last?.allOk ? "OK" : "FAIL",
+      last ? new Date(last.startedAt).toLocaleString() : "",
+      last?.allOk ? "ok" : "fail")
+    + KPI("Duración media", ms(Math.round(avgDuration)), `${total} runs`)
+    + KPI("Bytes IN / OUT", fmt(tokenIn) + " / " + fmt(tokenOut), "Acumulado")
+    + KPI("Pasos por run", String(last?.steps?.length ?? 0), "última");
+
+  // Sparkline.
+  const spark = document.getElementById("spark");
+  spark.innerHTML = runs.slice().reverse().map((r) => {
+    const cls = r.allOk ? "ok" : "fail";
+    const h = Math.max(8, Math.min(60, (r.durationMs / 500)));
+    return `<span class="${cls}" style="height:${h}px" title="${r.runId} · ${ms(r.durationMs)}"></span>`;
+  }).join("");
+
+  // Last run step list.
+  const lastSteps = document.getElementById("last-steps");
+  lastSteps.innerHTML = (last?.steps ?? []).map((s) => {
+    const errTxt = s.ok ? "" : `<pre style="margin:6px 0 0">${escapeHtml(JSON.stringify(s.info, null, 2))}</pre>`;
+    return `<div class="step">
+      <span class="dot ${s.ok ? "ok" : "fail"}"></span>
+      <span class="name">${s.name}</span>
+      <span class="at">${new Date(s.at).toLocaleTimeString()}</span>
+    </div>${errTxt}`;
+  }).join("") || `<p class="muted">Sin pasos.</p>`;
+
+  // Runs table.
+  const tbody = document.getElementById("runs-tbody");
+  tbody.innerHTML = runs.map((r) => {
+    const okSteps = r.steps?.filter((s) => s.ok).length ?? 0;
+    const total = r.steps?.length ?? 0;
+    return `<tr>
+      <td><code>${r.runId.slice(0, 19)}</code></td>
+      <td>${new Date(r.startedAt).toLocaleString()}</td>
+      <td>${ms(r.durationMs)}</td>
+      <td>${okSteps} / ${total}</td>
+      <td>${r.allOk ? '<span class="badge badge-ok">OK</span>' : '<span class="badge badge-fail">FAIL</span>'}</td>
+    </tr>`;
+  }).join("");
+
+  // Steps stats.
+  const stepIndex = {};
+  for (const r of runs) {
+    for (const s of (r.steps ?? [])) {
+      const x = stepIndex[s.name] ??= { ok: 0, fail: 0, lastErr: null };
+      if (s.ok) x.ok++; else { x.fail++; x.lastErr = s.info; }
+    }
+  }
+  const stepsTbody = document.querySelector("#steps-table tbody");
+  stepsTbody.innerHTML = Object.entries(stepIndex).map(([name, st]) => {
+    const total = st.ok + st.fail;
+    const rate = total ? Math.round((st.ok / total) * 100) : 0;
+    const klass = rate === 100 ? "ok" : rate >= 70 ? "warn" : "fail";
+    return `<tr>
+      <td><code>${name}</code></td>
+      <td>${st.ok}</td><td>${st.fail}</td>
+      <td class="${klass}">${rate}%</td>
+      <td>${st.lastErr ? `<details><summary>ver</summary><pre>${escapeHtml(JSON.stringify(st.lastErr, null, 2))}</pre></details>` : "—"}</td>
+    </tr>`;
+  }).join("");
+};
+
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Tab switcher.
+document.querySelectorAll(".tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b === btn));
+    const id = btn.dataset.tab;
+    for (const t of ["overview", "runs", "steps"]) {
+      document.getElementById(`tab-${t}`).hidden = (t !== id);
+    }
+  });
+});
+
+render();
+setInterval(render, 30_000);
+</script>
+</body>
+</html>
