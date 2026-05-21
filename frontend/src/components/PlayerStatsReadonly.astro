@@ -1,0 +1,29 @@
+---
+import type { Player } from "../lib/types.js";
+
+interface Props { player: Player }
+const { player: p } = Astro.props as Props;
+
+const stats: [string, number][] = [
+  ["Ritmo", p.pace], ["Tiro", p.shooting], ["Pase", p.passing],
+  ["Bote", p.dribbling], ["Defensa", p.defense], ["Físico", p.physical],
+];
+const used = stats.reduce((a, [, v]) => a + v, 0);
+const POOL = 240;
+---
+<div class="card space-y-2">
+  <div class="flex items-center justify-between">
+    <p class="label-text">Estadísticas</p>
+    <span class="text-xs font-mono text-court-muted">{used} / {POOL}</span>
+  </div>
+  {stats.map(([label, val]) => (
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-court-muted w-16 shrink-0">{label}</span>
+      <div class="flex-1 h-1.5 bg-court-border rounded-full overflow-hidden">
+        <div class="h-full bg-court-accent rounded-full" style={`width:${Math.min(100, val)}%`} />
+      </div>
+      <span class="text-xs font-bold text-white w-6 text-right">{val}</span>
+    </div>
+  ))}
+  {!p.canEditStats && <p class="text-[10px] text-court-warn">🔒 Stats bloqueadas por admin</p>}
+</div>

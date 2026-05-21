@@ -8,6 +8,7 @@ import { updatePlayerStats, sanctionPlayer } from "../services/player-actions.js
 import { deletePlayer } from "../services/player-delete.js";
 import { getAchievements } from "../services/player-achievements.js";
 import { grantCustom, revokeCustom } from "../services/player-achievements-grant.js";
+import { listCaptainTeams } from "../services/captain-teams.js";
 import { z } from "zod";
 
 export const playersRouter = Router();
@@ -61,6 +62,10 @@ playersRouter.get("/:id/history", requireAuth, asyncRoute(async (req, res) => {
 
 playersRouter.get("/:id/achievements", requireAuth, asyncRoute(async (req, res) => {
   res.json(await getAchievements(req.params.id));
+}));
+
+playersRouter.get("/:id/captain-teams", requireAuth, asyncRoute(async (req, res) => {
+  res.json(await listCaptainTeams(req.params.id));
 }));
 
 playersRouter.post("/:id/achievements", requireRole("admin"), asyncRoute(async (req, res) => {

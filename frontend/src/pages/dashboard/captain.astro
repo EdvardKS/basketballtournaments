@@ -1,14 +1,15 @@
 ---
 import Main from "../../layouts/Main.astro";
-import TeamSettings from "../../islands/TeamSettings.js";
 import DraftBoard from "../../islands/DraftBoard.js";
 import CromoCard from "../../components/cromo/CromoCard.astro";
-import PlayerProfileEditor from "../../islands/PlayerProfileEditor.tsx";
-import PlayerStatsRedistributor from "../../islands/PlayerStatsRedistributor.tsx";
+import PlayerInfoCard from "../../components/PlayerInfoCard.astro";
+import PlayerStatsReadonly from "../../components/PlayerStatsReadonly.astro";
+import PlayerProfileModals from "../../islands/PlayerProfileModals.tsx";
 import CromoShare from "../../islands/CromoShare.tsx";
+import CaptainTeamPicker, { type CaptainTeam } from "../../islands/CaptainTeamPicker.tsx";
 import { requireRole } from "../../lib/session.js";
 import { api, getCookieHeader } from "../../lib/api.js";
-import type { Tournament, Team, Achievement } from "../../lib/types.js";
+import type { Tournament, Achievement } from "../../lib/types.js";
 
 const { redirect, session } = await requireRole(Astro.request, "captain");
 if (redirect) return Astro.redirect(redirect);
@@ -17,84 +18,65 @@ const cookie = getCookieHeader(Astro.request);
 const player = session.player!;
 
 let tournaments: Tournament[] = [];
-let myTeam: Team | null = null;
-
 try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
-
 const active = tournaments.find((t) => !["completed","upcoming"].includes(t.status)) ?? null;
-
-if (active) {
-  try {
-    const detail = await api<{ teams: (Team & { captainId: string })[] }>(`/tournaments/${active.id}`, {}, cookie);
-    myTeam = detail.teams.find((t) => t.captainId === player.id) ?? null;
-  } catch { /* empty */ }
-}
-
 const isDraft = active?.status === "draft";
 
 let achievements: Achievement[] = [];
 try { achievements = await api<Achievement[]>(`/players/${player.id}/achievements`, {}, cookie); } catch { /* empty */ }
+
+let captainTeams: CaptainTeam[] = [];
+try { captainTeams = await api<CaptainTeam[]>(`/players/${player.id}/captain-teams`, {}, cookie); } catch { /* empty */ }
+
+const activeTeam = active ? captainTeams.find((t) => t.tournamentId === active.id) ?? null : null;
 ---
 <Main title="Panel capitán" player={player}>
   <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
     <div>
-      <h1 class="font-display text-4xl text-white">Panel del Capitán</h1>
-      <p class="text-court-muted text-sm">{player.name}</p>
+      <h1 class="font-display text-4xl text-white">Hola, {player.name.split(" ")[0]}</h1>
+      <p class="text-court-muted text-sm">Panel del capitán</p>
     </div>
 
-    {!active && (
-      <div class="card text-center py-12">
-        <p class="text-4xl mb-3">🏀</p>
-        <p class="text-court-muted">No hay torneo activo actualmente</p>
-      </div>
-    )}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <section class="space-y-4">
+        <h2 class="font-display text-2xl text-white">Mi panel</h2>
+
+        <CromoCard player={player} achievements={achievements} />
+        <CromoShare playerName={player.name} playerId={player.id} client:visible />
+
+        <PlayerInfoCard player={player} />
+        <PlayerStatsReadonly player={player} />
+        <PlayerProfileModals player={player} client:visible />
+      </section>
+
+      <section class="space-y-4">
+        <h2 class="font-display text-2xl text-white">Mi equipo</h2>
+        <CaptainTeamPicker teams={captainTeams} selfPlayerId={player.id} client:load />
+      </section>
+    </div>
 
     {active && (
-      <div class="space-y-6">
+      <section class="space-y-3">
         <div class="flex items-center gap-3">
           <h2 class="font-display text-2xl text-white">{active.name}</h2>
           <a href={`/tournaments/${active.id}`} class="btn-ghost text-xs">Ver torneo</a>
         </div>
-
-        {myTeam && (
-          <TeamSettings
-            team={myTeam}
-            matchDate={active.matchDate}
-            selfPlayerId={player.id}
-            client:load
-          />
-        )}
-
         {isDraft && (
           <div>
-            <h3 class="font-display text-2xl text-white mb-3">Draft en vivo</h3>
+            <h3 class="font-display text-xl text-white mb-3">Draft en vivo</h3>
             <DraftBoard
               tournamentId={active.id}
-              myTeamId={myTeam?.id ?? null}
+              myTeamId={activeTeam?.teamId ?? null}
               client:load
             />
           </div>
         )}
-
-        {!isDraft && !myTeam && (
-          <div class="card text-center py-8">
-            <p class="text-court-muted">El administrador te asignará un equipo cuando comience el draft</p>
+        {!isDraft && !activeTeam && (
+          <div class="card text-center py-6">
+            <p class="text-court-muted text-sm">El administrador te asignará un equipo cuando comience el draft.</p>
           </div>
         )}
-      </div>
+      </section>
     )}
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="space-y-4">
-        <h2 class="font-display text-2xl text-white">Mi perfil</h2>
-        <PlayerProfileEditor player={player} client:visible />
-        <PlayerStatsRedistributor player={player} client:visible />
-      </div>
-      <div class="space-y-3">
-        <h2 class="font-display text-2xl text-white">Mi cromo</h2>
-        <CromoCard player={player} achievements={achievements} />
-        <CromoShare playerName={player.name} playerId={player.id} client:visible />
-      </div>
-    </div>
   </div>
 </Main>

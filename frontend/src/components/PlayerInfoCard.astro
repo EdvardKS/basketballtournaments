@@ -1,0 +1,30 @@
+---
+import type { Player } from "../lib/types.js";
+import { POSITION_LABEL } from "../lib/display.js";
+
+interface Props { player: Player }
+const { player: p } = Astro.props as Props;
+---
+<div class="card space-y-2">
+  <p class="label-text">Datos personales</p>
+  <dl class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+    <dt class="text-court-muted text-xs">Nombre</dt>
+    <dd class="text-white truncate">{p.name}</dd>
+    <dt class="text-court-muted text-xs">Posición</dt>
+    <dd class="text-white">{POSITION_LABEL[p.position] ?? p.position}</dd>
+    {p.age != null && (<>
+      <dt class="text-court-muted text-xs">Edad</dt>
+      <dd class="text-white">{p.age} años</dd>
+    </>)}
+    <dt class="text-court-muted text-xs">Móvil</dt>
+    <dd class="text-white">{p.mobile}</dd>
+    {p.email && (<>
+      <dt class="text-court-muted text-xs">Email</dt>
+      <dd class="text-white truncate">{p.email}</dd>
+    </>)}
+    {p.username && (<>
+      <dt class="text-court-muted text-xs">Usuario</dt>
+      <dd class="text-white truncate">{p.username}</dd>
+    </>)}
+  </dl>
+</div>
