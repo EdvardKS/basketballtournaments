@@ -1,50 +1,52 @@
 ---
 import type { Player, Achievement } from "../../lib/types.js";
-import { cromoTier, tierTheme } from "../../lib/cromo.js";
-import { POSITION_LABEL, overallColor } from "../../lib/display.js";
-import CromoMedals from "./CromoMedals.astro";
+import { cromoTier, tierTheme, POSITION_ABBR } from "../../lib/cromo.js";
+import { overallColor } from "../../lib/display.js";
 
-interface Props { player: Player; achievements: Achievement[] }
-const { player: p, achievements } = Astro.props as Props;
+interface Props { player: Player; achievements?: Achievement[] }
+const { player: p } = Astro.props as Props;
 const tier = cromoTier(p.createdAt);
 const theme = tierTheme(tier);
+const positionAbbr = POSITION_ABBR[p.position] ?? p.position.slice(0, 2).toUpperCase();
 
 const stats = [
   ["RIT", p.pace], ["TIR", p.shooting], ["PAS", p.passing],
-  ["BOT", p.dribbling], ["DEF", p.defense], ["FIS", p.physical],
+  ["REG", p.dribbling], ["DEF", p.defense], ["FIS", p.physical],
 ] as const;
 ---
-<div id="cromo-root" class:list={["cromo", theme.frameClass]}
-     style={`--halo:${theme.haloIntensity}`}>
-  <div class="cromo-inner">
-    <div class="flex items-start justify-between mb-3">
-      <div>
-        <p class="text-[10px] text-court-muted uppercase tracking-widest">Tier {theme.tierLabel}</p>
-        <p class="font-display text-lg text-white leading-tight">{p.name}</p>
-        <p class="text-[11px] text-court-muted">{POSITION_LABEL[p.position] ?? p.position}</p>
-      </div>
-      <span class:list={["font-display text-4xl font-bold", overallColor(p.overall)]}>{p.overall}</span>
-    </div>
+<div id="cromo-root" class:list={["cromo", theme.frameClass]}>
+  <div class="cromo-bg" aria-hidden="true"></div>
+  <div class="cromo-shine" aria-hidden="true"></div>
 
-    <div class="flex gap-3 items-center">
-      {p.avatar ? (
-        <img src={p.avatar} alt="" class="w-20 h-20 rounded-xl object-cover border border-court-border shrink-0" />
-      ) : (
-        <div class="w-20 h-20 rounded-xl bg-court-border flex items-center justify-center text-3xl text-court-muted shrink-0">{p.name.charAt(0)}</div>
-      )}
-      <div class="grid grid-cols-3 gap-x-3 gap-y-1 flex-1">
-        {stats.map(([k, v]) => (
-          <div class="flex items-baseline justify-between">
-            <span class="text-[10px] text-court-muted">{k}</span>
-            <span class="text-xs font-bold text-white">{v}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+  <!-- Top-left: overall + position -->
+  <div class="cromo-corner">
+    <div class:list={["cromo-overall", overallColor(p.overall)]}>{p.overall}</div>
+    <div class="cromo-position">{positionAbbr}</div>
+    <div class="cromo-divider"></div>
+  </div>
 
-    <div class="mt-3 border-t border-court-border pt-3">
-      <p class="label-text text-[10px] mb-2">Medallas</p>
-      <CromoMedals achievements={achievements} />
+  <!-- Tier badge top-right -->
+  <div class="cromo-tier">{theme.tierLabel}</div>
+
+  <!-- Avatar (centered) -->
+  <div class="cromo-photo">
+    {p.avatar ? (
+      <img src={p.avatar} alt="" />
+    ) : (
+      <div class="cromo-photo-fallback">{p.name.charAt(0).toUpperCase()}</div>
+    )}
+  </div>
+
+  <!-- Name + stats footer -->
+  <div class="cromo-footer">
+    <p class="cromo-name">{p.name}</p>
+    <div class="cromo-stats">
+      {stats.map(([k, v]) => (
+        <div class="cromo-stat">
+          <span class="cromo-stat-val">{v}</span>
+          <span class="cromo-stat-key">{k}</span>
+        </div>
+      ))}
     </div>
   </div>
 </div>
@@ -52,19 +54,152 @@ const stats = [
 <style>
   .cromo {
     position: relative;
-    border-radius: 1rem;
-    padding: 2px;
-    background: linear-gradient(135deg, var(--cromo-frame-1), var(--cromo-frame-2));
-    box-shadow: 0 0 calc(var(--halo) * 30px) rgba(255, 140, 60, calc(var(--halo) * 0.45));
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    aspect-ratio: 2 / 3;
+    border-radius: 18px;
+    overflow: hidden;
+    isolation: isolate;
+    color: white;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+      0 18px 40px -10px rgba(0, 0, 0, 0.55),
+      0 0 40px -10px var(--cromo-glow, transparent);
   }
-  .cromo-inner {
-    background: var(--color-court-bg);
-    border-radius: 0.9rem;
-    padding: 1rem;
+  .cromo-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 0%, var(--cromo-c2) 0%, transparent 55%),
+      linear-gradient(160deg, var(--cromo-c1) 0%, var(--cromo-c3) 100%);
+    z-index: 0;
   }
-  .frame-v1 { --cromo-frame-1: #4a5260; --cromo-frame-2: #2a3140; }
-  .frame-v2 { --cromo-frame-1: #6b86c9; --cromo-frame-2: #38477a; }
-  .frame-v3 { --cromo-frame-1: #c2a44a; --cromo-frame-2: #75582a; }
-  .frame-v4 { --cromo-frame-1: #d96b32; --cromo-frame-2: #842a0c; }
-  .frame-v5\+ { --cromo-frame-1: #f4d03f; --cromo-frame-2: #c7331c; }
+  .cromo-shine {
+    position: absolute; inset: 0;
+    background:
+      repeating-linear-gradient(115deg,
+        transparent 0 14px,
+        rgba(255,255,255,0.04) 14px 16px),
+      radial-gradient(ellipse at 30% 110%, rgba(255,255,255,0.18), transparent 55%);
+    mix-blend-mode: screen;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .cromo-corner {
+    position: absolute; top: 14px; left: 16px; z-index: 3;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 2px;
+  }
+  .cromo-overall {
+    font-family: var(--font-display, "Bebas Neue", sans-serif);
+    font-size: 52px; line-height: 0.85;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+  }
+  .cromo-position {
+    font-family: var(--font-display, "Bebas Neue", sans-serif);
+    font-size: 16px; letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.92);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .cromo-divider {
+    width: 28px; height: 2px; margin-top: 4px;
+    background: linear-gradient(90deg, transparent, currentColor, transparent);
+    opacity: 0.5;
+  }
+  .cromo-tier {
+    position: absolute; top: 14px; right: 16px; z-index: 3;
+    font-size: 10px; letter-spacing: 0.3em;
+    padding: 4px 8px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 999px;
+    background: rgba(0,0,0,0.25);
+    backdrop-filter: blur(4px);
+    text-transform: uppercase;
+  }
+  .cromo-photo {
+    position: absolute; top: 10%; left: 50%; transform: translateX(-50%);
+    width: 70%; aspect-ratio: 1;
+    z-index: 2;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cromo-photo img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    border-radius: 12px;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.5));
+  }
+  .cromo-photo-fallback {
+    width: 100%; height: 100%;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display, "Bebas Neue", sans-serif);
+    font-size: 80px; color: rgba(255,255,255,0.55);
+  }
+  .cromo-footer {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 14px 16px 18px;
+    z-index: 3;
+    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.8) 100%);
+  }
+  .cromo-name {
+    font-family: var(--font-display, "Bebas Neue", sans-serif);
+    font-size: 22px; line-height: 1;
+    letter-spacing: 0.04em;
+    text-align: center;
+    margin: 0 0 10px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  .cromo-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px 14px;
+    text-align: center;
+  }
+  .cromo-stat {
+    display: flex; align-items: baseline; justify-content: center; gap: 4px;
+    font-family: var(--font-display, "Bebas Neue", sans-serif);
+  }
+  .cromo-stat-val {
+    font-size: 18px; font-weight: 800;
+    color: #fff;
+  }
+  .cromo-stat-key {
+    font-size: 10px; letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.7);
+  }
+
+  /* Tier palettes (one per year). v5+ collapses everything beyond year 4. */
+  .frame-v1 {
+    --cromo-c1: #4a4035;
+    --cromo-c2: #c08a4b;
+    --cromo-c3: #1c150f;
+    --cromo-glow: rgba(192, 138, 75, 0.45);
+  }
+  .frame-v2 {
+    --cromo-c1: #2a3450;
+    --cromo-c2: #7c8aae;
+    --cromo-c3: #0d1422;
+    --cromo-glow: rgba(124, 138, 174, 0.45);
+  }
+  .frame-v3 {
+    --cromo-c1: #563a0c;
+    --cromo-c2: #f5c518;
+    --cromo-c3: #1a1206;
+    --cromo-glow: rgba(245, 197, 24, 0.55);
+  }
+  .frame-v4 {
+    --cromo-c1: #0d3a2b;
+    --cromo-c2: #16d39b;
+    --cromo-c3: #04150f;
+    --cromo-glow: rgba(22, 211, 155, 0.5);
+  }
+  .frame-v5\+ {
+    --cromo-c1: #2a0d5a;
+    --cromo-c2: #d34ce0;
+    --cromo-c3: #07041a;
+    --cromo-glow: rgba(211, 76, 224, 0.55);
+  }
 </style>

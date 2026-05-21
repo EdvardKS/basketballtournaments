@@ -39,3 +39,10 @@ export const kindLabel: Record<string, { emoji: string; text: string }> = {
   mvp:          { emoji: "⭐", text: "MVP" },
   custom:       { emoji: "🏅", text: "Premio" },
 };
+
+export const POSITION_ABBR: Record<string, string> = {
+  base: "BA", escolta: "ES", alero: "AL",
+  "ala-pivot": "AP", pivot: "PI",
+};
+
+export const STAT_ABBR = ["RIT", "TIR", "PAS", "REG", "DEF", "FIS"] as const;

@@ -2,6 +2,7 @@
 import Main from "../../layouts/Main.astro";
 import DraftBoard from "../../islands/DraftBoard.js";
 import CromoCard from "../../components/cromo/CromoCard.astro";
+import CromoMedals from "../../components/cromo/CromoMedals.astro";
 import PlayerInfoCard from "../../components/PlayerInfoCard.astro";
 import PlayerStatsReadonly from "../../components/PlayerStatsReadonly.astro";
 import PlayerProfileModals from "../../islands/PlayerProfileModals.tsx";
@@ -41,8 +42,13 @@ const activeTeam = active ? captainTeams.find((t) => t.tournamentId === active.i
       <section class="space-y-4">
         <h2 class="font-display text-2xl text-white">Mi panel</h2>
 
-        <CromoCard player={player} achievements={achievements} />
+        <CromoCard player={player} />
         <CromoShare playerName={player.name} playerId={player.id} client:visible />
+
+        <div class="card space-y-2">
+          <p class="label-text">Medallas</p>
+          <CromoMedals achievements={achievements} />
+        </div>
 
         <PlayerInfoCard player={player} />
         <PlayerStatsReadonly player={player} />
