@@ -1,11 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api.js";
 import type { Player, Role } from "../lib/types.js";
+import NeonInput from "../components/ui/NeonInput.js";
+import NeonSelect from "../components/ui/NeonSelect.js";
+import NeonButton from "../components/ui/NeonButton.js";
+import NeonModal from "../components/ui/NeonModal.js";
+import { useRevealStagger } from "../lib/neon.js";
 import AdminPlayerActions from "./AdminPlayerActions.js";
 
 interface Props { initial: Player[] }
-
 const PAGE = 25;
+
+type DeleteTarget = { player: Player; hard: boolean } | null;
 
 export default function AdminUsersManager({ initial }: Props) {
   const [players, setPlayers] = useState<Player[]>(initial);
@@ -14,13 +20,14 @@ export default function AdminUsersManager({ initial }: Props) {
   const [showArchived, setShowArchived] = useState(false);
   const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<Player | null>(null);
+  const [del, setDel] = useState<DeleteTarget>(null);
+  const [delConfirm, setDelConfirm] = useState("");
+  const [delBusy, setDelBusy] = useState(false);
+  const [delErr, setDelErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   const refresh = async () => {
-    try {
-      const list = await api<Player[]>("/players");
-      setPlayers(list);
-    } catch { /* keep stale */ }
+    try { setPlayers(await api<Player[]>("/players")); } catch { /* keep stale */ }
   };
 
   const filtered = useMemo(() => {
@@ -38,70 +45,91 @@ export default function AdminUsersManager({ initial }: Props) {
   const view = filtered.slice(page * PAGE, page * PAGE + PAGE);
   useEffect(() => { if (page >= pages) setPage(pages - 1); }, [page, pages]);
 
-  const onDelete = async (p: Player, hard = false) => {
-    const word = hard ? "HARD" : "SOFT";
-    const ans = prompt(`Escribe ${word} para confirmar eliminación de ${p.name}.`);
-    if (ans !== word) return;
+  const containerRef = useRevealStagger([view.length, q, roleFilter, showArchived]);
+
+  const openDelete = (player: Player, hard: boolean) => {
+    setDel({ player, hard }); setDelConfirm(""); setDelErr(null);
+  };
+  const closeDelete = () => { setDel(null); setDelConfirm(""); setDelErr(null); };
+
+  const confirmDelete = async () => {
+    if (!del) return;
+    const expected = del.hard ? "BORRAR" : "ARCHIVAR";
+    if (delConfirm !== expected) { setDelErr(`Escribe "${expected}" para confirmar.`); return; }
+    setDelBusy(true); setDelErr(null);
     try {
-      await api(`/players/${p.id}${hard ? "?hard=true" : ""}`, { method: "DELETE" });
-      setMsg(`${p.name} eliminado (${hard ? "definitivo" : "archivado"}).`);
+      await api(`/players/${del.player.id}${del.hard ? "?hard=true" : ""}`, { method: "DELETE" });
+      setMsg(`${del.player.name} ${del.hard ? "borrado" : "archivado"}.`);
+      closeDelete();
       await refresh();
     } catch (e) {
       const code = e instanceof ApiError ? e.code : "ERROR";
-      setMsg(`No se pudo eliminar: ${code}.`);
-    }
+      setDelErr(`No se pudo eliminar (${code}).`);
+    } finally { setDelBusy(false); }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 items-end">
-        <label className="flex flex-col text-xs grow">
-          Buscar
-          <input value={q} onChange={(e) => setQ(e.target.value)}
-            className="input-neon !py-2 !text-sm" placeholder="Nombre, móvil, email…" />
-        </label>
-        <label className="flex flex-col text-xs">
-          Rol
-          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as Role | "all")}
-            className="input-neon !py-2 !text-sm">
-            <option value="all">Todos</option>
-            <option value="player">Jugador</option>
-            <option value="captain">Capitán</option>
-            <option value="admin">Admin</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2 text-xs text-court-muted self-end pb-2">
-          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_180px_auto] gap-3 items-end">
+        <NeonInput label="Buscar" value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Nombre, móvil, email…" />
+        <NeonSelect label="Rol" value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value as Role | "all")}>
+          <option value="all">Todos</option>
+          <option value="player">Jugador</option>
+          <option value="captain">Capitán</option>
+          <option value="admin">Admin</option>
+        </NeonSelect>
+        <label className="flex items-center gap-2 text-xs text-court-muted pb-2">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-[var(--color-neon-orange)]" />
           Ver archivados
         </label>
       </div>
 
       {msg && <p className="text-xs text-court-muted">{msg}</p>}
 
-      <div className="overflow-x-auto">
+      <div ref={containerRef} className="overflow-x-auto rounded-lg border border-court-border">
         <table className="w-full text-sm">
-          <thead className="text-[10px] uppercase tracking-wider text-court-muted">
-            <tr><th className="text-left py-2">Jugador</th><th>Rol</th><th>Móvil</th><th>OVR</th><th>Stats</th><th>Estado</th><th></th></tr>
+          <thead className="text-[10px] uppercase tracking-[0.25em] text-court-muted bg-court-bg/60">
+            <tr>
+              <th className="text-left py-2.5 pl-4">Jugador</th>
+              <th>Rol</th>
+              <th>Móvil</th>
+              <th>OVR</th>
+              <th>Stats</th>
+              <th>Estado</th>
+              <th className="pr-4"></th>
+            </tr>
           </thead>
           <tbody>
+            {view.length === 0 && (
+              <tr><td colSpan={7} className="py-10 text-center text-court-muted text-xs">Sin resultados.</td></tr>
+            )}
             {view.map((p) => (
-              <tr key={p.id} className="border-t border-court-border">
-                <td className="py-2 pr-2">
+              <tr key={p.id} data-reveal className="neon-row border-t border-court-border">
+                <td className="py-2 pl-4">
                   <div className="flex items-center gap-2">
-                    {p.avatar ? <img src={p.avatar} alt="" className="w-8 h-8 rounded object-cover" /> :
-                      <div className="w-8 h-8 rounded bg-court-border flex items-center justify-center text-xs">{p.name.charAt(0)}</div>}
+                    {p.avatar ? (
+                      <img src={p.avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-court-border" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-court-border flex items-center justify-center text-xs text-white/70">{p.name.charAt(0)}</div>
+                    )}
                     <span className="text-white">{p.name}</span>
                   </div>
                 </td>
-                <td className="text-center">{p.role}</td>
+                <td className="text-center">
+                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border border-court-border text-court-muted">{p.role}</span>
+                </td>
                 <td className="text-center text-court-muted text-xs">{p.mobile}</td>
-                <td className="text-center font-bold">{p.role === "admin" ? "—" : p.overall}</td>
+                <td className="text-center font-display text-base">{p.role === "admin" ? "—" : p.overall}</td>
                 <td className="text-center">{p.role === "admin" ? "—" : (p.canEditStats ? "🔓" : "🔒")}</td>
-                <td className="text-center text-xs">{p.archivedAt ? "Archivado" : "Activo"}</td>
-                <td className="text-right space-x-1">
-                  <button onClick={() => setEditing(p)} className="chip text-xs">Editar</button>
-                  <button onClick={() => onDelete(p, false)} className="chip text-xs">Archivar</button>
-                  <button onClick={() => onDelete(p, true)} className="chip text-xs text-court-warn">Borrar</button>
+                <td className="text-center text-[10px] uppercase tracking-widest">{p.archivedAt ? <span className="text-court-warn">Archivado</span> : <span className="text-court-ok">Activo</span>}</td>
+                <td className="pr-4 text-right whitespace-nowrap">
+                  <div className="inline-flex gap-1">
+                    <NeonButton variant="ghost" size="sm" onClick={() => setEditing(p)} title="Editar">✎</NeonButton>
+                    <NeonButton variant="ghost" size="sm" onClick={() => openDelete(p, false)} title="Archivar">📦</NeonButton>
+                    <NeonButton variant="danger" size="sm" onClick={() => openDelete(p, true)} title="Borrar">🗑</NeonButton>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -111,10 +139,10 @@ export default function AdminUsersManager({ initial }: Props) {
 
       <div className="flex justify-between items-center text-xs text-court-muted">
         <span>{filtered.length} resultados</span>
-        <div className="flex gap-2">
-          <button onClick={() => setPage((p) => Math.max(0, p - 1))} className="chip">«</button>
+        <div className="flex gap-2 items-center">
+          <NeonButton variant="ghost" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>«</NeonButton>
           <span>{page + 1} / {pages}</span>
-          <button onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} className="chip">»</button>
+          <NeonButton variant="ghost" size="sm" disabled={page >= pages - 1} onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}>»</NeonButton>
         </div>
       </div>
 
@@ -123,6 +151,26 @@ export default function AdminUsersManager({ initial }: Props) {
           onClose={() => setEditing(null)}
           onChanged={() => { refresh(); setEditing(null); }} />
       )}
+
+      <NeonModal open={!!del} title={del?.hard ? "Borrar definitivamente" : "Archivar jugador"}
+        subtitle={del?.player.name} onClose={closeDelete} hideCancel>
+        <div className="space-y-3">
+          <p className="text-sm text-court-muted">
+            {del?.hard
+              ? "Esta operación elimina al jugador y todos sus datos asociados (achievements custom, fotos, registros). Solo permitido si nunca fue capitán."
+              : "Archivar oculta al jugador de la lista activa pero conserva su historial. Puedes revertirlo cambiando el filtro."}
+          </p>
+          <NeonInput label={`Escribe ${del?.hard ? '"BORRAR"' : '"ARCHIVAR"'} para confirmar`}
+            value={delConfirm} onChange={(e) => setDelConfirm(e.target.value)} autoFocus
+            error={delErr ?? null} />
+          <div className="flex gap-2 justify-end">
+            <NeonButton variant="ghost" size="sm" disabled={delBusy} onClick={closeDelete}>Cancelar</NeonButton>
+            <NeonButton variant={del?.hard ? "danger" : "primary"} size="sm" disabled={delBusy} onClick={confirmDelete}>
+              {delBusy ? "Eliminando…" : del?.hard ? "Borrar definitivamente" : "Archivar"}
+            </NeonButton>
+          </div>
+        </div>
+      </NeonModal>
     </div>
   );
 }

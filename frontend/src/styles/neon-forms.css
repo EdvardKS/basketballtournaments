@@ -1,0 +1,247 @@
+/* Form + modal extras layered on top of global.css.
+   Imported once from global.css so every page picks it up automatically. */
+
+@keyframes neon-shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-8px); }
+  75%      { transform: translateX(8px); }
+}
+
+@keyframes neon-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 107, 0, 0.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(255, 107, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 107, 0, 0); }
+}
+
+@keyframes neon-pulse-green {
+  0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+@keyframes scan-line {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  50%  { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+@keyframes lock-pulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+/* --- Neon button base --- */
+.neon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 200ms ease, border-color 200ms ease, background 200ms ease;
+  isolation: isolate;
+}
+.neon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.neon-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.neon-btn::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at var(--rx, 50%) var(--ry, 50%), rgba(255,255,255,0.35) 0%, transparent 45%);
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+  z-index: 0;
+}
+.neon-btn:hover::before { opacity: 1; }
+.neon-btn > * { position: relative; z-index: 1; }
+
+.neon-btn-primary {
+  background: linear-gradient(135deg, #ff6b00 0%, #ff2d2d 100%);
+  color: white;
+  border-color: rgba(255, 107, 0, 0.6);
+  box-shadow: 0 0 18px rgba(255, 107, 0, 0.35), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.neon-btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 28px rgba(255, 107, 0, 0.55), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.neon-btn-blue {
+  background: linear-gradient(135deg, #0066ff 0%, #3aa0ff 100%);
+  color: white;
+  border-color: rgba(58, 160, 255, 0.6);
+  box-shadow: 0 0 18px rgba(0, 102, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.25);
+}
+
+.neon-btn-ghost {
+  background: rgba(255,255,255,0.04);
+  color: #c5cbda;
+  border-color: rgba(255,255,255,0.12);
+}
+.neon-btn-ghost:hover:not(:disabled) {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.25);
+  color: #fff;
+}
+
+.neon-btn-danger {
+  background: linear-gradient(135deg, rgba(255,45,45,0.18), rgba(255,45,45,0.05));
+  color: var(--color-neon-red);
+  border-color: rgba(255, 45, 45, 0.4);
+}
+.neon-btn-danger:hover:not(:disabled) {
+  background: rgba(255, 45, 45, 0.18);
+  box-shadow: 0 0 18px rgba(255, 45, 45, 0.35);
+}
+
+.neon-btn-success-burst { animation: neon-pulse-green 0.6s ease-out 1; }
+.neon-btn-error-shake   { animation: shake-x 0.4s ease-in-out 1; }
+
+/* --- Modal --- */
+.neon-modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(5, 8, 16, 0.78);
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  z-index: 60;
+}
+.neon-modal-panel {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, rgba(15,20,32,0.92) 0%, rgba(11,15,26,0.96) 100%);
+  z-index: 61;
+}
+.neon-modal-header {
+  position: relative;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(180deg, rgba(255,107,0,0.06) 0%, transparent 100%),
+    rgba(11, 15, 26, 0.8);
+}
+.neon-modal-header::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,107,0,0.55) 25%, rgba(255,45,45,0.55) 50%, rgba(0,102,255,0.55) 75%, transparent 100%);
+  pointer-events: none;
+}
+
+/* --- Slider --- */
+.neon-slider-track {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+.neon-slider-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #16d39b 0%, #f5c518 60%, #ff6b00 90%, #ff2d2d 100%);
+  border-radius: 999px;
+  transition: width 180ms ease;
+  box-shadow: 0 0 10px rgba(255, 107, 0, 0.35);
+}
+.neon-slider-input {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  margin: 0; padding: 0;
+  opacity: 0; cursor: pointer;
+}
+.neon-slider-input:disabled { cursor: not-allowed; }
+.neon-slider-thumb {
+  position: absolute;
+  top: 50%;
+  width: 18px; height: 18px;
+  margin-left: -9px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 0 0 2px rgba(255,107,0,0.7), 0 0 14px rgba(255,107,0,0.65);
+  transform: translateY(-50%);
+  pointer-events: none;
+  transition: left 180ms ease;
+}
+
+/* --- Drop zone --- */
+.neon-dropzone {
+  position: relative;
+  border: 1.5px dashed rgba(255,107,0,0.35);
+  border-radius: 0.85rem;
+  background: rgba(255,107,0,0.04);
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 200ms ease, background 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+}
+.neon-dropzone:hover {
+  border-color: rgba(255,107,0,0.6);
+  background: rgba(255,107,0,0.07);
+}
+.neon-dropzone.is-active {
+  border-color: rgba(255,107,0,1);
+  background: rgba(255,107,0,0.12);
+  transform: scale(1.015);
+  box-shadow: 0 0 30px rgba(255,107,0,0.35);
+}
+
+/* --- Table row indicator --- */
+.neon-row {
+  position: relative;
+  transition: transform 150ms ease, background 200ms ease;
+}
+.neon-row::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 6px; bottom: 6px;
+  width: 2px;
+  background: var(--color-neon-orange);
+  opacity: 0;
+  transition: opacity 200ms ease;
+  border-radius: 2px;
+}
+.neon-row:hover {
+  background: rgba(255, 107, 0, 0.04);
+  transform: translateX(2px);
+}
+.neon-row:hover::before { opacity: 1; }
+
+/* --- Tab indicator --- */
+.neon-tab-bar { position: relative; }
+.neon-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #ff6b00, #ff2d2d);
+  box-shadow: 0 0 10px rgba(255, 107, 0, 0.7);
+  border-radius: 2px;
+  transition: left 280ms cubic-bezier(0.2, 0.8, 0.2, 1), width 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+
+/* --- Section header --- */
+.neon-section-overline {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: var(--color-neon-orange);
+  margin-bottom: 6px;
+}
+
+/* --- Reduced motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .neon-btn, .neon-row, .neon-dropzone, .neon-slider-fill, .neon-slider-thumb {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import NeonButton from "../components/ui/NeonButton.js";
+import { successBurst } from "../lib/neon.js";
 
 interface Props { playerName: string; playerId: string }
 
@@ -10,14 +12,26 @@ const intentUrl = (kind: "wa" | "tw" | "fb", text: string, url: string): string 
   return `https://www.facebook.com/sharer/sharer.php?u=${u}`;
 };
 
+const IconShare = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" />
+  </svg>
+);
+
 export default function CromoShare({ playerName, playerId }: Props) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const flashRef = useRef<HTMLDivElement>(null);
+  const mainBtn = useRef<HTMLButtonElement>(null);
 
   const captureBlob = async (): Promise<Blob | null> => {
     const target = document.getElementById("cromo-root");
     if (!target) return null;
-    // Dynamic import keeps html2canvas out of the initial bundle.
+    // White flash overlay while the capture runs.
+    if (flashRef.current) {
+      flashRef.current.style.opacity = "0.25";
+      setTimeout(() => { if (flashRef.current) flashRef.current.style.opacity = "0"; }, 90);
+    }
     const mod = await import("html2canvas");
     const canvas = await mod.default(target, { backgroundColor: null, scale: 2 });
     return await new Promise((res) => canvas.toBlob((b) => res(b), "image/png"));
@@ -36,14 +50,16 @@ export default function CromoShare({ playerName, playerId }: Props) {
       const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
       if (nav.canShare && nav.canShare({ files: [file] })) {
         await nav.share({ files: [file], text: shareText, url: shareUrl });
+        successBurst(mainBtn.current);
       } else {
         const u = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = u; a.download = "cromo.png"; a.click();
         URL.revokeObjectURL(u);
         setMsg("Imagen descargada. Súbela a tu red preferida.");
+        successBurst(mainBtn.current);
       }
-    } catch (e) {
+    } catch {
       setMsg("Error al compartir.");
     } finally { setBusy(false); }
   };
@@ -63,17 +79,30 @@ export default function CromoShare({ playerName, playerId }: Props) {
   };
 
   return (
-    <div className="space-y-2">
-      <button disabled={busy} onClick={onShare} className="btn-primary text-xs w-full">
-        {busy ? "Generando…" : "Compartir cromo"}
-      </button>
-      <div className="grid grid-cols-4 gap-2">
-        <button onClick={() => openIntent("wa")} className="btn-ghost text-[10px]">WhatsApp</button>
-        <button onClick={() => openIntent("tw")} className="btn-ghost text-[10px]">Twitter</button>
-        <button onClick={() => openIntent("fb")} className="btn-ghost text-[10px]">Facebook</button>
-        <button onClick={openInstagram} className="btn-ghost text-[10px]">Instagram</button>
+    <>
+      <div ref={flashRef} aria-hidden="true"
+        className="fixed inset-0 bg-white pointer-events-none transition-opacity duration-150 z-[59]"
+        style={{ opacity: 0 }} />
+      <div className="space-y-2">
+        <NeonButton ref={mainBtn} variant="primary" disabled={busy} onClick={onShare} className="w-full">
+          <IconShare /> {busy ? "Generando…" : "Compartir cromo"}
+        </NeonButton>
+        <div className="grid grid-cols-4 gap-2">
+          <button onClick={() => openIntent("wa")} className="neon-btn neon-btn-ghost text-[10px] hover:!border-[#25D366]/70 hover:!text-[#25D366]">
+            WhatsApp
+          </button>
+          <button onClick={() => openIntent("tw")} className="neon-btn neon-btn-ghost text-[10px] hover:!border-[#1DA1F2]/70 hover:!text-[#1DA1F2]">
+            Twitter
+          </button>
+          <button onClick={() => openIntent("fb")} className="neon-btn neon-btn-ghost text-[10px] hover:!border-[#1877F2]/70 hover:!text-[#1877F2]">
+            Facebook
+          </button>
+          <button onClick={openInstagram} className="neon-btn neon-btn-ghost text-[10px] hover:!border-[#E4405F]/70 hover:!text-[#E4405F]">
+            Instagram
+          </button>
+        </div>
+        {msg && <p className="text-[10px] text-court-muted">{msg}</p>}
       </div>
-      {msg && <p className="text-[10px] text-court-muted">{msg}</p>}
-    </div>
+    </>
   );
 }

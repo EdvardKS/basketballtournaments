@@ -1,7 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api.js";
 import type { Player, Achievement } from "../lib/types.js";
 import { kindLabel } from "../lib/cromo.js";
+import NeonModal from "../components/ui/NeonModal.js";
+import NeonInput from "../components/ui/NeonInput.js";
+import NeonSelect from "../components/ui/NeonSelect.js";
+import NeonSlider from "../components/ui/NeonSlider.js";
+import NeonButton from "../components/ui/NeonButton.js";
 
 interface Tournament { id: string; name: string }
 interface Props {
@@ -10,6 +15,12 @@ interface Props {
   onChanged: () => void;
 }
 
+type Tab = "profile" | "stats" | "sanction" | "awards";
+
+const TAB_LABELS: Record<Tab, string> = {
+  profile: "Perfil", stats: "Stats", sanction: "Sanción", awards: "Premios",
+};
+
 const STAT_LABELS = [
   ["pace", "Ritmo"], ["shooting", "Tiro"], ["passing", "Pase"],
   ["dribbling", "Bote"], ["defense", "Defensa"], ["physical", "Físico"],
@@ -17,21 +28,27 @@ const STAT_LABELS = [
 
 export default function AdminPlayerActions({ player: p, onClose, onChanged }: Props) {
   const isAdmin = p.role === "admin";
-  const [tab, setTab] = useState<"profile" | "stats" | "sanction" | "awards">("profile");
+  const tabs: Tab[] = isAdmin ? ["profile", "awards"] : ["profile", "stats", "sanction", "awards"];
+  const [tab, setTab] = useState<Tab>("profile");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok"|"err"; text: string } | null>(null);
+
   const [stats, setStats] = useState({
     pace: p.pace, shooting: p.shooting, passing: p.passing,
     dribbling: p.dribbling, defense: p.defense, physical: p.physical,
   });
   const [profile, setProfile] = useState({
     name: p.name, mobile: p.mobile, email: p.email ?? "",
-    age: p.age ?? "", position: p.position, role: p.role,
+    age: (p.age ?? "") as number | "",
+    position: p.position, role: p.role,
     username: p.username ?? "",
   });
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
-  const [award, setAward] = useState({ kind: "mvp" as "mvp" | "custom", tournamentId: "", label: "", note: "" });
+  const [award, setAward] = useState({ kind: "mvp" as "mvp"|"custom", tournamentId: "", label: "", note: "" });
+
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  const indicatorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -39,6 +56,17 @@ export default function AdminPlayerActions({ player: p, onClose, onChanged }: Pr
       try { setAchievements(await api<Achievement[]>(`/players/${p.id}/achievements`)); } catch { /* */ }
     })();
   }, [p.id]);
+
+  // Slide tab indicator on tab change.
+  useEffect(() => {
+    if (!tabBarRef.current || !indicatorRef.current) return;
+    const active = tabBarRef.current.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
+    if (!active) return;
+    const barRect = tabBarRef.current.getBoundingClientRect();
+    const r = active.getBoundingClientRect();
+    indicatorRef.current.style.left = `${r.left - barRect.left}px`;
+    indicatorRef.current.style.width = `${r.width}px`;
+  }, [tab]);
 
   const wrap = async (fn: () => Promise<void>, ok: string) => {
     setBusy(true); setMsg(null);
@@ -78,108 +106,115 @@ export default function AdminPlayerActions({ player: p, onClose, onChanged }: Pr
     setAchievements(await api<Achievement[]>(`/players/${p.id}/achievements`));
   }, "Premio revocado.");
 
-  const input = "w-full bg-court-bg border border-court-border rounded px-2 py-1 text-sm";
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-      <div className="card w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl text-white">{p.name}</h3>
-          <button onClick={onClose} className="btn-ghost text-xs">Cerrar</button>
-        </div>
-        <nav className="flex gap-1 border-b border-court-border text-xs">
-          {(isAdmin
-            ? (["profile","awards"] as const)
-            : (["profile","stats","sanction","awards"] as const)
-          ).map((k) => (
-            <button key={k} onClick={() => setTab(k)}
-              className={`px-3 py-2 ${tab === k ? "text-white border-b-2 border-[var(--color-neon-orange)]" : "text-court-muted"}`}>
-              {{profile:"Perfil",stats:"Stats",sanction:"Sanción",awards:"Premios"}[k]}
+    <NeonModal open title={p.name} subtitle={`${p.role.toUpperCase()} · OVR ${p.role === "admin" ? "—" : p.overall}`} onClose={onClose}>
+      <div className="space-y-5">
+        <nav ref={tabBarRef} className="neon-tab-bar relative flex gap-1 border-b border-court-border" role="tablist">
+          {tabs.map((k) => (
+            <button key={k} data-tab={k} type="button" role="tab"
+              aria-selected={tab === k}
+              onClick={() => setTab(k)}
+              className={`relative px-4 py-2.5 text-xs uppercase tracking-[0.2em] font-bold transition-colors ${
+                tab === k ? "text-white" : "text-court-muted hover:text-white"
+              }`}>
+              {TAB_LABELS[k]}
             </button>
           ))}
+          <div ref={indicatorRef} className="neon-tab-indicator" style={{ left: 0, width: 0 }} />
         </nav>
 
         {tab === "profile" && (
-          <div className="grid grid-cols-2 gap-2">
-            <input className={input} value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="Nombre" />
-            <input className={input} value={profile.mobile} onChange={(e) => setProfile({ ...profile, mobile: e.target.value })} placeholder="Móvil" />
-            <input className={input} value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} placeholder="Email" />
-            <input className={input} value={profile.username} onChange={(e) => setProfile({ ...profile, username: e.target.value })} placeholder="Usuario" />
-            <input className={input} type="number" value={profile.age} onChange={(e) => setProfile({ ...profile, age: e.target.value as string })} placeholder="Edad" />
-            <input className={input} value={profile.position} onChange={(e) => setProfile({ ...profile, position: e.target.value })} placeholder="Posición" />
-            <select className={`${input} col-span-2`} value={profile.role}
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <NeonInput label="Nombre" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+            <NeonInput label="Móvil" value={profile.mobile} onChange={(e) => setProfile({ ...profile, mobile: e.target.value })} />
+            <NeonInput label="Email" type="email" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} />
+            <NeonInput label="Usuario" value={profile.username} onChange={(e) => setProfile({ ...profile, username: e.target.value })} />
+            <NeonInput label="Edad" type="number" value={profile.age === "" ? "" : String(profile.age)}
+              onChange={(e) => setProfile({ ...profile, age: e.target.value === "" ? "" : Number(e.target.value) })} />
+            <NeonInput label="Posición" value={profile.position} onChange={(e) => setProfile({ ...profile, position: e.target.value })} />
+            <NeonSelect label="Rol" value={profile.role}
               onChange={(e) => setProfile({ ...profile, role: e.target.value as Player["role"] })}>
-              <option value="player">player</option><option value="captain">captain</option><option value="admin">admin</option>
-            </select>
-            <button onClick={saveProfile} disabled={busy} className="btn-primary text-xs col-span-2">Guardar perfil</button>
-          </div>
+              <option value="player">Jugador</option>
+              <option value="captain">Capitán</option>
+              <option value="admin">Admin</option>
+            </NeonSelect>
+            <div className="sm:col-span-2">
+              <NeonButton variant="primary" size="sm" disabled={busy} onClick={saveProfile}>Guardar perfil</NeonButton>
+            </div>
+          </section>
         )}
 
         {tab === "stats" && (
-          <div className="space-y-2">
+          <section className="space-y-3">
             {STAT_LABELS.map(([k, label]) => (
-              <div key={k} className="flex items-center gap-2">
-                <span className="text-xs text-court-muted w-16">{label}</span>
-                <input type="range" min={1} max={99} value={stats[k]} onChange={(e) => setStats({ ...stats, [k]: Number(e.target.value) })} className="flex-1" />
-                <span className="text-xs font-bold w-8 text-right">{stats[k]}</span>
-              </div>
+              <NeonSlider key={k} label={label} min={1} max={99} value={stats[k]}
+                onChange={(v) => setStats({ ...stats, [k]: v })} />
             ))}
-            <div className="flex gap-2">
-              <button onClick={() => setStats({ pace: 40, shooting: 40, passing: 40, dribbling: 40, defense: 40, physical: 40 })} className="btn-ghost text-xs">Restablecer 40</button>
-              <button onClick={saveStats} disabled={busy} className="btn-primary text-xs">Guardar stats</button>
+            <div className="flex gap-2 pt-2">
+              <NeonButton variant="ghost" size="sm" onClick={() => setStats({ pace: 40, shooting: 40, passing: 40, dribbling: 40, defense: 40, physical: 40 })}>
+                Restablecer (40)
+              </NeonButton>
+              <NeonButton variant="primary" size="sm" disabled={busy} onClick={saveStats}>Guardar stats</NeonButton>
             </div>
-          </div>
+          </section>
         )}
 
         {tab === "sanction" && (
-          <div className="space-y-3">
-            <p className="text-sm text-court-muted">Estado actual: <span className={p.canEditStats ? "text-court-ok" : "text-court-warn"}>{p.canEditStats ? "Puede editar stats" : "Bloqueado"}</span></p>
+          <section className="space-y-3">
+            <p className="text-sm text-court-muted">
+              Estado actual: <span className={p.canEditStats ? "text-court-ok" : "text-court-warn"}>{p.canEditStats ? "Puede editar stats" : "Bloqueado"}</span>
+            </p>
             <div className="flex gap-2">
-              <button disabled={busy} onClick={() => toggleSanction(false)} className="btn-ghost text-xs">Bloquear stats</button>
-              <button disabled={busy} onClick={() => toggleSanction(true)} className="btn-primary text-xs">Desbloquear</button>
+              <NeonButton variant="danger" size="sm" disabled={busy} onClick={() => toggleSanction(false)}>Bloquear stats</NeonButton>
+              <NeonButton variant="primary" size="sm" disabled={busy} onClick={() => toggleSanction(true)}>Desbloquear</NeonButton>
             </div>
-          </div>
+          </section>
         )}
 
         {tab === "awards" && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <select className={input} value={award.kind}
+          <section className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <NeonSelect label="Tipo" value={award.kind}
                 onChange={(e) => setAward({ ...award, kind: e.target.value as "mvp" | "custom" })}>
                 <option value="mvp">MVP</option>
                 <option value="custom">Custom</option>
-              </select>
-              <select className={input} value={award.tournamentId}
+              </NeonSelect>
+              <NeonSelect label="Torneo" value={award.tournamentId}
                 onChange={(e) => setAward({ ...award, tournamentId: e.target.value })}>
-                <option value="">— Torneo —</option>
+                <option value="">— Selecciona torneo —</option>
                 {tournaments.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              </NeonSelect>
               {award.kind === "custom" && (
-                <input className={`${input} col-span-2`} value={award.label}
-                  onChange={(e) => setAward({ ...award, label: e.target.value })}
-                  placeholder="Etiqueta (ej. Mejor defensor)" />
+                <div className="sm:col-span-2">
+                  <NeonInput label="Etiqueta" value={award.label}
+                    onChange={(e) => setAward({ ...award, label: e.target.value })}
+                    placeholder="Mejor defensor, MVP del partido…" />
+                </div>
               )}
-              <input className={`${input} col-span-2`} value={award.note}
-                onChange={(e) => setAward({ ...award, note: e.target.value })}
-                placeholder="Nota (opcional)" />
+              <div className="sm:col-span-2">
+                <NeonInput label="Nota (opcional)" value={award.note}
+                  onChange={(e) => setAward({ ...award, note: e.target.value })} />
+              </div>
             </div>
-            <button onClick={grant} disabled={busy} className="btn-primary text-xs">Otorgar</button>
-            <ul className="space-y-1 mt-2">
+            <NeonButton variant="primary" size="sm" disabled={busy} onClick={grant}>Otorgar premio</NeonButton>
+
+            <ul className="space-y-1.5">
               {achievements.filter((a) => a.id).map((a) => {
                 const l = kindLabel[a.kind] ?? { emoji: "🏅", text: a.kind };
                 return (
-                  <li key={a.id ?? `${a.kind}-${a.tournamentId}`} className="flex items-center gap-2 text-xs">
-                    <span>{l.emoji}</span>
+                  <li key={a.id} className="flex items-center gap-3 text-xs bg-court-bg/40 border border-court-border rounded px-3 py-2">
+                    <span className="text-lg">{l.emoji}</span>
                     <span className="flex-1">{a.kind === "custom" ? a.label : l.text} · {a.tournamentName} ({a.year})</span>
-                    {a.id && <button onClick={() => revoke(a.id!)} className="chip text-[10px]">Revocar</button>}
+                    <NeonButton variant="danger" size="sm" onClick={() => revoke(a.id!)}>Revocar</NeonButton>
                   </li>
                 );
               })}
             </ul>
-          </div>
+          </section>
         )}
 
         {msg && <p className={msg.kind === "ok" ? "text-xs text-court-ok" : "text-xs text-court-warn"}>{msg.text}</p>}
       </div>
-    </div>
+    </NeonModal>
   );
 }

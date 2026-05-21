@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { Player } from "../lib/types.js";
+import NeonModal from "../components/ui/NeonModal.js";
+import NeonButton from "../components/ui/NeonButton.js";
 import PlayerProfileEditor from "./PlayerProfileEditor.js";
 import PlayerStatsRedistributor from "./PlayerStatsRedistributor.js";
 
@@ -7,27 +9,18 @@ interface Props { player: Player }
 
 type Modal = null | "profile" | "stats";
 
-function Fullscreen({ title, onClose, children }: {
-  title: string; onClose: () => void; children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex flex-col">
-      <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-court-border bg-court-bg">
-        <h2 className="font-display text-lg text-white">{title}</h2>
-        <div className="flex gap-2">
-          <button onClick={onClose} className="btn-ghost text-xs">Cancelar</button>
-          <button onClick={onClose} aria-label="Cerrar"
-            className="w-9 h-9 rounded-full border border-court-border flex items-center justify-center text-white hover:bg-court-border">✕</button>
-        </div>
-      </header>
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="max-w-2xl mx-auto">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
+const IconPencil = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+const IconGear = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008.91 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 8.91a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+  </svg>
+);
 
 export default function PlayerProfileModals({ player }: Props) {
   const [open, setOpen] = useState<Modal>(null);
@@ -37,23 +30,24 @@ export default function PlayerProfileModals({ player }: Props) {
   return (
     <>
       <div className="flex gap-2 flex-wrap">
-        <button onClick={() => setOpen("profile")} className="btn-primary text-xs">Editar perfil</button>
-        <button onClick={() => setOpen("stats")} disabled={!canEditStats}
-          className="btn-ghost text-xs disabled:opacity-50">
-          {canEditStats ? "Editar stats" : "Stats bloqueadas"}
-        </button>
+        <NeonButton variant="primary" size="sm" onClick={() => setOpen("profile")}>
+          <IconPencil /> Editar perfil
+        </NeonButton>
+        <NeonButton variant={canEditStats ? "blue" : "ghost"} size="sm"
+          disabled={!canEditStats}
+          onClick={() => setOpen("stats")}>
+          <IconGear /> {canEditStats ? "Editar stats" : "Stats bloqueadas"}
+        </NeonButton>
       </div>
 
-      {open === "profile" && (
-        <Fullscreen title="Editar perfil" onClose={close}>
-          <PlayerProfileEditor player={player} />
-        </Fullscreen>
-      )}
-      {open === "stats" && (
-        <Fullscreen title="Editar stats" onClose={close}>
-          <PlayerStatsRedistributor player={player} />
-        </Fullscreen>
-      )}
+      <NeonModal open={open === "profile"} title="Editar perfil"
+        subtitle="Datos personales y contraseña" onClose={close}>
+        <PlayerProfileEditor player={player} onDone={close} />
+      </NeonModal>
+      <NeonModal open={open === "stats"} title="Editar estadísticas"
+        subtitle="Total disponible: 240 puntos · máximo 99 por habilidad" onClose={close}>
+        <PlayerStatsRedistributor player={player} onDone={close} />
+      </NeonModal>
     </>
   );
 }

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import TeamSettings from "./TeamSettings.js";
+import NeonSelect from "../components/ui/NeonSelect.js";
+import { useRevealStagger } from "../lib/neon.js";
 import type { Team } from "../lib/types.js";
 
 export interface CaptainTeam {
@@ -13,8 +15,6 @@ export interface CaptainTeam {
 
 interface Props { teams: CaptainTeam[]; selfPlayerId: string }
 
-// Edits are open until the day before the matchDate, then frozen forever.
-// "completed" tournaments are always frozen.
 const isEditable = (t: CaptainTeam): boolean => {
   if (t.tournamentStatus === "completed") return false;
   if (!t.matchDate) return true;
@@ -37,12 +37,15 @@ export default function CaptainTeamPicker({ teams, selfPlayerId }: Props) {
   const current = useMemo(() =>
     teams.find((t) => t.teamId === picked) ?? teams[0] ?? null, [teams, picked]);
 
+  const containerRef = useRevealStagger([picked]);
+
   if (!current) {
     return (
-      <div className="card text-center py-8">
-        <p className="text-court-muted text-sm">
-          Aún no has capitaneado ningún equipo. Cuando un admin te asigne capitán,
-          tu equipo aparecerá aquí.
+      <div className="card text-center py-10">
+        <div className="text-5xl mb-3">🛡️</div>
+        <p className="font-hero text-2xl text-white">Sin equipos todavía</p>
+        <p className="text-court-muted text-sm mt-2">
+          Cuando un admin te asigne como capitán, tu equipo aparecerá aquí.
         </p>
       </div>
     );
@@ -52,50 +55,54 @@ export default function CaptainTeamPicker({ teams, selfPlayerId }: Props) {
   const showSelect = teams.length > 1;
 
   return (
-    <div className="space-y-3">
+    <div ref={containerRef} className="space-y-4">
       {showSelect && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <label className="text-xs text-court-muted">Edición</label>
-          <select className="input-neon !py-1.5 !text-xs"
-            value={current.teamId}
+        <div data-reveal>
+          <NeonSelect label="Edición" value={current.teamId}
             onChange={(e) => setPicked(e.target.value)}>
             {teams.map((t) => (
               <option key={t.teamId} value={t.teamId}>
                 {t.tournamentName} · {t.matchDate ?? "sin fecha"}
               </option>
             ))}
-          </select>
+          </NeonSelect>
         </div>
       )}
 
       {!editable && (
-        <div className="card border border-court-warn/30 bg-court-warn/5">
-          <p className="text-xs text-court-warn">
-            🔒 Esta configuración está congelada — fue el día del torneo
-            <span className="text-white"> {current.matchDate ?? "(fecha no fijada)"}</span>.
-            Los datos quedan como recuerdo.
-          </p>
+        <div data-reveal className="card border border-court-warn/30 bg-court-warn/5 flex items-start gap-3">
+          <span className="text-2xl" style={{ animation: "lock-pulse 1.4s ease-in-out infinite" }}>🔒</span>
+          <div>
+            <p className="neon-section-overline" style={{ color: "var(--color-court-warn, #f5c518)" }}>Congelado</p>
+            <p className="text-sm text-white">
+              Esta configuración quedó fijada el día del torneo
+              <span className="text-court-muted"> ({current.matchDate ?? "fecha no fijada"})</span>.
+              Se conserva como recuerdo histórico.
+            </p>
+          </div>
         </div>
       )}
 
       {editable ? (
-        <TeamSettings
-          team={toTeam(current)}
-          matchDate={current.matchDate}
-          selfPlayerId={selfPlayerId}
-        />
+        <div data-reveal>
+          <TeamSettings
+            team={toTeam(current)}
+            matchDate={current.matchDate}
+            selfPlayerId={selfPlayerId}
+          />
+        </div>
       ) : (
-        <div className="card space-y-2">
+        <div data-reveal className="card space-y-3">
           <div className="flex items-start gap-3">
             {current.logo ? (
-              <img src={current.logo} alt="" className="w-16 h-16 rounded-xl object-cover border border-court-border" />
+              <img src={current.logo} alt="" className="w-20 h-20 rounded-xl object-cover border border-court-border" />
             ) : (
-              <div className="w-16 h-16 rounded-xl bg-court-border flex items-center justify-center text-2xl text-court-muted">?</div>
+              <div className="w-20 h-20 rounded-xl bg-court-border flex items-center justify-center text-3xl text-court-muted">?</div>
             )}
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-widest text-court-muted">{current.tournamentName}</p>
-              <p className="font-display text-xl text-white truncate">{current.teamName}</p>
-              {current.description && <p className="text-xs text-court-muted mt-1">{current.description}</p>}
+              <p className="neon-section-overline">{current.tournamentName}</p>
+              <p className="font-hero text-2xl text-white truncate leading-none">{current.teamName}</p>
+              {current.description && <p className="text-xs text-court-muted mt-2">{current.description}</p>}
             </div>
           </div>
           {current.whatsappLink && (
