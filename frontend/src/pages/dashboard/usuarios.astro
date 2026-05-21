@@ -1,0 +1,29 @@
+---
+import Main from "../../layouts/Main.astro";
+import AdminUsersManager from "../../islands/AdminUsersManager.tsx";
+import { requireRole } from "../../lib/session.js";
+import { api, getCookieHeader } from "../../lib/api.js";
+import type { Player } from "../../lib/types.js";
+
+const { redirect, session } = await requireRole(Astro.request, "admin");
+if (redirect) return Astro.redirect(redirect);
+
+const cookie = getCookieHeader(Astro.request);
+
+let players: Player[] = [];
+try { players = await api<Player[]>("/players", {}, cookie); } catch { /* empty */ }
+---
+<Main title="Gestión de usuarios" player={session.player}>
+  <div class="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div>
+        <h1 class="font-display text-4xl text-white">Gestión de usuarios</h1>
+        <p class="text-court-muted text-sm">CRUD global, sanciones y premios.</p>
+      </div>
+      <a href="/dashboard/admin" class="btn-ghost text-xs">← Panel admin</a>
+    </div>
+    <div class="card">
+      <AdminUsersManager initial={players} client:load />
+    </div>
+  </div>
+</Main>

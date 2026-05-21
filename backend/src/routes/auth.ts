@@ -6,8 +6,9 @@ import {
   authenticate, createRecoveryChallenge,
   recoverCheckIdentity, recoverResetPassword,
 } from "../services/auth.js";
+import { changePassword } from "../services/auth-password.js";
 import { createPlayer } from "../services/players.js";
-import { currentPlayer } from "../middleware/auth.js";
+import { currentPlayer, requireAuth } from "../middleware/auth.js";
 
 export const authRouter = Router();
 
@@ -90,6 +91,11 @@ const recoverResetSchema = z.object({
 authRouter.post("/recover/reset", asyncRoute(async (req, res) => {
   const d = recoverResetSchema.parse(req.body);
   res.json(await recoverResetPassword(d.recoveryToken, d.password));
+}));
+
+authRouter.post("/password", requireAuth, asyncRoute(async (req, res) => {
+  await changePassword(req.session!.playerId!, req.body);
+  res.status(204).end();
 }));
 
 // Public diagnostic endpoint: returns exactly what the backend sees about the

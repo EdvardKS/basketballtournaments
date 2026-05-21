@@ -34,6 +34,8 @@ export const toPlayer = (r: Row): Player => ({
   passing: Number(r.passing), dribbling: Number(r.dribbling),
   defense: Number(r.defense), physical: Number(r.physical),
   overall: Number(r.overall),
+  canEditStats: r.can_edit_stats == null ? true : Boolean(r.can_edit_stats),
+  archivedAt: r.archived_at == null ? null : toIso(r.archived_at),
   createdAt: toIso(r.created_at),
 });
 

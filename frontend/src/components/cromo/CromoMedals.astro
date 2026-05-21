@@ -1,0 +1,36 @@
+---
+import type { Achievement } from "../../lib/types.js";
+import { kindLabel } from "../../lib/cromo.js";
+
+interface Props { achievements: Achievement[] }
+const { achievements } = Astro.props as Props;
+
+const sortKey: Record<string, number> = {
+  champion: 0, runner_up: 1, third_place: 2,
+  mvp: 3, custom: 4, participated: 5,
+};
+const sorted = [...achievements].sort((a, b) => {
+  const ka = sortKey[a.kind] ?? 9;
+  const kb = sortKey[b.kind] ?? 9;
+  return ka === kb ? b.year - a.year : ka - kb;
+});
+---
+{sorted.length === 0 ? (
+  <p class="text-xs text-court-muted">Sin medallas aún — participa en un torneo para empezar.</p>
+) : (
+  <ul class="grid grid-cols-2 gap-2">
+    {sorted.map((a) => {
+      const l = kindLabel[a.kind] ?? { emoji: "🏅", text: a.kind };
+      const text = a.kind === "custom" ? (a.label ?? "Premio") : l.text;
+      return (
+        <li class="flex items-center gap-2 bg-court-bg/60 border border-court-border rounded px-2 py-1.5">
+          <span class="text-lg leading-none" aria-hidden="true">{l.emoji}</span>
+          <div class="min-w-0">
+            <p class="text-[11px] font-semibold text-white truncate">{text} · {a.year}</p>
+            <p class="text-[10px] text-court-muted truncate">{a.tournamentName}</p>
+          </div>
+        </li>
+      );
+    })}
+  </ul>
+)}

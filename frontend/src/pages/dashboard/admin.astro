@@ -28,6 +28,9 @@ const initialActive =
 ---
 <Main title="Panel admin" player={session.player}>
   <div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="mb-4 flex justify-end">
+      <a href="/dashboard/usuarios" class="btn-ghost text-xs">Gestión de usuarios →</a>
+    </div>
     <AdminPanel
       tournaments={tournaments}
       initialActiveId={initialActive?.id ?? null}

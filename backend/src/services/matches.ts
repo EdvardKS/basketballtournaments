@@ -4,6 +4,9 @@ import { toMatch, toGroup, toGroupMember } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
 import { generateKnockout, propagateBracketWinner } from "./bracket.js";
 import { transitionTournament } from "./lifecycle.js";
+import {
+  autoGrantOnFinal, autoGrantOnThirdPlace,
+} from "./player-achievements-grant.js";
 
 export const matchesForTournament = async (tournamentId: string) => {
   await transitionTournament(tournamentId);
@@ -178,6 +181,11 @@ export const completeMatch = async (matchId: string) => {
         "UPDATE tournaments SET status='completed', winner_id=$1 WHERE id=$2",
         [winnerId, m.tournamentId],
       );
+      const loserId = winnerId === m.homeTeamId ? m.awayTeamId : m.homeTeamId;
+      await autoGrantOnFinal(m.tournamentId, winnerId, loserId);
+    }
+    if (m.stage === "third_place" && winnerId) {
+      await autoGrantOnThirdPlace(m.tournamentId, winnerId);
     }
 
     return toMatch(updated[0]);

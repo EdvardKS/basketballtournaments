@@ -1,0 +1,70 @@
+---
+import type { Player, Achievement } from "../../lib/types.js";
+import { cromoTier, tierTheme } from "../../lib/cromo.js";
+import { POSITION_LABEL, overallColor } from "../../lib/display.js";
+import CromoMedals from "./CromoMedals.astro";
+
+interface Props { player: Player; achievements: Achievement[] }
+const { player: p, achievements } = Astro.props as Props;
+const tier = cromoTier(p.createdAt);
+const theme = tierTheme(tier);
+
+const stats = [
+  ["RIT", p.pace], ["TIR", p.shooting], ["PAS", p.passing],
+  ["BOT", p.dribbling], ["DEF", p.defense], ["FIS", p.physical],
+] as const;
+---
+<div id="cromo-root" class:list={["cromo", theme.frameClass]}
+     style={`--halo:${theme.haloIntensity}`}>
+  <div class="cromo-inner">
+    <div class="flex items-start justify-between mb-3">
+      <div>
+        <p class="text-[10px] text-court-muted uppercase tracking-widest">Tier {theme.tierLabel}</p>
+        <p class="font-display text-lg text-white leading-tight">{p.name}</p>
+        <p class="text-[11px] text-court-muted">{POSITION_LABEL[p.position] ?? p.position}</p>
+      </div>
+      <span class:list={["font-display text-4xl font-bold", overallColor(p.overall)]}>{p.overall}</span>
+    </div>
+
+    <div class="flex gap-3 items-center">
+      {p.avatar ? (
+        <img src={p.avatar} alt="" class="w-20 h-20 rounded-xl object-cover border border-court-border shrink-0" />
+      ) : (
+        <div class="w-20 h-20 rounded-xl bg-court-border flex items-center justify-center text-3xl text-court-muted shrink-0">{p.name.charAt(0)}</div>
+      )}
+      <div class="grid grid-cols-3 gap-x-3 gap-y-1 flex-1">
+        {stats.map(([k, v]) => (
+          <div class="flex items-baseline justify-between">
+            <span class="text-[10px] text-court-muted">{k}</span>
+            <span class="text-xs font-bold text-white">{v}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div class="mt-3 border-t border-court-border pt-3">
+      <p class="label-text text-[10px] mb-2">Medallas</p>
+      <CromoMedals achievements={achievements} />
+    </div>
+  </div>
+</div>
+
+<style>
+  .cromo {
+    position: relative;
+    border-radius: 1rem;
+    padding: 2px;
+    background: linear-gradient(135deg, var(--cromo-frame-1), var(--cromo-frame-2));
+    box-shadow: 0 0 calc(var(--halo) * 30px) rgba(255, 140, 60, calc(var(--halo) * 0.45));
+  }
+  .cromo-inner {
+    background: var(--color-court-bg);
+    border-radius: 0.9rem;
+    padding: 1rem;
+  }
+  .frame-v1 { --cromo-frame-1: #4a5260; --cromo-frame-2: #2a3140; }
+  .frame-v2 { --cromo-frame-1: #6b86c9; --cromo-frame-2: #38477a; }
+  .frame-v3 { --cromo-frame-1: #c2a44a; --cromo-frame-2: #75582a; }
+  .frame-v4 { --cromo-frame-1: #d96b32; --cromo-frame-2: #842a0c; }
+  .frame-v5\+ { --cromo-frame-1: #f4d03f; --cromo-frame-2: #c7331c; }
+</style>

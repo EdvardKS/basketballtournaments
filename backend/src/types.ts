@@ -14,7 +14,22 @@ export interface Player {
   age: number | null; gdprAccepted: boolean; gdprAcceptedAt: string | null;
   pace: number; shooting: number; passing: number;
   dribbling: number; defense: number; physical: number; overall: number;
+  canEditStats: boolean; archivedAt: string | null;
   createdAt: string;
+}
+
+export type AchievementKind =
+  | "participated" | "champion" | "runner_up" | "third_place" | "mvp" | "custom";
+
+export interface Achievement {
+  id: string | null;             // null for derived (not persisted)
+  kind: AchievementKind;
+  tournamentId: string;
+  tournamentName: string;
+  year: number;
+  label: string | null;
+  note: string | null;
+  awardedAt: string | null;
 }
 
 export interface Tournament {

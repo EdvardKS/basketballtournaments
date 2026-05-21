@@ -2,9 +2,13 @@
 import Main from "../../layouts/Main.astro";
 import TeamSettings from "../../islands/TeamSettings.js";
 import DraftBoard from "../../islands/DraftBoard.js";
+import CromoCard from "../../components/cromo/CromoCard.astro";
+import PlayerProfileEditor from "../../islands/PlayerProfileEditor.tsx";
+import PlayerStatsRedistributor from "../../islands/PlayerStatsRedistributor.tsx";
+import CromoShare from "../../islands/CromoShare.tsx";
 import { requireRole } from "../../lib/session.js";
 import { api, getCookieHeader } from "../../lib/api.js";
-import type { Tournament, Team } from "../../lib/types.js";
+import type { Tournament, Team, Achievement } from "../../lib/types.js";
 
 const { redirect, session } = await requireRole(Astro.request, "captain");
 if (redirect) return Astro.redirect(redirect);
@@ -27,6 +31,9 @@ if (active) {
 }
 
 const isDraft = active?.status === "draft";
+
+let achievements: Achievement[] = [];
+try { achievements = await api<Achievement[]>(`/players/${player.id}/achievements`, {}, cookie); } catch { /* empty */ }
 ---
 <Main title="Panel capitán" player={player}>
   <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
@@ -76,5 +83,18 @@ const isDraft = active?.status === "draft";
         )}
       </div>
     )}
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="space-y-4">
+        <h2 class="font-display text-2xl text-white">Mi perfil</h2>
+        <PlayerProfileEditor player={player} client:visible />
+        <PlayerStatsRedistributor player={player} client:visible />
+      </div>
+      <div class="space-y-3">
+        <h2 class="font-display text-2xl text-white">Mi cromo</h2>
+        <CromoCard player={player} achievements={achievements} />
+        <CromoShare playerName={player.name} playerId={player.id} client:visible />
+      </div>
+    </div>
   </div>
 </Main>

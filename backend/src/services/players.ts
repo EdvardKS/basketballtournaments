@@ -9,8 +9,11 @@ export const STAT_KEYS = ["pace","shooting","passing","dribbling","defense","phy
 type StatKey = typeof STAT_KEYS[number];
 type WithStats = Partial<Record<StatKey, number>>;
 
+export const DEFAULT_STAT = 40;
+export const MAX_STAT_TOTAL = 240;
+
 export const computeOverall = (s: WithStats): number => {
-  const sum = STAT_KEYS.reduce((a, k) => a + (s[k] ?? 50), 0);
+  const sum = STAT_KEYS.reduce((a, k) => a + (s[k] ?? DEFAULT_STAT), 0);
   return Math.round(sum / STAT_KEYS.length);
 };
 
@@ -36,7 +39,7 @@ export const createPlayer = async (raw: unknown) => {
       (name, mobile, email, role, position, password, is_public, avatar,
        age, gdpr_accepted, gdpr_accepted_at,
        pace, shooting, passing, dribbling, defense, physical, overall)
-     VALUES ($1,$2,$3,'player',$4,$5,$6,$7,$8,$9,NOW(),50,50,50,50,50,50,$10)
+     VALUES ($1,$2,$3,'player',$4,$5,$6,$7,$8,$9,NOW(),40,40,40,40,40,40,$10)
      RETURNING *`,
     [data.name, data.mobile, data.email ?? null,
      data.position, data.password, data.isPublic, data.avatar ?? null,
