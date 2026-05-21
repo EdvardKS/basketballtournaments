@@ -104,7 +104,7 @@ const liveMessage =
     <!-- Phase progress -->
     <section class="glass p-5 sm:p-6">
       <p class="text-[10px] uppercase tracking-[0.3em] text-court-muted mb-4">Progreso del torneo</p>
-      <PhaseProgressBar phase={phase} />
+      <PhaseProgressBar phase={phase} matchDate={tournament.matchDate ?? tournament.date} />
     </section>
 
     <!-- Live draft panel -->

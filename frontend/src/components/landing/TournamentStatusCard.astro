@@ -99,7 +99,7 @@ const dateLabel = formatDate(t.matchDate ?? t.date).toUpperCase();
     <!-- Phase progress -->
     <div class="mb-8">
       <p class="text-[10px] uppercase tracking-[0.25em] text-court-muted mb-3">Estado del torneo</p>
-      <PhaseProgressBar status={effective} />
+      <PhaseProgressBar status={effective} matchDate={t.matchDate ?? t.date} />
     </div>
 
     <!-- Countdown + CTA -->

@@ -1,12 +1,14 @@
 ---
 import type { TournamentStatus } from "../../lib/types.js";
 import type { TournamentPhase } from "../../lib/tournamentPhase.js";
+import { formatDate } from "../../lib/display.js";
 
 interface Props {
   status?: TournamentStatus;   // legacy entry-point (landing page uses this)
   phase?: TournamentPhase;     // preferred — derives directly without remapping
+  matchDate?: string | null;   // shown under the "Grupos" step
 }
-const { status, phase } = Astro.props;
+const { status, phase, matchDate } = Astro.props;
 
 // 5 visible steps. We map a "current step index" from either signal.
 const STEPS: { label: string; icon: string }[] = [
@@ -17,11 +19,15 @@ const STEPS: { label: string; icon: string }[] = [
   { label: "Final",         icon: "M8 21h8M12 17v4M7 4h10v6a5 5 0 01-10 0V4z" },
 ];
 
-const phaseToIdx = (p: TournamentPhase): number => {
-  if (p === "pre")        return 0;
-  if (p === "draft")      return 1;
-  if (p === "groups")     return 2;
-  if (p === "knockouts")  return 3;
+// Fractional positions so preMatchday lands halfway between Draft (1) and
+// Grupos (2). Lookup returns a number where the integer part is the active
+// step and the fractional part offsets the connector bar.
+const phaseToFloat = (p: TournamentPhase): number => {
+  if (p === "pre")         return 0;
+  if (p === "draft")       return 1;
+  if (p === "preMatchday") return 1.5;
+  if (p === "groups")      return 2;
+  if (p === "knockouts")   return 3;
   return 4; // completed
 };
 
@@ -33,13 +39,18 @@ const statusToIdx = (s: TournamentStatus): number => {
   return 4; // completed
 };
 
-const currentIdx = phase ? phaseToIdx(phase) : status ? statusToIdx(status) : 0;
+const currentIdx = phase ? phaseToFloat(phase) : status ? statusToIdx(status) : 0;
+const inBetween = currentIdx % 1 !== 0;
 
-const stateOf = (i: number): "done" | "active" | "pending" =>
-  i < currentIdx ? "done" : i === currentIdx ? "active" : "pending";
+const stateOf = (i: number): "done" | "active" | "pending" => {
+  if (inBetween) return i <= Math.floor(currentIdx) ? "done" : "pending";
+  return i < currentIdx ? "done" : i === currentIdx ? "active" : "pending";
+};
 
-// Progress fill: dot-centred on the active step.
-const fillPct = Math.min(100, Math.max(0, Math.round((currentIdx + 0.5) / (STEPS.length - 0) * 100)));
+// Progress fill: dot-centred on the active step (or floating between steps
+// when inBetween).
+const fillPct = Math.min(100, Math.max(0, ((currentIdx + 0.5) / STEPS.length) * 100));
+const dateLabel = matchDate ? formatDate(matchDate) : null;
 ---
 <div class="w-full">
   <div class="relative">
@@ -53,6 +64,7 @@ const fillPct = Math.min(100, Math.max(0, Math.round((currentIdx + 0.5) / (STEPS
     <ol class="relative flex items-start justify-between gap-1">
       {STEPS.map((p, i) => {
         const state = stateOf(i);
+        const showDate = i === 2 && dateLabel; // under "Grupos"
         return (
           <li class="flex flex-col items-center gap-2 flex-1 min-w-0">
             <div
@@ -78,6 +90,11 @@ const fillPct = Math.min(100, Math.max(0, Math.round((currentIdx + 0.5) / (STEPS
             >
               {p.label}
             </span>
+            {showDate && (
+              <span class="text-[10px] tabular-nums text-court-muted text-center">
+                {dateLabel}
+              </span>
+            )}
           </li>
         );
       })}
