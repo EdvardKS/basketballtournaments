@@ -56,6 +56,16 @@ Single source of truth across hourly self-runs. **Always read this file first**,
 
 ## Run log
 
+### 2026-05-21 16:30 Z — Wake-up #2
+
+- **Reached step**: `slot/ensure` (blocked).
+- **All OK**: ❌
+- **Steps OK / total**: 2 / 3.
+- **Latest JSON**: `validation/runs/run-2026-05-21T16-30-03-166Z.json`.
+- **Action taken**: `validation/run.sh` was not exporting `BASE`, so `node`
+  fell back to `http://localhost:4000` and failed at login. Added `export`.
+  Re-ran; same `LK-46251` blocker. Did not touch anything else.
+
 ### 2026-05-21 15:30 Z — Wake-up #1
 
 - **Reached step**: `slot/ensure` (blocked).

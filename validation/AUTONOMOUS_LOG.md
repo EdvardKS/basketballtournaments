@@ -43,3 +43,19 @@ Append-only narrative of what each hourly self-run actually did. Keep it terse �
 2. Run the suite (same prompt).
 3. If still blocked by `LK-46251` → just append "still blocked" to the log and commit. Do NOT attempt to delete or close it.
 4. Once the user unblocks it, the loop should pass end-to-end. If new failures appear, fix them in the same pattern.
+
+## 2026-05-21 16:30 Z
+
+**Did:** Pulled latest main. Ran `bash validation/run.sh`. First attempt failed at `admin/login` again even though wake-up #1 left BASE pointing at 127.0.0.1:4010. Replicated the runner call manually with `node -e` — that worked. Then ran `node validation/run.mjs` directly — that also worked. Concluded the wrapper was at fault.
+
+**Found:**
+- `run.sh` set `BASE` as a local shell var without `export`, so `node` saw `BASE=undefined` and fell back to the in-script default `http://localhost:4000`, which is unreachable here (host port is 4010 and IPv6 `localhost` errors on Node 24).
+- Once that was fixed, the same blocker as last hour: `BLOCKED_BY_LIVE_TOURNAMENT id=e0363f21-b8c5-4557-bb59-1835ff933461 name=LK-46251 status=setup`.
+
+**Fixed:**
+- `validation/run.sh`: changed `BASE="${BASE:-...}"` → `export BASE="${BASE:-...}"` so the value reaches the node process.
+- Did NOT touch `LK-46251`. Per contract that's user-owned state.
+
+**Commit:** `(this push)`
+
+**Next:** loop will stay blocked at `slot/ensure` until the user completes or deletes `LK-46251`. Subsequent wake-ups should keep recording "still blocked" entries without touching anything beyond the log.
