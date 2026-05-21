@@ -125,6 +125,57 @@ const createPlayers = async (n) => {
   return created;
 };
 
+// `ONE_ACTIVE_ONLY` rule on the backend means a new tournament can only be
+// created when no other tournament is in a non-terminal state. We auto-
+// complete any in-flight tournament that THIS validator created (name
+// prefix `AutoE2E-`). Real, user-created tournaments are sacred — we
+// surface a clear error and abort.
+const PREFIX = "AutoE2E-";
+const TERMINAL = new Set(["completed"]);
+
+const completeStaleAutoTournament = async () => {
+  const { data: list } = await apiCall("GET", "/tournaments");
+  const stale = (list ?? []).find((t) =>
+    typeof t?.name === "string"
+    && t.name.startsWith(PREFIX)
+    && !TERMINAL.has(t.status));
+  if (!stale) return { closed: 0 };
+  // Force-finish via an admin PATCH to status="completed".
+  try {
+    await apiCall("PATCH", `/tournaments/${stale.id}`, { status: "completed" });
+  } catch (e) {
+    // Backend may refuse a direct status flip from some states. Best-effort
+    // alternative: complete every pending match so lifecycle/transitionAll
+    // closes it on the next request.
+    try {
+      const { data: matches } = await apiCall("GET", `/matches/tournament/${stale.id}`);
+      for (const m of matches ?? []) {
+        if (m.status === "completed") continue;
+        if (!m.homeTeamId || !m.awayTeamId) continue;
+        await apiCall("PATCH", `/matches/${m.id}`,
+          { homeScore: pickInt(10, 30), awayScore: pickInt(10, 30), status: "completed" },
+          { allowFail: true });
+      }
+      await apiCall("PATCH", `/tournaments/${stale.id}`, { status: "completed" },
+        { allowFail: true });
+    } catch (e2) {
+      throw new Error(`could not close stale ${stale.name}: ${e2.message}`);
+    }
+  }
+  return { closed: 1, id: stale.id, name: stale.name };
+};
+
+const ensureCreatableSlot = async () => {
+  const { data: list } = await apiCall("GET", "/tournaments");
+  const blocker = (list ?? []).find((t) => !TERMINAL.has(t.status));
+  if (!blocker) return { blocked: false };
+  if (typeof blocker.name === "string" && blocker.name.startsWith(PREFIX)) {
+    await completeStaleAutoTournament();
+    return { blocked: false, autoClosed: blocker.name };
+  }
+  return { blocked: true, blocker: { id: blocker.id, name: blocker.name, status: blocker.status } };
+};
+
 const createTournament = async () => {
   const today = new Date();
   const matchDate = new Date(today.getTime() + 7 * 86_400_000);
@@ -226,6 +277,14 @@ const main = async () => {
     const players = await expectStep("players/create", async () => {
       const created = await createPlayers(PLAYER_COUNT);
       return { summary: { created: created.length }, players: created };
+    });
+    await expectStep("slot/ensure", async () => {
+      const slot = await ensureCreatableSlot();
+      if (slot.blocked) {
+        const b = slot.blocker;
+        throw new Error(`BLOCKED_BY_LIVE_TOURNAMENT id=${b.id} name=${b.name} status=${b.status}`);
+      }
+      return { summary: slot };
     });
     const tour = await expectStep("tournament/create", async () => {
       const t = await createTournament();

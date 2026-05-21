@@ -1,0 +1,72 @@
+{
+  "runId": "2026-05-21T15-29-08-480Z",
+  "seed": 1779377348480,
+  "base": "http://localhost:4010",
+  "startedAt": "2026-05-21T15:29:08.480Z",
+  "endedAt": "2026-05-21T15:29:08.755Z",
+  "durationMs": 273,
+  "allOk": false,
+  "tournamentId": null,
+  "tokens": {
+    "in": 1888,
+    "out": 3590
+  },
+  "steps": [
+    {
+      "name": "admin/login",
+      "ok": true,
+      "info": {
+        "id": "admin-1",
+        "name": "Administrador base1",
+        "mobile": "700000001",
+        "username": "base1",
+        "email": "base1@villena.test",
+        "role": "admin",
+        "position": "base",
+        "avatar": null,
+        "isPublic": false,
+        "age": null,
+        "gdprAccepted": false,
+        "gdprAcceptedAt": null,
+        "pace": 50,
+        "shooting": 50,
+        "passing": 50,
+        "dribbling": 50,
+        "defense": 50,
+        "physical": 50,
+        "overall": 50,
+        "createdAt": "2026-04-24T14:55:40.719Z"
+      },
+      "at": "2026-05-21T15:29:08.640Z"
+    },
+    {
+      "name": "players/create",
+      "ok": true,
+      "info": {
+        "created": 8
+      },
+      "at": "2026-05-21T15:29:08.738Z"
+    },
+    {
+      "name": "tournament/create",
+      "ok": false,
+      "info": {
+        "error": "HTTP 409 POST /tournaments",
+        "status": 409,
+        "body": {
+          "error": "ONE_ACTIVE_ONLY",
+          "message": "Ya existe un torneo en curso (LK-46251)."
+        }
+      },
+      "at": "2026-05-21T15:29:08.755Z"
+    }
+  ],
+  "fatalError": {
+    "message": "HTTP 409 POST /tournaments",
+    "status": 409,
+    "body": {
+      "error": "ONE_ACTIVE_ONLY",
+      "message": "Ya existe un torneo en curso (LK-46251)."
+    }
+  }
+}
