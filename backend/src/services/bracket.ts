@@ -25,6 +25,7 @@
 import { query, queryOne, tx } from "../db/query.js";
 import { HttpError } from "../middleware/error.js";
 import type { MatchStage } from "../types.js";
+import { assertBracketUnlocked } from "./tournaments.js";
 
 export type BracketFormat =
   | "top2_per_group"
@@ -386,6 +387,7 @@ export const generateKnockout = async (tournamentId: string) => {
 // standings. Used by the admin "regenerate" endpoint and whenever the
 // bracket needs to follow a fresh format / size choice.
 export const regenerateBracket = async (tournamentId: string) => {
+  await assertBracketUnlocked(tournamentId);
   return tx(async (q) => {
     await q(
       "DELETE FROM matches WHERE tournament_id=$1 AND stage!='group'",

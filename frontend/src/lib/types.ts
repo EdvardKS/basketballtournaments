@@ -39,6 +39,7 @@ export interface Tournament {
   bracketSize: BracketSize | null;
   bracketQualifiersPerGroup: number | null;
   bracketWildcards: number | null;
+  bracketLockedAt: string | null;
 }
 
 export interface Team {

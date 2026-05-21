@@ -83,6 +83,36 @@ export const getTournament = async (id: string) => {
   return toTournament(row);
 };
 
+// Lock the bracket configuration so the group editor + bracket picker
+// cannot be edited until unlocked. Idempotent: locking a locked tournament
+// is a no-op, unlocking an unlocked one likewise.
+export const lockBracket = async (id: string) => {
+  const row = await queryOne(
+    `UPDATE tournaments SET bracket_locked_at = COALESCE(bracket_locked_at, NOW())
+       WHERE id=$1 AND deleted_at IS NULL RETURNING *`, [id]);
+  if (!row) throw new HttpError(404, "TOURNAMENT_NOT_FOUND");
+  return toTournament(row);
+};
+
+export const unlockBracket = async (id: string) => {
+  const row = await queryOne(
+    `UPDATE tournaments SET bracket_locked_at = NULL
+       WHERE id=$1 AND deleted_at IS NULL RETURNING *`, [id]);
+  if (!row) throw new HttpError(404, "TOURNAMENT_NOT_FOUND");
+  return toTournament(row);
+};
+
+// Throws if the tournament's bracket has been "fijada"; used by every
+// mutation that would invalidate the locked configuration.
+export const assertBracketUnlocked = async (id: string) => {
+  const row = await queryOne(
+    "SELECT bracket_locked_at FROM tournaments WHERE id=$1", [id]);
+  if (row && (row as { bracket_locked_at: Date | string | null }).bracket_locked_at) {
+    throw new HttpError(409, "BRACKET_LOCKED",
+      "La configuración está fijada. Desfíjala antes de modificar grupos o eliminatorias.");
+  }
+};
+
 // Soft-delete with double confirmation: caller must echo the exact
 // tournament name and the literal string "DELETE". Registrations and
 // players remain in the DB — only the tournament row is hidden.

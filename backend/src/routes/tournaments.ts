@@ -5,7 +5,7 @@ import { asyncRoute, HttpError } from "../middleware/error.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import {
   listTournaments, getTournament, createTournament, patchTournament,
-  softDeleteTournament,
+  softDeleteTournament, lockBracket, unlockBracket,
 } from "../services/tournaments.js";
 import {
   listRegistrations, registerForTournament,
@@ -42,6 +42,17 @@ tournamentsRouter.patch("/:id", requireRole("admin"), asyncRoute(async (req, res
 tournamentsRouter.delete("/:id", requireRole("admin"), asyncRoute(async (req, res) => {
   res.json(await softDeleteTournament(req.params.id, req.body));
 }));
+
+// "Fijar" the bracket configuration: subsequent regroup / regen calls
+// fail with BRACKET_LOCKED until the admin unlocks again.
+tournamentsRouter.post("/:id/lock-bracket", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    res.json(await lockBracket(req.params.id));
+  }));
+tournamentsRouter.post("/:id/unlock-bracket", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    res.json(await unlockBracket(req.params.id));
+  }));
 
 tournamentsRouter.post("/:id/register", requireAuth, asyncRoute(async (req, res) => {
   const playerId = req.session!.playerId!;

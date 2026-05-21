@@ -407,6 +407,7 @@ function TabContent({
           teams={detail?.teams ?? []}
           groups={groups}
           allPlayers={allPlayers}
+          locked={!!tournament.bracketLockedAt}
           onChange={onChange}
         />
       );
@@ -446,7 +447,7 @@ function TabContent({
 
   if (tab === "preview") {
     return (
-      <PreviewTab tournament={tournament} matches={matches} groups={groups} />
+      <PreviewTab tournament={tournament} matches={matches} groups={groups} onChange={onChange} />
     );
   }
 
@@ -829,6 +830,8 @@ function BracketConfigPicker({
   useEffect(() => { setPicked(initialKey); }, [initialKey]);
 
   const window = bracketDecisionWindow(tournament);
+  const locked = !!tournament.bracketLockedAt;
+  const editable = window !== "locked" && !locked;
   const selected = options.find((o) => optionKey(o) === picked) ?? null;
 
   // Auto-save whenever the picked option changes and differs from what the
@@ -869,10 +872,10 @@ function BracketConfigPicker({
   useEffect(() => {
     if (!selected) return;
     if (picked === persistKey) return;
-    if (window === "locked") return;
+    if (!editable) return;
     const handle = setTimeout(() => { void persist(selected); }, 300);
     return () => clearTimeout(handle);
-  }, [picked, persistKey, selected, persist, window]);
+  }, [picked, persistKey, selected, persist, editable]);
 
   return (
     <div className="glass p-4 sm:p-5 space-y-3">
@@ -893,7 +896,7 @@ function BracketConfigPicker({
             <button
               type="button"
               onClick={() => setPicked(optionKey(recommended))}
-              disabled={window === "locked"}
+              disabled={!editable}
               title={`Recomendado: ${recommended.label}`}
               className="btn-ghost !py-1.5 !px-3 !text-xs border border-[var(--color-neon-orange)]/40 text-[var(--color-neon-orange)] hover:bg-[var(--color-neon-orange)]/10"
             >
@@ -903,6 +906,11 @@ function BracketConfigPicker({
           {window === "locked" && (
             <span className="chip bg-court-warn/15 text-court-warn border border-court-warn/30">
               🔒 cerrado · víspera del torneo
+            </span>
+          )}
+          {locked && (
+            <span className="chip" style={{ background: "rgba(245,197,24,0.15)", color: "#f5c518", border: "1px solid rgba(245,197,24,0.4)" }}>
+              🔒 configuración fijada · desfíjala en Vista previa
             </span>
           )}
         </div>
@@ -934,7 +942,7 @@ function BracketConfigPicker({
                     value={k}
                     checked={active}
                     onChange={() => setPicked(k)}
-                    disabled={window === "locked"}
+                    disabled={!editable}
                     className="accent-[var(--color-neon-orange)] shrink-0 mt-0.5"
                   />
                   <div className="flex-1 min-w-0">
@@ -1133,12 +1141,13 @@ const teamAccent = (teamId: string): string => {
 };
 
 function GroupEditor({
-  tournamentId, teams, groups, allPlayers, onChange,
+  tournamentId, teams, groups, allPlayers, locked, onChange,
 }: {
   tournamentId: string;
   teams: TeamWithPlayers[];
   groups: GroupWithMembers[];
   allPlayers: Player[];
+  locked: boolean;
   onChange: () => void;
 }) {
   const playerById = useMemo(() =>
@@ -1206,6 +1215,7 @@ function GroupEditor({
 
   // Drag & drop handlers. dataTransfer carries the team id.
   const onDragStart = (e: React.DragEvent, teamId: string) => {
+    if (locked) { e.preventDefault(); return; }
     e.dataTransfer.setData("text/plain", teamId);
     e.dataTransfer.effectAllowed = "move";
   };
@@ -1218,6 +1228,7 @@ function GroupEditor({
   const onDrop = (e: React.DragEvent, targetIdx: number) => {
     e.preventDefault();
     setDragOver(null);
+    if (locked) return;
     const teamId = e.dataTransfer.getData("text/plain");
     if (!teamId) return;
     setEditGroups((prev) => {
@@ -1300,11 +1311,18 @@ function GroupEditor({
         </div>
         <div className="flex items-center gap-2">
           <SaveBadge state={saving} />
-          <button type="button" onClick={addGroup} className="btn-ghost !py-1.5 !px-3 !text-xs">
+          <button type="button" onClick={addGroup} disabled={locked} className="btn-ghost !py-1.5 !px-3 !text-xs disabled:opacity-40">
             + Añadir grupo
           </button>
         </div>
       </header>
+
+      {locked && (
+        <div className="rounded-lg border px-3 py-2 text-sm flex items-center gap-2"
+             style={{ background: "rgba(245,197,24,0.08)", borderColor: "rgba(245,197,24,0.45)", color: "#f5c518" }}>
+          🔒 Configuración fijada · desfíjala desde la pestaña Vista previa para volver a editar grupos.
+        </div>
+      )}
 
       {errorMsg && (
         <div className="rounded-lg border border-court-danger/40 bg-court-danger/10 px-3 py-2 text-court-danger text-sm">
@@ -1354,15 +1372,16 @@ function GroupEditor({
                     <span className="font-hero text-xl text-white">{g.name.charAt(g.name.length - 1).toUpperCase()}</span>
                   </div>
                   <input
-                    className="bg-transparent text-white font-hero text-xl flex-1 min-w-0 outline-none focus:bg-white/5 rounded px-2 py-1"
+                    className="bg-transparent text-white font-hero text-xl flex-1 min-w-0 outline-none focus:bg-white/5 rounded px-2 py-1 disabled:opacity-70"
                     value={g.name}
+                    disabled={locked}
                     onChange={(e) => {
                       const v = e.target.value;
                       setLocalField(gi, { name: v });
                       scheduleMeta(g.id, { name: v });
                     }}
                   />
-                  {editGroups.length > 1 && (
+                  {editGroups.length > 1 && !locked && (
                     <button
                       type="button"
                       onClick={() => removeGroup(gi)}
@@ -1379,12 +1398,13 @@ function GroupEditor({
                     <input
                       type="color"
                       value={g.color}
+                      disabled={locked}
                       onChange={(e) => {
                         const v = e.target.value;
                         setLocalField(gi, { color: v });
                         scheduleMeta(g.id, { color: v });
                       }}
-                      className="w-6 h-6 rounded cursor-pointer border border-white/10 bg-transparent"
+                      className="w-6 h-6 rounded cursor-pointer border border-white/10 bg-transparent disabled:opacity-50"
                     />
                     <span className="text-court-muted">Color del grupo</span>
                   </label>
@@ -1499,24 +1519,42 @@ function SaveBadge({ state }: { state: "idle" | "syncing" | "ok" | "err" }) {
 // bracket layout the backend has already scaffolded for the chosen format.
 
 function PreviewTab({
-  tournament, matches, groups,
+  tournament, matches, groups, onChange,
 }: {
   tournament: Tournament;
   matches: Match[];
   groups: GroupWithMembers[];
+  onChange: () => void;
 }) {
   const ko = matches.filter((m) => m.stage !== "group");
   const groupMatches = matches.filter((m) => m.stage === "group");
   const formatLabel = tournament.bracketFormat === "top1_plus_best2_seconds"
     ? "1º de cada grupo + 2 mejores 2dos"
     : "Top 2 de cada grupo";
+  const locked = !!tournament.bracketLockedAt;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const toggleLock = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await api(`/tournaments/${tournament.id}/${locked ? "unlock" : "lock"}-bracket`, {
+        method: "POST",
+      });
+      onChange();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo actualizar el estado");
+    } finally { setBusy(false); }
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6 pb-32">
       {/* Hero header */}
       <header
         className="relative overflow-hidden rounded-2xl border border-white/10 p-5 sm:p-6"
-        style={{ background: "linear-gradient(135deg, rgba(58,160,255,0.10) 0%, rgba(20,26,44,0.92) 60%)" }}
+        style={{ background: locked
+          ? "linear-gradient(135deg, rgba(245,197,24,0.12) 0%, rgba(20,26,44,0.92) 60%)"
+          : "linear-gradient(135deg, rgba(58,160,255,0.10) 0%, rgba(20,26,44,0.92) 60%)" }}
       >
         <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full opacity-25 blur-3xl pointer-events-none" style={{ background: "#3aa0ff" }} aria-hidden="true" />
         <div className="relative flex flex-wrap items-end justify-between gap-3">
@@ -1643,6 +1681,109 @@ function PreviewTab({
           </ul>
         </section>
       )}
+
+      {/* Floating "Fijar" button — absolute, bottom centered, neon glow +
+          particles. Becomes "Desfijar" once the bracket is locked. */}
+      <div className="sticky bottom-6 z-30 flex justify-center pointer-events-none">
+        <div className="pointer-events-auto">
+          <FijarButton
+            locked={locked}
+            busy={busy}
+            error={err}
+            onClick={toggleLock}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FijarButton({
+  locked, busy, error, onClick,
+}: {
+  locked: boolean;
+  busy: boolean;
+  error: string | null;
+  onClick: () => void;
+}) {
+  const goldA = "#f5c518";
+  const goldB = "#ff8a1a";
+  const lockedA = "#3ecf8e";
+  const lockedB = "#118ab2";
+  const A = locked ? lockedA : goldA;
+  const B = locked ? lockedB : goldB;
+
+  return (
+    <div className="relative">
+      {/* Aura halo */}
+      <span
+        aria-hidden="true"
+        className="absolute -inset-6 rounded-full pointer-events-none"
+        style={{
+          background: `radial-gradient(60% 60% at 50% 50%, ${A}55, transparent 70%)`,
+          filter: "blur(14px)",
+          animation: "fijar-aura 3.6s ease-in-out infinite",
+        }}
+      />
+      {/* Light particles */}
+      <span aria-hidden="true" className="absolute inset-0 pointer-events-none">
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+          <span
+            key={i}
+            className="absolute w-1.5 h-1.5 rounded-full"
+            style={{
+              top: "50%",
+              left: "50%",
+              background: i % 2 === 0 ? A : B,
+              boxShadow: `0 0 8px ${A}`,
+              animation: `fijar-particle 4s ${(i * 0.4).toFixed(2)}s linear infinite`,
+              transform: `rotate(${i * 45}deg) translateX(0)`,
+            }}
+          />
+        ))}
+      </span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onClick}
+        className="relative inline-flex items-center gap-3 px-7 py-3 rounded-full font-hero text-base tracking-[0.25em] uppercase text-[#0c1120] border-2 transition-transform active:scale-95"
+        style={{
+          background: `linear-gradient(135deg, ${A}, ${B})`,
+          borderColor: `${A}cc`,
+          boxShadow: `0 0 28px ${A}aa, 0 0 80px ${A}55, inset 0 1px 0 rgba(255,255,255,0.6)`,
+          animation: "fijar-pulse 2.4s ease-in-out infinite",
+          textShadow: "0 1px 0 rgba(255,255,255,0.4)",
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          {locked
+            ? <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></>
+            : <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0" /></>}
+        </svg>
+        {busy ? "Guardando…" : locked ? "Desfijar configuración" : "Fijar grupos y eliminatorias"}
+      </button>
+      {error && (
+        <p className="absolute -bottom-7 left-0 right-0 text-center text-court-danger text-xs">
+          {error}
+        </p>
+      )}
+      <style>{`
+        @keyframes fijar-pulse {
+          0%, 100% { transform: translateY(0); box-shadow: 0 0 28px ${A}aa, 0 0 80px ${A}55, inset 0 1px 0 rgba(255,255,255,0.6); }
+          50%      { transform: translateY(-2px); box-shadow: 0 0 40px ${A}cc, 0 0 110px ${A}77, inset 0 1px 0 rgba(255,255,255,0.7); }
+        }
+        @keyframes fijar-aura {
+          0%, 100% { opacity: 0.65; transform: scale(1); }
+          50%      { opacity: 1;    transform: scale(1.12); }
+        }
+        @keyframes fijar-particle {
+          0%   { transform: rotate(0deg)   translateX(0)    scale(0.6); opacity: 0; }
+          15%  { opacity: 1; }
+          85%  { opacity: 1; }
+          100% { transform: rotate(360deg) translateX(90px) scale(1);   opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }

@@ -61,6 +61,7 @@ export const toTournament = (r: Row): Tournament => ({
     ? null : Number(r.bracket_qualifiers_per_group),
   bracketWildcards: r.bracket_wildcards == null
     ? null : Number(r.bracket_wildcards),
+  bracketLockedAt: r.bracket_locked_at == null ? null : toIso(r.bracket_locked_at),
 });
 
 export const toTeam = (r: Row): Team => ({

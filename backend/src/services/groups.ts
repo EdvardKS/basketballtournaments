@@ -3,6 +3,7 @@ import { query, queryOne, tx } from "../db/query.js";
 import { toGroup } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
 import { generateKnockout } from "./bracket.js";
+import { assertBracketUnlocked } from "./tournaments.js";
 
 const GROUP_NAMES = ["Grupo A","Grupo B","Grupo C","Grupo D","Grupo E","Grupo F","Grupo G","Grupo H"];
 
@@ -76,6 +77,7 @@ export interface RegroupGroupInput {
 export const regroupTeams = async (
   tournamentId: string, input: RegroupGroupInput[],
 ) => {
+  await assertBracketUnlocked(tournamentId);
   if (!Array.isArray(input) || input.length === 0) {
     throw new HttpError(400, "GROUPS_REQUIRED", "Debes enviar al menos un grupo.");
   }
@@ -174,6 +176,7 @@ export const updateGroupMeta = async (
   tournamentId: string, groupId: string,
   patch: { name?: string; color?: string | null; logo?: string | null },
 ) => {
+  await assertBracketUnlocked(tournamentId);
   const owner = await queryOne(
     "SELECT id FROM tournament_groups WHERE id=$1 AND tournament_id=$2",
     [groupId, tournamentId]);
