@@ -16,6 +16,7 @@ const STAT_LABELS = [
 ] as const;
 
 export default function AdminPlayerActions({ player: p, onClose, onChanged }: Props) {
+  const isAdmin = p.role === "admin";
   const [tab, setTab] = useState<"profile" | "stats" | "sanction" | "awards">("profile");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok"|"err"; text: string } | null>(null);
@@ -86,7 +87,10 @@ export default function AdminPlayerActions({ player: p, onClose, onChanged }: Pr
           <button onClick={onClose} className="btn-ghost text-xs">Cerrar</button>
         </div>
         <nav className="flex gap-1 border-b border-court-border text-xs">
-          {(["profile","stats","sanction","awards"] as const).map((k) => (
+          {(isAdmin
+            ? (["profile","awards"] as const)
+            : (["profile","stats","sanction","awards"] as const)
+          ).map((k) => (
             <button key={k} onClick={() => setTab(k)}
               className={`px-3 py-2 ${tab === k ? "text-white border-b-2 border-[var(--color-neon-orange)]" : "text-court-muted"}`}>
               {{profile:"Perfil",stats:"Stats",sanction:"Sanción",awards:"Premios"}[k]}

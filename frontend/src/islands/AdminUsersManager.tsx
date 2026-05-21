@@ -95,8 +95,8 @@ export default function AdminUsersManager({ initial }: Props) {
                 </td>
                 <td className="text-center">{p.role}</td>
                 <td className="text-center text-court-muted text-xs">{p.mobile}</td>
-                <td className="text-center font-bold">{p.overall}</td>
-                <td className="text-center">{p.canEditStats ? "🔓" : "🔒"}</td>
+                <td className="text-center font-bold">{p.role === "admin" ? "—" : p.overall}</td>
+                <td className="text-center">{p.role === "admin" ? "—" : (p.canEditStats ? "🔓" : "🔒")}</td>
                 <td className="text-center text-xs">{p.archivedAt ? "Archivado" : "Activo"}</td>
                 <td className="text-right space-x-1">
                   <button onClick={() => setEditing(p)} className="chip text-xs">Editar</button>

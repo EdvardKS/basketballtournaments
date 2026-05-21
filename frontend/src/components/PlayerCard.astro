@@ -26,9 +26,11 @@ const displayName = authenticated ? p.name : p.name.charAt(0) + "***";
   <div class="flex-1 min-w-0">
     <div class="flex items-start justify-between gap-1">
       <p class="font-semibold text-white text-sm truncate">{displayName}</p>
-      <span class:list={["font-display text-xl font-bold shrink-0", overallColor(p.overall)]}>
-        {p.overall}
-      </span>
+      {p.role !== "admin" && (
+        <span class:list={["font-display text-xl font-bold shrink-0", overallColor(p.overall)]}>
+          {p.overall}
+        </span>
+      )}
     </div>
     <p class="text-xs text-court-muted">{POSITION_LABEL[p.position] ?? p.position}</p>
     {p.age && <p class="text-xs text-court-muted">{p.age} años</p>}
