@@ -1724,9 +1724,21 @@ function FijarButton({
   const [progress, setProgress] = useState(0); // 0..1
   const [holding, setHolding] = useState(false);
   const [burst, setBurst] = useState(false);     // post-complete spectacle
+  const [morphKey, setMorphKey] = useState(0);   // remount trigger on state flip
   const startRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const cancelRef = useRef(false);
+  const prevLockedRef = useRef(locked);
+
+  // Trigger a one-shot color-morph animation whenever the locked flag flips
+  // (after a successful fijar / desfijar). Bumping morphKey remounts the
+  // inner wrapper so the entry @keyframes runs from frame 0.
+  useEffect(() => {
+    if (prevLockedRef.current !== locked) {
+      prevLockedRef.current = locked;
+      setMorphKey((k) => k + 1);
+    }
+  }, [locked]);
 
   const stopRaf = () => {
     if (rafRef.current != null) {
@@ -1788,8 +1800,10 @@ function FijarButton({
     : burst
       ? (locked ? "Desfijando…" : "¡Fijado!")
       : holding
-        ? (locked ? "Mantén pulsado…" : "Mantén pulsado…")
-        : (locked ? "Mantén pulsado para desfijar" : "Mantén pulsado para fijar");
+        ? "Mantén pulsado…"
+        : locked
+          ? "DESFIJAR · mantén pulsado"
+          : "FIJAR · mantén pulsado";
 
   // Geometry: particles sit on a pill ring around the button — distributed
   // along an ellipse so the gesture decorates the whole shape.
@@ -1877,41 +1891,62 @@ function FijarButton({
         </span>
       )}
 
-      <button
-        type="button"
-        disabled={busy || burst}
-        onPointerDown={beginHold}
-        onPointerUp={endHold}
-        onPointerLeave={endHold}
-        onPointerCancel={endHold}
-        onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) beginHold(); }}
-        onKeyUp={(e) => { if (e.key === "Enter" || e.key === " ") endHold(); }}
-        aria-label={label}
-        className="relative inline-flex items-center gap-3 px-8 py-3.5 rounded-full font-hero text-base tracking-[0.25em] uppercase text-[#0c1120] border-2 disabled:opacity-90"
-        style={{
-          background: `linear-gradient(135deg, ${A}, ${B})`,
-          borderColor: `${A}cc`,
-          boxShadow: burst
-            ? `0 0 80px ${A}, 0 0 200px ${A}aa, inset 0 1px 0 #fff`
-            : holding
-              ? `0 0 50px ${A}dd, 0 0 140px ${A}88, inset 0 1px 0 rgba(255,255,255,0.7)`
-              : `0 0 28px ${A}aa, 0 0 80px ${A}55, inset 0 1px 0 rgba(255,255,255,0.6)`,
-          animation: burst
-            ? "fijar-button-burst 0.45s ease-out"
-            : holding ? "none" : "fijar-pulse 2.4s ease-in-out infinite",
-          textShadow: "0 1px 0 rgba(255,255,255,0.4)",
-          transform: holding ? `scale(${1 + progress * 0.05})` : undefined,
-          transition: "box-shadow 200ms ease-out",
-        }}
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          {locked
-            ? <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></>
-            : <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0" /></>}
-        </svg>
-        <span className="relative z-[1]">{label}</span>
-      </button>
+      {/* Keyed inner so the state-morph animation re-runs on every flip
+          between Fijar and Desfijar variants. */}
+      <div key={morphKey} style={{ animation: "fijar-state-enter 0.7s ease-out" }}>
+        <button
+          type="button"
+          disabled={busy || burst}
+          onPointerDown={beginHold}
+          onPointerUp={endHold}
+          onPointerLeave={endHold}
+          onPointerCancel={endHold}
+          onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) beginHold(); }}
+          onKeyUp={(e) => { if (e.key === "Enter" || e.key === " ") endHold(); }}
+          aria-label={label}
+          data-variant={locked ? "desfijar" : "fijar"}
+          className="relative inline-flex items-center gap-3 px-8 py-3.5 rounded-full font-hero text-base tracking-[0.25em] uppercase text-[#0c1120] border-2 disabled:opacity-90"
+          style={{
+            background: `linear-gradient(135deg, ${A}, ${B})`,
+            borderColor: `${A}cc`,
+            boxShadow: burst
+              ? `0 0 80px ${A}, 0 0 200px ${A}aa, inset 0 1px 0 #fff`
+              : holding
+                ? `0 0 50px ${A}dd, 0 0 140px ${A}88, inset 0 1px 0 rgba(255,255,255,0.7)`
+                : `0 0 28px ${A}aa, 0 0 80px ${A}55, inset 0 1px 0 rgba(255,255,255,0.6)`,
+            animation: burst
+              ? "fijar-button-burst 0.45s ease-out"
+              : holding ? "none" : "fijar-pulse 2.4s ease-in-out infinite",
+            textShadow: "0 1px 0 rgba(255,255,255,0.4)",
+            transform: holding ? `scale(${1 + progress * 0.05})` : undefined,
+            transition: "box-shadow 200ms ease-out",
+          }}
+        >
+          {/* Sweep shine that runs left→right on state change */}
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full overflow-hidden pointer-events-none"
+            style={{ animation: "fijar-state-sweep 0.7s ease-out" }}
+          >
+            <span
+              className="absolute inset-y-0 -left-1/3 w-1/3"
+              style={{
+                background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.85), transparent)",
+                filter: "blur(2px)",
+                animation: "fijar-state-sweep-band 0.7s ease-out forwards",
+              }}
+            />
+          </span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+               className="relative z-[1]">
+            {locked
+              ? <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></>
+              : <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0" /></>}
+          </svg>
+          <span className="relative z-[1]">{label}</span>
+        </button>
+      </div>
 
       {error && (
         <p className="absolute -bottom-7 left-0 right-0 text-center text-court-danger text-xs">
@@ -1941,6 +1976,19 @@ function FijarButton({
           0%   { transform: scale(1.05); }
           40%  { transform: scale(1.18); }
           100% { transform: scale(1); }
+        }
+        /* State swap: scale + hue rotate so the colour change reads as an
+           explicit visual flip, not a silent re-render. */
+        @keyframes fijar-state-enter {
+          0%   { transform: scale(0.82) rotate(-4deg); filter: brightness(2) saturate(1.6) hue-rotate(40deg); opacity: 0; }
+          40%  { transform: scale(1.1)  rotate(2deg);  filter: brightness(1.4) saturate(1.3) hue-rotate(0deg);  opacity: 1; }
+          100% { transform: scale(1)    rotate(0deg);  filter: brightness(1)   saturate(1)   hue-rotate(0deg); opacity: 1; }
+        }
+        @keyframes fijar-state-sweep      { 0%, 100% { opacity: 1; } }
+        @keyframes fijar-state-sweep-band {
+          0%   { left: -33%; opacity: 0; }
+          25%  { opacity: 1; }
+          100% { left: 110%; opacity: 0; }
         }
       `}</style>
     </div>
