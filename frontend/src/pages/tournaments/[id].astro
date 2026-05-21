@@ -204,6 +204,34 @@ const liveMessage =
       </>
     )}
 
+    {/* PRE-MATCHDAY + LOCKED — admin fijó la configuración: ya enseñamos
+        grupos + bracket aunque la fase de juego no haya empezado. */}
+    {phase === "preMatchday" && tournament.bracketLockedAt && (
+      <>
+        {groups.length > 0 && (
+          <GroupsBlock groups={groups} matches={matches} hoursConfirmed={tournament.hoursConfirmed} variant="lead" isAdmin={isAdmin} />
+        )}
+        {koMatches.length > 0 && (
+          <section>
+            <header class="mb-5">
+              <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-blue)] font-bold mb-2">Cuadro definitivo</p>
+              <h2 class="font-hero text-3xl sm:text-4xl text-white leading-none">ELIMINATORIAS</h2>
+              <p class="text-court-muted text-sm mt-2">Configuración fijada. El torneo arrancará el día programado.</p>
+            </header>
+            <KnockoutBracketView matches={koMatches} hoursConfirmed={tournament.hoursConfirmed} isAdmin={isAdmin} />
+          </section>
+        )}
+        <section>
+          <header class="mb-5">
+            <p class="text-[11px] uppercase tracking-[0.4em] text-[var(--color-neon-orange)] font-bold mb-2">Plantillas</p>
+            <h2 class="font-hero text-3xl sm:text-4xl text-white leading-none">EQUIPOS</h2>
+          </header>
+          <TeamsFranchiseGrid teams={teams} authenticated={auth} captains={captains} rosterTarget={tournament.teamSize} pickingTeamId={null} />
+        </section>
+        <RulesCard tournament={tournament} />
+      </>
+    )}
+
     {/* GROUPS — groups lead, teams next, rules at the end */}
     {phase === "groups" && (
       <>

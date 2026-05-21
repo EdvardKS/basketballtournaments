@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../../lib/api.js";
 import type { Tournament, TeamWithPlayers, GroupWithMembers, Match, Player } from "../../lib/types.js";
 import { formatDate } from "../../lib/display.js";
@@ -1536,6 +1536,10 @@ function PreviewTab({
   const [err, setErr] = useState<string | null>(null);
 
   const toggleLock = async () => {
+    if (locked) {
+      const ok = confirm("¿Desfijar la configuración? Volverás a poder editar grupos y eliminatorias.");
+      if (!ok) return;
+    }
     setBusy(true); setErr(null);
     try {
       await api(`/tournaments/${tournament.id}/${locked ? "unlock" : "lock"}-bracket`, {
@@ -1698,6 +1702,14 @@ function PreviewTab({
   );
 }
 
+// Hold-to-confirm button inspired by https://motion.dev/examples/react-hold-to-confirm
+// The admin must press AND HOLD for HOLD_MS to trigger the action. Releasing
+// before the timer completes rewinds the progress ring back to 0. Once
+// completed, the button morphs into a "Configuración fijada" state and the
+// hold gesture is no longer needed to unlock (a normal click + confirm dialog
+// is enough so the admin cannot accidentally desfijar by tapping).
+const HOLD_MS = 1400;
+
 function FijarButton({
   locked, busy, error, onClick,
 }: {
@@ -1713,19 +1725,91 @@ function FijarButton({
   const A = locked ? lockedA : goldA;
   const B = locked ? lockedB : goldB;
 
+  const [progress, setProgress] = useState(0); // 0..1
+  const [holding, setHolding] = useState(false);
+  const startRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const cancelRef = useRef(false);
+
+  const stopRaf = () => {
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  };
+
+  const tick = (now: number) => {
+    if (cancelRef.current) return;
+    if (startRef.current == null) startRef.current = now;
+    const elapsed = now - startRef.current;
+    const p = Math.min(1, elapsed / HOLD_MS);
+    setProgress(p);
+    if (p >= 1) {
+      stopRaf();
+      setHolding(false);
+      onClick();
+      // Fade the ring back after the action fires.
+      setTimeout(() => setProgress(0), 420);
+      return;
+    }
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  const beginHold = () => {
+    if (busy) return;
+    if (locked) { onClick(); return; }
+    cancelRef.current = false;
+    startRef.current = null;
+    setHolding(true);
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  const endHold = () => {
+    if (!holding) return;
+    cancelRef.current = true;
+    stopRaf();
+    setHolding(false);
+    // Rewind the ring smoothly.
+    const startedAt = performance.now();
+    const startProgress = progress;
+    const rewind = (now: number) => {
+      const t = Math.min(1, (now - startedAt) / 260);
+      const next = startProgress * (1 - t);
+      setProgress(next);
+      if (t < 1) rafRef.current = requestAnimationFrame(rewind);
+      else { rafRef.current = null; setProgress(0); }
+    };
+    rafRef.current = requestAnimationFrame(rewind);
+  };
+
+  // Cancel any in-flight raf on unmount.
+  useEffect(() => () => { stopRaf(); }, []);
+
+  const ringR = 34;
+  const ringC = 2 * Math.PI * ringR;
+  const ringDashoffset = ringC * (1 - progress);
+
+  const label = busy
+    ? "Guardando…"
+    : locked
+      ? "Configuración fijada · click para desfijar"
+      : holding
+        ? "Mantén pulsado…"
+        : "Mantén pulsado para fijar";
+
   return (
-    <div className="relative">
+    <div className="relative select-none" style={{ width: "fit-content" }}>
       {/* Aura halo */}
       <span
         aria-hidden="true"
-        className="absolute -inset-6 rounded-full pointer-events-none"
+        className="absolute -inset-8 rounded-full pointer-events-none"
         style={{
-          background: `radial-gradient(60% 60% at 50% 50%, ${A}55, transparent 70%)`,
-          filter: "blur(14px)",
+          background: `radial-gradient(60% 60% at 50% 50%, ${A}66, transparent 70%)`,
+          filter: "blur(16px)",
           animation: "fijar-aura 3.6s ease-in-out infinite",
         }}
       />
-      {/* Light particles */}
+      {/* Light particles — appear stronger while holding */}
       <span aria-hidden="true" className="absolute inset-0 pointer-events-none">
         {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
           <span
@@ -1735,34 +1819,69 @@ function FijarButton({
               top: "50%",
               left: "50%",
               background: i % 2 === 0 ? A : B,
-              boxShadow: `0 0 8px ${A}`,
-              animation: `fijar-particle 4s ${(i * 0.4).toFixed(2)}s linear infinite`,
+              boxShadow: `0 0 10px ${A}`,
+              opacity: holding ? 1 : 0.7,
+              animation: `fijar-particle ${holding ? "1.6s" : "4s"} ${(i * 0.18).toFixed(2)}s linear infinite`,
               transform: `rotate(${i * 45}deg) translateX(0)`,
             }}
           />
         ))}
       </span>
+
       <button
         type="button"
         disabled={busy}
-        onClick={onClick}
-        className="relative inline-flex items-center gap-3 px-7 py-3 rounded-full font-hero text-base tracking-[0.25em] uppercase text-[#0c1120] border-2 transition-transform active:scale-95"
+        onPointerDown={beginHold}
+        onPointerUp={endHold}
+        onPointerLeave={endHold}
+        onPointerCancel={endHold}
+        onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) beginHold(); }}
+        onKeyUp={(e) => { if (e.key === "Enter" || e.key === " ") endHold(); }}
+        aria-label={label}
+        className="relative inline-flex items-center gap-3 px-8 py-3.5 rounded-full font-hero text-base tracking-[0.25em] uppercase text-[#0c1120] border-2 transition-transform active:scale-[0.98] disabled:opacity-70"
         style={{
           background: `linear-gradient(135deg, ${A}, ${B})`,
           borderColor: `${A}cc`,
-          boxShadow: `0 0 28px ${A}aa, 0 0 80px ${A}55, inset 0 1px 0 rgba(255,255,255,0.6)`,
-          animation: "fijar-pulse 2.4s ease-in-out infinite",
+          boxShadow: holding
+            ? `0 0 42px ${A}cc, 0 0 120px ${A}77, inset 0 1px 0 rgba(255,255,255,0.7)`
+            : `0 0 28px ${A}aa, 0 0 80px ${A}55, inset 0 1px 0 rgba(255,255,255,0.6)`,
+          animation: holding ? "none" : "fijar-pulse 2.4s ease-in-out infinite",
           textShadow: "0 1px 0 rgba(255,255,255,0.4)",
+          transform: holding ? `scale(${1 + progress * 0.04})` : undefined,
         }}
       >
+        {/* Progress ring overlay */}
+        <svg
+          aria-hidden="true"
+          className="absolute -inset-1.5 w-[calc(100%+0.75rem)] h-[calc(100%+0.75rem)] pointer-events-none"
+          viewBox="0 0 100 80"
+          preserveAspectRatio="none"
+          style={{ overflow: "visible" }}
+        >
+          <rect
+            x="2" y="2" width="96" height="76" rx="38" ry="38"
+            fill="none"
+            stroke="rgba(255,255,255,0.85)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            pathLength={ringC}
+            strokeDasharray={ringC}
+            strokeDashoffset={ringDashoffset}
+            style={{
+              filter: `drop-shadow(0 0 6px ${A})`,
+              transition: holding ? "none" : "stroke-dashoffset 260ms ease-out",
+            }}
+          />
+        </svg>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           {locked
             ? <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></>
             : <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0" /></>}
         </svg>
-        {busy ? "Guardando…" : locked ? "Desfijar configuración" : "Fijar grupos y eliminatorias"}
+        <span className="relative z-[1]">{label}</span>
       </button>
+
       {error && (
         <p className="absolute -bottom-7 left-0 right-0 text-center text-court-danger text-xs">
           {error}
@@ -1770,12 +1889,12 @@ function FijarButton({
       )}
       <style>{`
         @keyframes fijar-pulse {
-          0%, 100% { transform: translateY(0); box-shadow: 0 0 28px ${A}aa, 0 0 80px ${A}55, inset 0 1px 0 rgba(255,255,255,0.6); }
-          50%      { transform: translateY(-2px); box-shadow: 0 0 40px ${A}cc, 0 0 110px ${A}77, inset 0 1px 0 rgba(255,255,255,0.7); }
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-2px); }
         }
         @keyframes fijar-aura {
-          0%, 100% { opacity: 0.65; transform: scale(1); }
-          50%      { opacity: 1;    transform: scale(1.12); }
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50%      { opacity: 1;   transform: scale(1.14); }
         }
         @keyframes fijar-particle {
           0%   { transform: rotate(0deg)   translateX(0)    scale(0.6); opacity: 0; }
