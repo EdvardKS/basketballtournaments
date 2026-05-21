@@ -1536,10 +1536,6 @@ function PreviewTab({
   const [err, setErr] = useState<string | null>(null);
 
   const toggleLock = async () => {
-    if (locked) {
-      const ok = confirm("¿Desfijar la configuración? Volverás a poder editar grupos y eliminatorias.");
-      if (!ok) return;
-    }
     setBusy(true); setErr(null);
     try {
       await api(`/tournaments/${tournament.id}/${locked ? "unlock" : "lock"}-bracket`, {
@@ -1703,12 +1699,12 @@ function PreviewTab({
 }
 
 // Hold-to-confirm button inspired by https://motion.dev/examples/react-hold-to-confirm
-// The admin must press AND HOLD for HOLD_MS to trigger the action. Releasing
-// before the timer completes rewinds the progress ring back to 0. Once
-// completed, the button morphs into a "Configuración fijada" state and the
-// hold gesture is no longer needed to unlock (a normal click + confirm dialog
-// is enough so the admin cannot accidentally desfijar by tapping).
-const HOLD_MS = 1400;
+// Both fijar and desfijar use the gesture so the action can never fire by a
+// stray tap. While the admin holds, a ring of particles lights up
+// sequentially around the button; reaching 100% kicks off a spectacular
+// burst (white flash + radial sparks + scale pulse) before the API call.
+const HOLD_MS = 1500;
+const PARTICLE_COUNT = 32;
 
 function FijarButton({
   locked, busy, error, onClick,
@@ -1727,6 +1723,7 @@ function FijarButton({
 
   const [progress, setProgress] = useState(0); // 0..1
   const [holding, setHolding] = useState(false);
+  const [burst, setBurst] = useState(false);     // post-complete spectacle
   const startRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const cancelRef = useRef(false);
@@ -1747,17 +1744,18 @@ function FijarButton({
     if (p >= 1) {
       stopRaf();
       setHolding(false);
-      onClick();
-      // Fade the ring back after the action fires.
-      setTimeout(() => setProgress(0), 420);
+      // Spectacle: flash burst + radial sparks + scale pulse, then fire
+      // the action right after the white flash peaks.
+      setBurst(true);
+      setTimeout(() => { onClick(); }, 280);
+      setTimeout(() => { setBurst(false); setProgress(0); }, 1200);
       return;
     }
     rafRef.current = requestAnimationFrame(tick);
   };
 
   const beginHold = () => {
-    if (busy) return;
-    if (locked) { onClick(); return; }
+    if (busy || burst) return;
     cancelRef.current = false;
     startRef.current = null;
     setHolding(true);
@@ -1769,11 +1767,11 @@ function FijarButton({
     cancelRef.current = true;
     stopRaf();
     setHolding(false);
-    // Rewind the ring smoothly.
+    // Smooth rewind so the partial-charge fades back to dim.
     const startedAt = performance.now();
     const startProgress = progress;
     const rewind = (now: number) => {
-      const t = Math.min(1, (now - startedAt) / 260);
+      const t = Math.min(1, (now - startedAt) / 280);
       const next = startProgress * (1 - t);
       setProgress(next);
       if (t < 1) rafRef.current = requestAnimationFrame(rewind);
@@ -1785,52 +1783,103 @@ function FijarButton({
   // Cancel any in-flight raf on unmount.
   useEffect(() => () => { stopRaf(); }, []);
 
-  const ringR = 34;
-  const ringC = 2 * Math.PI * ringR;
-  const ringDashoffset = ringC * (1 - progress);
-
   const label = busy
     ? "Guardando…"
-    : locked
-      ? "Configuración fijada · click para desfijar"
+    : burst
+      ? (locked ? "Desfijando…" : "¡Fijado!")
       : holding
-        ? "Mantén pulsado…"
-        : "Mantén pulsado para fijar";
+        ? (locked ? "Mantén pulsado…" : "Mantén pulsado…")
+        : (locked ? "Mantén pulsado para desfijar" : "Mantén pulsado para fijar");
+
+  // Geometry: particles sit on a pill ring around the button — distributed
+  // along an ellipse so the gesture decorates the whole shape.
+  const rx = 130; // horizontal radius (px)
+  const ry = 38;  // vertical radius (px)
+  const particles = Array.from({ length: PARTICLE_COUNT }, (_, i) => {
+    const theta = (i / PARTICLE_COUNT) * Math.PI * 2 - Math.PI / 2;
+    const x = Math.cos(theta) * rx;
+    const y = Math.sin(theta) * ry;
+    const lit = progress >= (i + 0.5) / PARTICLE_COUNT;
+    return { i, x, y, lit, theta };
+  });
 
   return (
     <div className="relative select-none" style={{ width: "fit-content" }}>
-      {/* Aura halo */}
+      {/* Outer aura — gentle by default, blooms while holding */}
       <span
         aria-hidden="true"
-        className="absolute -inset-8 rounded-full pointer-events-none"
+        className="absolute -inset-10 rounded-full pointer-events-none"
         style={{
-          background: `radial-gradient(60% 60% at 50% 50%, ${A}66, transparent 70%)`,
-          filter: "blur(16px)",
-          animation: "fijar-aura 3.6s ease-in-out infinite",
+          background: `radial-gradient(60% 60% at 50% 50%, ${A}77, transparent 70%)`,
+          filter: "blur(18px)",
+          opacity: holding ? 0.95 + progress * 0.05 : burst ? 1 : 0.55,
+          transform: `scale(${1 + (holding ? progress * 0.25 : burst ? 0.35 : 0)})`,
+          transition: "opacity 240ms ease-out, transform 240ms ease-out",
         }}
       />
-      {/* Light particles — appear stronger while holding */}
+
+      {/* Particle ring around the button. Unlit = dim dot, lit = bright,
+          big-glow, sparkling. The "filling" sweeps clockwise as the user
+          holds longer. */}
       <span aria-hidden="true" className="absolute inset-0 pointer-events-none">
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+        {particles.map(({ i, x, y, lit }) => (
           <span
             key={i}
-            className="absolute w-1.5 h-1.5 rounded-full"
+            className="absolute rounded-full"
             style={{
               top: "50%",
               left: "50%",
-              background: i % 2 === 0 ? A : B,
-              boxShadow: `0 0 10px ${A}`,
-              opacity: holding ? 1 : 0.7,
-              animation: `fijar-particle ${holding ? "1.6s" : "4s"} ${(i * 0.18).toFixed(2)}s linear infinite`,
-              transform: `rotate(${i * 45}deg) translateX(0)`,
+              width: lit ? 7 : 3.5,
+              height: lit ? 7 : 3.5,
+              background: lit ? (i % 2 === 0 ? A : B) : "rgba(255,255,255,0.18)",
+              boxShadow: lit ? `0 0 14px ${A}, 0 0 4px #fff` : "none",
+              transform: `translate(${x - (lit ? 3.5 : 1.75)}px, ${y - (lit ? 3.5 : 1.75)}px)`,
+              transition: "width 160ms ease-out, height 160ms ease-out, background 160ms ease-out, box-shadow 160ms ease-out",
+              animation: lit ? `fijar-twinkle 0.9s ${(i * 0.03).toFixed(2)}s ease-in-out infinite` : undefined,
             }}
           />
         ))}
       </span>
 
+      {/* Burst overlay: white halo expansion + 16 outward sparks */}
+      {burst && (
+        <span aria-hidden="true" className="absolute inset-0 pointer-events-none">
+          <span
+            className="absolute rounded-full"
+            style={{
+              top: "50%", left: "50%",
+              width: 6, height: 6,
+              transform: "translate(-50%,-50%)",
+              background: "white",
+              boxShadow: `0 0 60px 30px #fff, 0 0 160px 80px ${A}`,
+              animation: "fijar-burst-flash 1.1s ease-out forwards",
+            }}
+          />
+          {Array.from({ length: 16 }, (_, i) => {
+            const t = (i / 16) * Math.PI * 2;
+            return (
+              <span
+                key={`spark-${i}`}
+                className="absolute rounded-full"
+                style={{
+                  top: "50%", left: "50%",
+                  width: 6, height: 6,
+                  background: i % 2 === 0 ? A : "#fff",
+                  boxShadow: `0 0 14px ${A}, 0 0 4px #fff`,
+                  transform: "translate(-50%,-50%)",
+                  ["--spark-x" as never]: `${Math.cos(t) * 220}px`,
+                  ["--spark-y" as never]: `${Math.sin(t) * 90}px`,
+                  animation: `fijar-burst-spark 1s ${(i * 0.02).toFixed(2)}s ease-out forwards`,
+                }}
+              />
+            );
+          })}
+        </span>
+      )}
+
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || burst}
         onPointerDown={beginHold}
         onPointerUp={endHold}
         onPointerLeave={endHold}
@@ -1838,41 +1887,23 @@ function FijarButton({
         onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !e.repeat) beginHold(); }}
         onKeyUp={(e) => { if (e.key === "Enter" || e.key === " ") endHold(); }}
         aria-label={label}
-        className="relative inline-flex items-center gap-3 px-8 py-3.5 rounded-full font-hero text-base tracking-[0.25em] uppercase text-[#0c1120] border-2 transition-transform active:scale-[0.98] disabled:opacity-70"
+        className="relative inline-flex items-center gap-3 px-8 py-3.5 rounded-full font-hero text-base tracking-[0.25em] uppercase text-[#0c1120] border-2 disabled:opacity-90"
         style={{
           background: `linear-gradient(135deg, ${A}, ${B})`,
           borderColor: `${A}cc`,
-          boxShadow: holding
-            ? `0 0 42px ${A}cc, 0 0 120px ${A}77, inset 0 1px 0 rgba(255,255,255,0.7)`
-            : `0 0 28px ${A}aa, 0 0 80px ${A}55, inset 0 1px 0 rgba(255,255,255,0.6)`,
-          animation: holding ? "none" : "fijar-pulse 2.4s ease-in-out infinite",
+          boxShadow: burst
+            ? `0 0 80px ${A}, 0 0 200px ${A}aa, inset 0 1px 0 #fff`
+            : holding
+              ? `0 0 50px ${A}dd, 0 0 140px ${A}88, inset 0 1px 0 rgba(255,255,255,0.7)`
+              : `0 0 28px ${A}aa, 0 0 80px ${A}55, inset 0 1px 0 rgba(255,255,255,0.6)`,
+          animation: burst
+            ? "fijar-button-burst 0.45s ease-out"
+            : holding ? "none" : "fijar-pulse 2.4s ease-in-out infinite",
           textShadow: "0 1px 0 rgba(255,255,255,0.4)",
-          transform: holding ? `scale(${1 + progress * 0.04})` : undefined,
+          transform: holding ? `scale(${1 + progress * 0.05})` : undefined,
+          transition: "box-shadow 200ms ease-out",
         }}
       >
-        {/* Progress ring overlay */}
-        <svg
-          aria-hidden="true"
-          className="absolute -inset-1.5 w-[calc(100%+0.75rem)] h-[calc(100%+0.75rem)] pointer-events-none"
-          viewBox="0 0 100 80"
-          preserveAspectRatio="none"
-          style={{ overflow: "visible" }}
-        >
-          <rect
-            x="2" y="2" width="96" height="76" rx="38" ry="38"
-            fill="none"
-            stroke="rgba(255,255,255,0.85)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            pathLength={ringC}
-            strokeDasharray={ringC}
-            strokeDashoffset={ringDashoffset}
-            style={{
-              filter: `drop-shadow(0 0 6px ${A})`,
-              transition: holding ? "none" : "stroke-dashoffset 260ms ease-out",
-            }}
-          />
-        </svg>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           {locked
@@ -1892,15 +1923,24 @@ function FijarButton({
           0%, 100% { transform: translateY(0); }
           50%      { transform: translateY(-2px); }
         }
-        @keyframes fijar-aura {
-          0%, 100% { opacity: 0.6; transform: scale(1); }
-          50%      { opacity: 1;   transform: scale(1.14); }
+        @keyframes fijar-twinkle {
+          0%, 100% { transform: scale(1); filter: brightness(1); }
+          50%      { transform: scale(1.4); filter: brightness(1.6); }
         }
-        @keyframes fijar-particle {
-          0%   { transform: rotate(0deg)   translateX(0)    scale(0.6); opacity: 0; }
+        @keyframes fijar-burst-flash {
+          0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.4); }
+          25%  { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+          100% { opacity: 0; transform: translate(-50%,-50%) scale(3.4); }
+        }
+        @keyframes fijar-burst-spark {
+          0%   { transform: translate(-50%,-50%); opacity: 0; }
           15%  { opacity: 1; }
-          85%  { opacity: 1; }
-          100% { transform: rotate(360deg) translateX(90px) scale(1);   opacity: 0; }
+          100% { transform: translate(calc(-50% + var(--spark-x)), calc(-50% + var(--spark-y))) scale(0.4); opacity: 0; }
+        }
+        @keyframes fijar-button-burst {
+          0%   { transform: scale(1.05); }
+          40%  { transform: scale(1.18); }
+          100% { transform: scale(1); }
         }
       `}</style>
     </div>
