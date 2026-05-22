@@ -32,7 +32,7 @@
 | AC4 | Torneo pasa a `completed` y el jugador sube `overall` después | El cromo de ese torneo en el carousel sigue mostrando las stats del snapshot al cierre. El cromo del torneo abierto (si lo hay) sí refleja el cambio. |
 | AC5 | Crear dos torneos consecutivos y abrir su theme endpoint | Reciben `catalog_index` distintos (0 y 1) y por tanto palette distintas. La UNIQUE constraint impide colisiones. |
 | AC6 | Jugador en el carousel posicionado en el cromo de 2022, pulsa "Descargar PNG" | El PNG descargado es el cromo de 2022 (header + theme + stats de 2022), no el de 2026. |
-| AC7 | Catálogo de paletas se agota | `GET /tournaments/:id/theme` devuelve `409 THEME_CATALOG_EXHAUSTED`. Admin extiende el catálogo vía `POST /admin/tournament-themes/seed`. |
+| AC7 | Catálogo de paletas se agota | El servidor genera procedurally una nueva paleta a partir del `tournament_id` (sha256 → HSL), la persiste con el siguiente `catalog_index` libre y la asigna. El admin sigue pudiendo precargar paletas curadas vía `POST /admin/tournament-themes/seed`. `409 THEME_CATALOG_EXHAUSTED` ya no ocurre en flujo normal. |
 | AC8 | Migración aplicada sobre DB con torneos existentes | Cada torneo recibe `theme_id` único; ningún torneo queda sin theme. |
 | AC9 | Animación del carousel | Las transiciones entre slides usan GSAP (`gsap.to`) con duración 0.45s y ease `power2.out`. No hay flash ni jump visible. |
 | AC10 | Compartir vía WhatsApp en móvil | Web Share API recibe el `File` del cromo activo, no de `#cromo-root` por defecto. |
