@@ -1,7 +1,8 @@
 ---
 import Main from "../../layouts/Main.astro";
 import TournamentCard from "../../components/TournamentCard.astro";
-import CromoCard from "../../components/cromo/CromoCard.astro";
+import CromoCarousel from "../../components/cromo/CromoCarousel.astro";
+import CromoEmptyState from "../../components/cromo/CromoEmptyState.astro";
 import CromoMedals from "../../components/cromo/CromoMedals.astro";
 import PlayerInfoCard from "../../components/PlayerInfoCard.astro";
 import PlayerStatsReadonly from "../../components/PlayerStatsReadonly.astro";
@@ -10,6 +11,7 @@ import CromoShare from "../../islands/CromoShare.tsx";
 import { requireAuth } from "../../lib/session.js";
 import { api, getCookieHeader } from "../../lib/api.js";
 import type { Tournament, Achievement } from "../../lib/types.js";
+import type { Cromo } from "../../lib/cromos.js";
 
 const { redirect, session } = await requireAuth(Astro.request);
 if (redirect) return Astro.redirect(redirect);
@@ -22,9 +24,16 @@ const player = session.player!;
 let tournaments: Tournament[] = [];
 try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
 const active = tournaments.find((t) => !["completed","upcoming"].includes(t.status)) ?? null;
+const openTournament = tournaments.find((t) => ["open", "upcoming"].includes(t.status)) ?? null;
 
 let achievements: Achievement[] = [];
 try { achievements = await api<Achievement[]>(`/players/${player.id}/achievements`, {}, cookie); } catch { /* empty */ }
+
+let cromos: Cromo[] = [];
+try {
+  const res = await api<{ cromos: Cromo[] }>(`/players/${player.id}/cromos`, {}, cookie);
+  cromos = res.cromos;
+} catch { /* empty */ }
 ---
 <Main title="Mi panel" player={player}>
   <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
@@ -48,8 +57,14 @@ try { achievements = await api<Achievement[]>(`/players/${player.id}/achievement
     <section class="space-y-4">
       <h2 class="font-display text-2xl text-white">Mi panel</h2>
 
-      <CromoCard player={player} />
-      <CromoShare playerName={player.name} playerId={player.id} client:visible />
+      {cromos.length === 0 ? (
+        <CromoEmptyState openTournament={openTournament} />
+      ) : (
+        <>
+          <CromoCarousel cromos={cromos} />
+          <CromoShare playerName={player.name} playerId={player.id} client:visible />
+        </>
+      )}
 
       <div class="card space-y-2">
         <p class="label-text">Medallas</p>

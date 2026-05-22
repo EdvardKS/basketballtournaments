@@ -20,6 +20,7 @@ export interface ShareInput {
   playerName: string;
   playerUrl: string;        // canonical public URL we want to advertise
   network: ShareNetwork;
+  source?: HTMLElement | null; // SPEC-013: explicit active-slide node
 }
 
 export interface ShareResult {
@@ -62,10 +63,10 @@ const downloadFile = (exp: ExportedCard) => {
 };
 
 export const shareCard = async ({
-  playerName, playerUrl, network,
+  playerName, playerUrl, network, source,
 }: ShareInput): Promise<ShareResult> => {
   const fileName = buildFileName(playerName);
-  const exp = await exportCardToPng({ fileName });
+  const exp = await exportCardToPng({ fileName, source });
   const exportPx = { w: exp.width, h: exp.height };
   const text = `Mi cromo de ${playerName} 🏀`;
 

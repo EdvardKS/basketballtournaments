@@ -176,9 +176,14 @@ export const exportCardToPng = async (opts: ExportOptions = {}): Promise<Exporte
 
 // Plain download (no share intent). Used by the explicit "Descargar PNG"
 // button so the UI doesn't need to re-implement the anchor dance.
-export const downloadCard = async (playerName: string): Promise<ExportedCard> => {
+// `source` optionally targets a specific cromo node — defaults to the
+// `#cromo-root` of the active carousel slide.
+export const downloadCard = async (
+  playerName: string,
+  source?: HTMLElement | null,
+): Promise<ExportedCard> => {
   const fileName = buildFileName(playerName);
-  const exp = await exportCardToPng({ fileName });
+  const exp = await exportCardToPng({ fileName, source });
   const a = document.createElement("a");
   a.href = exp.url;
   a.download = fileName;

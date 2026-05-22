@@ -1,34 +1,41 @@
 ---
-// Single source of truth for the cromo visual. The card is ALWAYS the box
-// `lib/cromo-export.ts` rasterizes (680×906 logical px) — the surrounding
-// `.cromo-fit` wrapper only scales the preview down via a CSS container
-// query. All positional rules live on `.cromo` directly (NOT on
-// `.cromo-fit .cromo`) so the exported clone, which is detached from the
-// `.cromo-fit` ancestor, renders byte-for-byte identical to the preview.
-import type { Player, Achievement } from "../../lib/types.js";
-import { cromoTier, tierTheme, POSITION_ABBR } from "../../lib/cromo.js";
+// SPEC-013: cromo per tournament. Receives a fully-resolved `Cromo` (theme +
+// player + tournament + versionLabel) so this component has no business
+// logic — it only renders.
+//
+// The card stays at 680x906 logical px (single source of truth for the
+// export sandbox). The preview wrapper scales it via --cromo-scale; the
+// theme palette is applied as inline CSS custom properties on #cromo-root
+// so there is no Astro scoping ambiguity at runtime.
+import type { Cromo } from "../../lib/cromos.js";
+import { paletteToStyle } from "../../lib/cromos.js";
+import { POSITION_ABBR } from "../../lib/cromo.js";
 import { overallColor } from "../../lib/display.js";
 
-interface Props { player: Player; achievements?: Achievement[] }
-const { player: p } = Astro.props as Props;
-const tier = cromoTier(p.createdAt);
-const theme = tierTheme(tier);
-const positionAbbr = POSITION_ABBR[p.position] ?? p.position.slice(0, 2).toUpperCase();
+interface Props {
+  cromo: Cromo;
+  active?: boolean;
+}
+const { cromo: c, active } = Astro.props as Props;
+const positionAbbr = POSITION_ABBR[c.player.position] ?? c.player.position.slice(0, 2).toUpperCase();
 
 const stats = [
-  ["RIT", p.pace], ["TIR", p.shooting], ["PAS", p.passing],
-  ["REG", p.dribbling], ["DEF", p.defense], ["FIS", p.physical],
+  ["RIT", c.player.pace],     ["TIR", c.player.shooting], ["PAS", c.player.passing],
+  ["REG", c.player.dribbling],["DEF", c.player.defense],  ["FIS", c.player.physical],
 ] as const;
+
+const rootStyle = "position:absolute;top:0;left:0;width:680px;height:906px;transform-origin:top left;transform:scale(var(--cromo-scale,0.559));"
+  + paletteToStyle(c.theme);
 ---
 <div class="cromo-fit" style="width:clamp(280px,100%,380px);margin:0 auto;aspect-ratio:680/906;position:relative;overflow:hidden;box-sizing:border-box;--cromo-scale:0.559;">
-  <div id="cromo-root" class:list={["cromo", theme.frameClass]} style="position:absolute;top:0;left:0;width:680px;height:906px;transform-origin:top left;transform:scale(var(--cromo-scale,0.559));">
-    <!-- Layered background: base gradient + foil + spotlight + vignette. -->
+  <div id="cromo-root" class="cromo" data-active={active ? "true" : "false"} data-tournament-id={c.tournamentId} style={rootStyle}>
+    <!-- Layered background. -->
     <div class="cromo-bg" aria-hidden="true"></div>
     <div class="cromo-foil" aria-hidden="true"></div>
     <div class="cromo-spotlight" aria-hidden="true"></div>
     <div class="cromo-vignette" aria-hidden="true"></div>
 
-    <!-- Dual-tone metallic frame (outer + inner border). -->
+    <!-- Dual-tone metallic frame. -->
     <div class="cromo-frame cromo-frame-outer" aria-hidden="true"></div>
     <div class="cromo-frame cromo-frame-inner" aria-hidden="true"></div>
 
@@ -38,38 +45,46 @@ const stats = [
     <span class="cromo-corner-deco cromo-corner-bl" aria-hidden="true"></span>
     <span class="cromo-corner-deco cromo-corner-br" aria-hidden="true"></span>
 
+    <!-- Tournament header (SPEC-013). -->
+    <div class="cromo-tournament" aria-label="Torneo">
+      <div class="cromo-tname">{c.tournamentName}</div>
+      <div class="cromo-tyear">{c.tournamentYear}</div>
+    </div>
+
     <!-- Top-left: rating + divider + position. -->
     <div class="cromo-corner">
-      <div class:list={["cromo-overall", overallColor(p.overall)]}>{p.overall}</div>
+      <div class={`cromo-overall ${overallColor(c.player.overall)}`}>{c.player.overall}</div>
       <div class="cromo-divider" aria-hidden="true"></div>
       <div class="cromo-position">{positionAbbr}</div>
     </div>
 
-    <!-- Tier badge top-right. -->
+    <!-- Tier badge top-right. versionLabel is the ordinal "v1", "v2", ... -->
     <div class="cromo-tier">
       <span class="cromo-tier-dot" aria-hidden="true"></span>
-      {theme.tierLabel}
+      {c.versionLabel.toUpperCase()}
     </div>
 
-    <!-- Avatar zone: pseudo-shadow + masked photo (no CSS filters that
-         html-to-image can't reproduce — we use real DOM nodes). -->
+    <!-- Frozen-stats badge when the tournament is completed. -->
+    {c.frozen ? <div class="cromo-frozen" aria-label="Cromo finalizado">FINAL</div> : null}
+
+    <!-- Avatar zone. -->
     <div class="cromo-photo-shadow" aria-hidden="true"></div>
     <div class="cromo-photo-mask">
-      {p.avatar ? (
-        <img class="cromo-photo-img" src={p.avatar} alt="" crossorigin="anonymous" decoding="sync" />
+      {c.player.avatar ? (
+        <img class="cromo-photo-img" src={c.player.avatar} alt="" crossorigin="anonymous" decoding="sync" />
       ) : (
-        <div class="cromo-photo-fallback">{p.name.charAt(0).toUpperCase()}</div>
+        <div class="cromo-photo-fallback">{c.player.name.charAt(0).toUpperCase()}</div>
       )}
     </div>
 
-    <!-- Footer: brand line, name, stats grid. -->
+    <!-- Footer: brand, name, stats. -->
     <div class="cromo-footer">
       <div class="cromo-brand" aria-hidden="true">
         <span class="cromo-brand-hair"></span>
-        <span class="cromo-brand-text">VBL · VILLENA BASKET LEAGUE</span>
+        <span class="cromo-brand-text">VBL · {c.theme.label.toUpperCase()}</span>
         <span class="cromo-brand-hair"></span>
       </div>
-      <p class="cromo-name">{p.name}</p>
+      <p class="cromo-name">{c.player.name}</p>
       <div class="cromo-stats">
         {stats.map(([k, v]) => (
           <div class="cromo-stat">
@@ -83,35 +98,7 @@ const stats = [
 </div>
 
 <style>
-  /* Preview wrapper. Inner card stays at 680x906 px logical (what the
-     export sandbox captures). Scale ratio is set by the inline script
-     below via ResizeObserver — CSS container queries proved unreliable
-     in this Astro layout. */
-  .cromo-fit {
-    width: clamp(280px, 100%, 380px);
-    margin: 0 auto;
-    aspect-ratio: 680 / 906;
-    position: relative;
-    overflow: hidden;
-    box-sizing: border-box;
-    /* CSS fallback in case the JS observer hasn't run yet: 380 / 680.
-       The inline script below overrides this with the exact value once
-       layout is measured. */
-    --cromo-scale: 0.559;
-  }
-  .cromo-fit > .cromo {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    transform-origin: top left;
-    transform: scale(var(--cromo-scale));
-  }
-
-  /* --- Canonical card box. Absolute px everywhere — no clamp / vw / %. --- */
   .cromo {
-    position: relative;
-    width: 680px;
-    height: 906px;
     border-radius: 32px;
     overflow: hidden;
     isolation: isolate;
@@ -123,14 +110,9 @@ const stats = [
       0 0 80px -20px var(--cromo-glow, transparent);
   }
 
-  /* --- Metallic frame (dual concentric borders, FUT style). --- */
-  .cromo-frame {
-    position: absolute;
-    pointer-events: none;
-  }
+  .cromo-frame { position: absolute; pointer-events: none; }
   .cromo-frame-outer {
-    inset: 0;
-    border-radius: 32px;
+    inset: 0; border-radius: 32px;
     border: 3px solid var(--cromo-frame-2);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,0.18),
@@ -138,20 +120,14 @@ const stats = [
     z-index: 8;
   }
   .cromo-frame-inner {
-    inset: 10px;
-    border-radius: 24px;
+    inset: 10px; border-radius: 24px;
     border: 1px solid rgba(255,255,255,0.18);
-    box-shadow:
-      inset 0 0 0 1px rgba(0,0,0,0.35);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
     z-index: 7;
   }
 
-  /* --- FUT-style corner notches. 32px triangles in tier color. --- */
   .cromo-corner-deco {
-    position: absolute;
-    width: 32px;
-    height: 32px;
-    z-index: 9;
+    position: absolute; width: 32px; height: 32px; z-index: 9;
     pointer-events: none;
     background: var(--cromo-frame-2);
     box-shadow: 0 0 12px var(--cromo-glow);
@@ -161,7 +137,6 @@ const stats = [
   .cromo-corner-bl { bottom: 0; left: 0;    clip-path: polygon(0 0, 0 100%, 100% 100%); border-bottom-left-radius: 32px; }
   .cromo-corner-br { bottom: 0; right: 0;   clip-path: polygon(100% 0, 100% 100%, 0 100%); border-bottom-right-radius: 32px; }
 
-  /* --- Background layers. --- */
   .cromo-bg {
     position: absolute; inset: 0; z-index: 0;
     background:
@@ -169,8 +144,6 @@ const stats = [
       radial-gradient(ellipse 80% 60% at 50% 18%, color-mix(in oklab, var(--cromo-c2) 30%, transparent), transparent 70%),
       linear-gradient(170deg, var(--cromo-c1) 0%, var(--cromo-c3) 55%, #06080f 100%);
   }
-  /* Diagonal foil — confined to the upper half so the stats area stays
-     readable. mask-image is supported by html-to-image and evergreen browsers. */
   .cromo-foil {
     position: absolute; inset: 0; z-index: 1;
     background: repeating-linear-gradient(115deg,
@@ -178,8 +151,7 @@ const stats = [
       transparent 2px 16px);
     -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 80%);
             mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 80%);
-    opacity: 0.65;
-    pointer-events: none;
+    opacity: 0.65; pointer-events: none;
   }
   .cromo-spotlight {
     position: absolute; inset: 0; z-index: 2;
@@ -192,21 +164,45 @@ const stats = [
     pointer-events: none;
   }
 
-  /* --- Top-left corner: overall + divider + position. --- */
+  /* Tournament header — sits above corner / tier, centred. */
+  .cromo-tournament {
+    position: absolute;
+    top: 26px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 11;
+    text-align: center;
+    pointer-events: none;
+    max-width: 360px;
+  }
+  .cromo-tname {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cromo-tyear {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: var(--cromo-frame-2);
+    margin-top: 2px;
+    text-shadow: 0 0 18px var(--cromo-glow), 0 2px 6px rgba(0,0,0,0.55);
+  }
+
   .cromo-corner {
     position: absolute;
-    top: 40px;
-    left: 48px;
+    top: 100px; left: 48px;
     z-index: 10;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    display: flex; flex-direction: column; align-items: center;
   }
   .cromo-overall {
-    font-size: 112px;
-    font-weight: 900;
-    letter-spacing: -0.05em;
-    line-height: 0.82;
+    font-size: 112px; font-weight: 900;
+    letter-spacing: -0.05em; line-height: 0.82;
     text-shadow:
       0 4px 22px rgba(0,0,0,0.65),
       0 1px 0 rgba(255,255,255,0.08);
@@ -218,28 +214,20 @@ const stats = [
     opacity: 0.7;
   }
   .cromo-position {
-    font-size: 32px;
-    font-weight: 600;
+    font-size: 32px; font-weight: 600;
     letter-spacing: 0.22em;
     color: rgba(255,255,255,0.96);
     text-shadow: 0 2px 8px rgba(0,0,0,0.5);
   }
 
-  /* --- Tier badge (top-right metallic insignia). --- */
   .cromo-tier {
     position: absolute;
-    top: 46px;
-    right: 48px;
+    top: 110px; right: 48px;
     z-index: 10;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 18px;
-    border-radius: 999px;
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: 0.36em;
-    text-transform: uppercase;
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 10px 18px; border-radius: 999px;
+    font-size: 16px; font-weight: 700;
+    letter-spacing: 0.36em; text-transform: uppercase;
     color: var(--cromo-tier-text, #fff);
     background:
       linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.35)),
@@ -256,17 +244,25 @@ const stats = [
     box-shadow: 0 0 12px var(--cromo-frame-2);
   }
 
-  /* Avatar zone. Real DOM nodes for shadow + mask (no filter rules, so
-     html-to-image reproduces the result 1:1). Photo mask is top 100px,
-     height 530px, so its feet sit 270px from the card bottom. We place
-     the shadow 246px from the bottom so its centre lands a touch below
-     the feet — where a real coleccionable casts. */
+  /* FINAL badge for frozen tournaments. */
+  .cromo-frozen {
+    position: absolute;
+    top: 160px; right: 48px;
+    z-index: 10;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.36em;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.85);
+  }
+
+  /* Photo + shadow as DOM nodes (no filter rules so html-to-image reproduces 1:1). */
   .cromo-photo-shadow {
     position: absolute;
-    bottom: 246px;
-    left: 50%;
-    width: 380px;
-    height: 70px;
+    bottom: 246px; left: 50%;
+    width: 380px; height: 70px;
     transform: translateX(-50%);
     z-index: 2;
     background: radial-gradient(ellipse 50% 50% at 50% 50%,
@@ -275,21 +271,16 @@ const stats = [
   }
   .cromo-photo-mask {
     position: absolute;
-    top: 100px;
-    left: 50%;
+    top: 160px; left: 50%;
     transform: translateX(-50%);
-    width: 500px;
-    height: 530px;
+    width: 500px; height: 470px;
     z-index: 3;
     overflow: hidden;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
+    display: flex; align-items: flex-end; justify-content: center;
     border-radius: 24px;
   }
   .cromo-photo-img {
-    width: 100%;
-    height: 100%;
+    width: 100%; height: 100%;
     object-fit: contain;
     object-position: center bottom;
   }
@@ -303,7 +294,6 @@ const stats = [
     color: rgba(255,255,255,0.45);
   }
 
-  /* --- Footer: brand + name + stats. --- */
   .cromo-footer {
     position: absolute;
     left: 0; right: 0; bottom: 0;
@@ -316,16 +306,13 @@ const stats = [
       rgba(0,0,0,0.94) 100%);
   }
   .cromo-brand {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: center;
+    gap: 14px; margin-bottom: 12px;
   }
   .cromo-brand-text {
     font-size: 11px;
-    letter-spacing: 0.5em;
-    color: rgba(255,255,255,0.55);
+    letter-spacing: 0.4em;
+    color: rgba(255,255,255,0.6);
     white-space: nowrap;
   }
   .cromo-brand-hair {
@@ -333,21 +320,16 @@ const stats = [
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
   }
   .cromo-name {
-    font-size: 46px;
-    line-height: 1;
-    letter-spacing: 0.05em;
-    text-align: center;
+    font-size: 46px; line-height: 1;
+    letter-spacing: 0.05em; text-align: center;
     margin: 0 auto 22px;
     max-width: 600px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     text-shadow:
       0 2px 0 rgba(0,0,0,0.4),
       0 6px 20px rgba(0,0,0,0.6);
     text-transform: uppercase;
-    color: #fff;
-    font-weight: 800;
+    color: #fff; font-weight: 800;
   }
   .cromo-stats {
     display: grid;
@@ -355,11 +337,8 @@ const stats = [
     gap: 8px 12px;
   }
   .cromo-stat {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 14px 6px;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 4px; padding: 14px 6px;
     border-radius: 14px;
     background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04));
     border: 1px solid rgba(255,255,255,0.16);
@@ -368,72 +347,18 @@ const stats = [
       0 2px 8px rgba(0,0,0,0.4);
   }
   .cromo-stat-val {
-    font-size: 40px;
-    font-weight: 900;
-    color: #fff;
-    line-height: 0.9;
+    font-size: 40px; font-weight: 900;
+    color: #fff; line-height: 0.9;
     text-shadow: 0 2px 6px rgba(0,0,0,0.55);
   }
   .cromo-stat-key {
-    font-size: 12px;
-    letter-spacing: 0.28em;
+    font-size: 12px; letter-spacing: 0.28em;
     color: rgba(255,255,255,0.65);
     font-weight: 600;
-  }
-
-  /* --- Tier palettes (v1 bronze → v5+ amethyst). --- */
-  .frame-v1 {
-    --cromo-c1: #5a4a3a;
-    --cromo-c2: #d4a05c;
-    --cromo-c3: #1a120c;
-    --cromo-glow: rgba(212, 160, 92, 0.45);
-    --cromo-frame-1: rgba(212, 160, 92, 0.85);
-    --cromo-frame-2: #f0c987;
-    --cromo-tier-text: #f0c987;
-  }
-  .frame-v2 {
-    --cromo-c1: #2b3858;
-    --cromo-c2: #98abdd;
-    --cromo-c3: #0b1224;
-    --cromo-glow: rgba(152, 171, 221, 0.5);
-    --cromo-frame-1: rgba(152, 171, 221, 0.85);
-    --cromo-frame-2: #c6d4ef;
-    --cromo-tier-text: #c6d4ef;
-  }
-  .frame-v3 {
-    --cromo-c1: #5e3f0a;
-    --cromo-c2: #ffd34a;
-    --cromo-c3: #1a1206;
-    --cromo-glow: rgba(255, 211, 74, 0.55);
-    --cromo-frame-1: rgba(255, 211, 74, 0.85);
-    --cromo-frame-2: #ffe27a;
-    --cromo-tier-text: #ffe27a;
-  }
-  .frame-v4 {
-    --cromo-c1: #0f4032;
-    --cromo-c2: #2af0b1;
-    --cromo-c3: #021510;
-    --cromo-glow: rgba(42, 240, 177, 0.5);
-    --cromo-frame-1: rgba(42, 240, 177, 0.85);
-    --cromo-frame-2: #7df3cb;
-    --cromo-tier-text: #7df3cb;
-  }
-  .frame-v5plus {
-    --cromo-c1: #2d0e60;
-    --cromo-c2: #e066f0;
-    --cromo-c3: #07041a;
-    --cromo-glow: rgba(224, 102, 240, 0.55);
-    --cromo-frame-1: rgba(224, 102, 240, 0.85);
-    --cromo-frame-2: #f4a8f9;
-    --cromo-tier-text: #f4a8f9;
   }
 </style>
 
 <script is:inline>
-  // Drive the preview scale via JS so the inner .cromo stays at 680x906 px
-  // logical (what the export sandbox captures) while the visual preview
-  // always fits its column. CSS has a 0.559 fallback for the 380px default,
-  // this script refines it to the exact column width on every resize.
   (() => {
     const tick = (el) => {
       const w = el.clientWidth || el.getBoundingClientRect().width;
@@ -441,8 +366,7 @@ const stats = [
       el.style.setProperty("--cromo-scale", String(w / 680));
     };
     const mount = () => {
-      const nodes = document.querySelectorAll(".cromo-fit");
-      nodes.forEach((el) => {
+      document.querySelectorAll(".cromo-fit").forEach((el) => {
         if (el.dataset.cromoFitMounted === "1") return;
         el.dataset.cromoFitMounted = "1";
         requestAnimationFrame(() => tick(el));
@@ -456,8 +380,6 @@ const stats = [
     } else {
       mount();
     }
-    // Astro view transitions / soft navigations re-attach the component
-    // without firing DOMContentLoaded, so we also listen to astro:page-load.
     document.addEventListener("astro:page-load", mount);
   })();
 </script>

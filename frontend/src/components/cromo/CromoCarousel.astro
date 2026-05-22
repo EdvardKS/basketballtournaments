@@ -1,0 +1,49 @@
+---
+// SPEC-013: manual carousel of all the cromos a player has earned across
+// the tournaments they registered in. The slides are SSR-rendered via
+// CromoCard.astro; CromoCarouselControls.tsx handles state + GSAP slide
+// animation client-side. Each slide carries `data-slide-index` and the
+// active slide is marked via `data-active="true"` on its #cromo-root so
+// CromoShare can target it directly.
+import type { Cromo } from "../../lib/cromos.js";
+import CromoCard from "./CromoCard.astro";
+import CromoCarouselControls from "./CromoCarouselControls.tsx";
+
+interface Props { cromos: Cromo[] }
+const { cromos } = Astro.props as Props;
+const dotMeta = cromos.map((c, i) => ({
+  index: i,
+  themeFrame: c.theme.frame,
+  themeGlow: c.theme.glow,
+  label: `${c.tournamentName} ${c.tournamentYear}`,
+}));
+---
+<div class="cromo-carousel" role="region" aria-roledescription="carousel">
+  <div class="cromo-track" data-cromo-track>
+    {cromos.map((c, i) => (
+      <div class="cromo-slide" data-slide-index={i}>
+        <CromoCard cromo={c} active={i === 0} />
+      </div>
+    ))}
+  </div>
+  <CromoCarouselControls dots={dotMeta} client:visible />
+</div>
+
+<style>
+  .cromo-carousel {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+  }
+  .cromo-track {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    will-change: transform;
+  }
+  .cromo-slide {
+    flex: 0 0 100%;
+    display: flex;
+    justify-content: center;
+  }
+</style>

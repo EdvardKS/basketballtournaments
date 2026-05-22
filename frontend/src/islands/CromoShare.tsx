@@ -75,10 +75,20 @@ export default function CromoShare({ playerName, playerId }: Props) {
   const playerUrl = typeof window !== "undefined"
     ? `${window.location.origin}/jugador/${playerId}` : "";
 
+  // SPEC-013: prefer the carousel's active slide. Fall back to the first
+  // #cromo-root for backwards compatibility (e.g. tests without carousel).
+  const findActiveSource = (): HTMLElement | null => {
+    if (typeof document === "undefined") return null;
+    const active = document.querySelector<HTMLElement>('.cromo[data-active="true"]');
+    if (active) return active;
+    return document.getElementById("cromo-root");
+  };
+
   const handleShare = async (network: ShareNetwork) => {
     setBusy(network); setHint(null);
     try {
-      const res = await shareCard({ playerName, playerUrl, network });
+      const source = findActiveSource();
+      const res = await shareCard({ playerName, playerUrl, network, source });
       setHint(outcomeHint(res, network));
       successBurst(btnRefs.current[network]);
     } catch (err) {
@@ -92,7 +102,8 @@ export default function CromoShare({ playerName, playerId }: Props) {
   const handleDownload = async () => {
     setBusy("dl"); setHint(null);
     try {
-      const exp = await downloadCard(playerName);
+      const source = findActiveSource();
+      const exp = await downloadCard(playerName, source);
       setHint(`Cromo descargado (${exp.width}×${exp.height} px).`);
       successBurst(btnRefs.current.dl);
     } catch (err) {
