@@ -10,10 +10,53 @@
 // CAS-update the tournament. Concurrent requests for the same tournament
 // converge — the loser observes a NULL → non-NULL transition done by the
 // winner.
+//
+// When the curated catalog is exhausted, we extend it on-the-fly by
+// procedurally generating a deterministic palette from the tournament id.
+// This guarantees the system never blocks tournament creation, while
+// honouring the no-repetition rule (catalog_index UNIQUE persists the
+// generated entry exactly like a curated one).
 
 import { z } from "zod";
+import crypto from "node:crypto";
 import { query, queryOne, tx } from "../db/query.js";
 import { HttpError } from "../middleware/error.js";
+
+// Deterministic palette generator from a tournament id. Picks a style and
+// derives HSL bases from successive hash bytes so two tournaments never
+// land on identical colours. Style cycles fluor → pastel → metallic → mix.
+const STYLES = ["fluor", "pastel", "metallic", "mix"] as const;
+const proceduralPalette = (tournamentId: string, catalogIndex: number): Palette => {
+  const hash = crypto.createHash("sha256").update(tournamentId).digest();
+  const style = STYLES[catalogIndex % STYLES.length];
+  const hueA = hash[0] * 360 / 256;
+  const hueB = (hueA + 60 + (hash[1] % 90)) % 360;
+  const sat = style === "pastel" ? 55 : style === "metallic" ? 45 : 95;
+  const accentL = style === "fluor" ? 60 : style === "pastel" ? 80 : 65;
+  const frameL  = style === "pastel" ? 88 : style === "metallic" ? 80 : 78;
+  const c1 = hslToHex(hueA, sat * 0.3, 8);
+  const c2 = hslToHex(hueA, sat, accentL);
+  const c3 = hslToHex(hueB, sat * 0.25, 4);
+  const glow = c2;
+  const frame = hslToHex(hueA, sat, frameL);
+  return {
+    style,
+    c1, c2, c3, glow, frame,
+    tier_text: frame,
+    label: `${style[0]!.toUpperCase()}${style.slice(1)} #${catalogIndex}`,
+  };
+};
+
+const hslToHex = (h: number, s: number, l: number): string => {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(255 * c).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+};
 
 export const paletteSchema = z.object({
   style:     z.enum(["fluor", "pastel", "metallic", "mix"]),
@@ -85,6 +128,7 @@ export const resolveTournamentTheme = async (
       if (theme) return theme;
     }
 
+    let freeRow: Record<string, unknown> | null = null;
     const free = await q<{ id: string; catalog_index: number; palette: unknown; created_at: unknown }>(
       `SELECT th.id, th.catalog_index, th.palette, th.created_at
          FROM tournament_themes th
@@ -94,14 +138,48 @@ export const resolveTournamentTheme = async (
         ORDER BY th.catalog_index ASC
         LIMIT 1`,
     );
-    if (free.length === 0) {
-      throw new HttpError(409, "THEME_CATALOG_EXHAUSTED",
-        "El catálogo de paletas está agotado. Un admin debe ampliarlo vía POST /admin/tournament-themes/seed.");
+    if (free.length > 0) {
+      freeRow = free[0] as Record<string, unknown>;
+    } else {
+      // Catalog exhausted — extend it on-the-fly with a procedural palette
+      // derived deterministically from the tournament id. The new row gets
+      // the next free catalog_index so the UNIQUE invariant holds.
+      const maxIdx = await q<{ m: number | null }>(
+        "SELECT MAX(catalog_index) AS m FROM tournament_themes",
+      );
+      const nextIdx = ((maxIdx[0]?.m ?? -1) + 1);
+      const palette = proceduralPalette(tournamentId, nextIdx);
+      const inserted = await q<{ id: string; catalog_index: number; palette: unknown; created_at: unknown }>(
+        `INSERT INTO tournament_themes (catalog_index, palette)
+         VALUES ($1, $2::jsonb)
+         ON CONFLICT (catalog_index) DO NOTHING
+         RETURNING id, catalog_index, palette, created_at`,
+        [nextIdx, JSON.stringify(palette)],
+      );
+      if (inserted.length === 0) {
+        // Another writer just took that index. Retry by reading a free row.
+        const retry = await q<{ id: string; catalog_index: number; palette: unknown; created_at: unknown }>(
+          `SELECT th.id, th.catalog_index, th.palette, th.created_at
+             FROM tournament_themes th
+            WHERE NOT EXISTS (
+              SELECT 1 FROM tournaments t WHERE t.theme_id = th.id
+            )
+            ORDER BY th.catalog_index ASC
+            LIMIT 1`,
+        );
+        if (retry.length === 0) {
+          throw new HttpError(409, "THEME_CATALOG_EXHAUSTED",
+            "Could not allocate a theme after retry. Try again.");
+        }
+        freeRow = retry[0] as Record<string, unknown>;
+      } else {
+        freeRow = inserted[0] as Record<string, unknown>;
+      }
     }
 
     const claim = await q<{ id: string }>(
       "UPDATE tournaments SET theme_id=$1 WHERE id=$2 AND theme_id IS NULL RETURNING id",
-      [free[0].id, tournamentId],
+      [freeRow.id as string, tournamentId],
     );
     if (claim.length === 0) {
       // Lost the race. Read whatever the winner assigned.
@@ -109,7 +187,7 @@ export const resolveTournamentTheme = async (
       if (!winner) throw new HttpError(500, "THEME_RACE_LOST");
       return winner;
     }
-    return rowToTheme(free[0] as Record<string, unknown>);
+    return rowToTheme(freeRow);
   });
 };
 
