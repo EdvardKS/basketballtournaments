@@ -13,6 +13,9 @@ import {
 import { regenerateBracket } from "../services/bracket.js";
 import { updateMatchTime } from "../services/schedule.js";
 import { regroupTeams, updateGroupMeta, type RegroupGroupInput } from "../services/groups.js";
+import {
+  createScoreSession, revokeScoreSession, getActiveSessionForMatch,
+} from "../services/match-score-sessions.js";
 
 export const matchesRouter = Router();
 
@@ -100,3 +103,36 @@ matchesRouter.post("/:id/score", requireRole("admin"),
 
 matchesRouter.post("/:id/complete", requireRole("admin"),
   asyncRoute(async (req, res) => res.json(await completeMatch(req.params.id))));
+
+// SPEC-015: admin endpoints for the temporary scorer URL. The cleartext
+// token is returned exactly once in the create response — the DB only stores
+// sha256(token). DELETE is idempotent (no error when nothing was active).
+matchesRouter.post("/:id/score-session", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    const created = await createScoreSession(req.params.id, req.session?.playerId ?? null);
+    res.json({
+      url: created.url,
+      token: created.token,
+      expiresWhen: "match_completed",
+      session: {
+        id: created.session.id,
+        matchId: created.session.matchId,
+        status: created.session.status,
+      },
+    });
+  }));
+
+matchesRouter.delete("/:id/score-session", requireRole("admin"),
+  asyncRoute(async (req, res) => res.json(await revokeScoreSession(req.params.id))));
+
+// Lets the admin UI know whether a token is already outstanding (used to
+// toggle "create URL" vs "revoke URL" in the matchday scorer).
+matchesRouter.get("/:id/score-session", requireRole("admin"),
+  asyncRoute(async (req, res) => {
+    const session = await getActiveSessionForMatch(req.params.id);
+    if (!session) { res.json({ active: false }); return; }
+    res.json({
+      active: true,
+      session: { id: session.id, matchId: session.matchId, status: session.status },
+    });
+  }));

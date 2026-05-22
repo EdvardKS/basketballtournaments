@@ -7,6 +7,7 @@ import { tournamentsRouter, cromoThemesAdminRouter } from "./tournaments.js";
 import { teamsRouter } from "./teams.js";
 import { draftRouter } from "./draft.js";
 import { matchesRouter } from "./matches.js";
+import { matchScoreRouter } from "./match-score.js";
 import { tradesRouter } from "./trades.js";
 
 export const apiRouter = Router();
@@ -18,4 +19,5 @@ apiRouter.use("/admin/tournament-themes", cromoThemesAdminRouter);
 apiRouter.use("/teams", teamsRouter);
 apiRouter.use("/draft", draftRouter);
 apiRouter.use("/matches", matchesRouter);
+apiRouter.use("/match-score", matchScoreRouter);
 apiRouter.use("/trades", tradesRouter);
