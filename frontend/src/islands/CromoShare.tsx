@@ -1,48 +1,19 @@
+// Thin UI layer on top of `lib/cromo-share.ts`. Buttons trigger a single
+// orchestrator that always exports a canonical 1360×1812 PNG, then either
+// uses Web Share API (mobile, with files), or downloads + deep-links to
+// the chosen network.
 import { useRef, useState, type ComponentType } from "react";
 import { successBurst } from "../lib/neon.js";
+import { shareCard, type ShareNetwork, type ShareResult } from "../lib/cromo-share.js";
+import { exportCardToPng, buildFileName, CromoExportError } from "../lib/cromo-export.js";
 
 interface Props { playerName: string; playerId: string }
 
-type Network = "wa" | "tw" | "fb" | "ig";
-
-const NETWORK_LABEL: Record<Network, string> = {
+const NETWORK_LABEL: Record<ShareNetwork, string> = {
   wa: "WhatsApp", tw: "Twitter / X", fb: "Facebook", ig: "Instagram",
 };
-
-const NETWORK_ACCENT: Record<Network, string> = {
+const NETWORK_ACCENT: Record<ShareNetwork, string> = {
   wa: "#25D366", tw: "#1DA1F2", fb: "#1877F2", ig: "#E4405F",
-};
-
-const isMobile = () =>
-  typeof navigator !== "undefined"
-  && /android|iphone|ipad|ipod/i.test(navigator.userAgent);
-
-const isAndroid = () =>
-  typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
-
-// Deep link → app on mobile, web fallback elsewhere. Returns the URL we'll set
-// `window.location.href` to (universal links handle app vs web automatically
-// on modern OSes; legacy `*://` schemes are kept as last-resort fallbacks).
-const buildDeepLink = (net: Network, text: string, url: string): string => {
-  const t = encodeURIComponent(text);
-  const u = encodeURIComponent(url);
-  switch (net) {
-    case "wa": return `https://wa.me/?text=${t}%20${u}`;
-    case "tw": return `https://twitter.com/intent/tweet?text=${t}&url=${u}`;
-    case "fb": return `https://www.facebook.com/sharer/sharer.php?u=${u}&quote=${t}`;
-    case "ig": return isAndroid() ? "intent://camera/#Intent;package=com.instagram.android;scheme=instagram;end" : "instagram://camera";
-  }
-};
-
-const downloadBlob = (blob: Blob, name: string) => {
-  const u = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = u; a.download = name; a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  // Revoke after a tick so iOS Safari has time to start the download.
-  setTimeout(() => URL.revokeObjectURL(u), 4000);
 };
 
 const IconWA = () => (
@@ -67,121 +38,117 @@ const IconIG = () => (
     <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
   </svg>
 );
+const IconDownload = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+  </svg>
+);
 
-const ICON: Record<Network, ComponentType> = { wa: IconWA, tw: IconTW, fb: IconFB, ig: IconIG };
+const ICON: Record<ShareNetwork, ComponentType> = {
+  wa: IconWA, tw: IconTW, fb: IconFB, ig: IconIG,
+};
+
+const outcomeHint = (r: ShareResult, net: ShareNetwork): string => {
+  if (r.outcome === "web-share") return `Compartido en ${NETWORK_LABEL[net]}.`;
+  if (r.outcome === "cancelled") return "Compartir cancelado.";
+  if (r.outcome === "download-only") return `Cromo descargado (${r.fileName}). Súbelo desde la app de Instagram.`;
+  // deep-link
+  return `Cromo descargado (${r.fileName}). Adjúntalo en ${NETWORK_LABEL[net]}.`;
+};
+
+const errorHint = (e: unknown): string => {
+  if (e instanceof CromoExportError) {
+    if (e.message === "CROMO_ROOT_NOT_FOUND") return "Cromo no encontrado en pantalla.";
+    if (e.message === "BLOB_NULL") return "El navegador no devolvió la imagen. Reintenta.";
+    return "No se pudo generar la imagen. Reintenta.";
+  }
+  return "Error al compartir.";
+};
 
 export default function CromoShare({ playerName, playerId }: Props) {
-  const [busy, setBusy] = useState<Network | null>(null);
+  const [busy, setBusy] = useState<ShareNetwork | "dl" | null>(null);
   const [hint, setHint] = useState<string | null>(null);
-  const flashRef = useRef<HTMLDivElement>(null);
-  const btnRefs = useRef<Record<Network, HTMLButtonElement | null>>({ wa: null, tw: null, fb: null, ig: null });
+  const btnRefs = useRef<Record<ShareNetwork | "dl", HTMLButtonElement | null>>({
+    wa: null, tw: null, fb: null, ig: null, dl: null,
+  });
 
-  const captureBlob = async (): Promise<Blob | null> => {
-    const target = document.getElementById("cromo-root");
-    if (!target) return null;
-    if (flashRef.current) {
-      flashRef.current.style.opacity = "0.25";
-      setTimeout(() => { if (flashRef.current) flashRef.current.style.opacity = "0"; }, 90);
+  const playerUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/jugador/${playerId}` : "";
+
+  const handleShare = async (network: ShareNetwork) => {
+    setBusy(network); setHint(null);
+    try {
+      const res = await shareCard({ playerName, playerUrl, network });
+      setHint(outcomeHint(res, network));
+      successBurst(btnRefs.current[network]);
+    } catch (err) {
+      console.error("[cromo-share]", err);
+      setHint(errorHint(err));
+    } finally {
+      setBusy(null);
     }
-    const mod = await import("html2canvas");
-    const canvas = await mod.default(target, { backgroundColor: null, scale: 2 });
-    return await new Promise((res) => canvas.toBlob((b) => res(b), "image/png"));
   };
 
-  const shareUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/jugador/${playerId}` : "";
-  const shareText = `Mi cromo de ${playerName} 🏀`;
-
-  const shareTo = async (net: Network) => {
-    setBusy(net); setHint(null);
+  const handleDownload = async () => {
+    setBusy("dl"); setHint(null);
     try {
-      const blob = await captureBlob();
-      if (!blob) { setHint("No pude generar la imagen."); return; }
-
-      const file = new File([blob], "cromo.png", { type: "image/png" });
-      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
-
-      // 1) Try Web Share API with the file attached. On mobile the system
-      //    sheet pops up; the user taps the target app and the PNG is
-      //    attached directly. This is the best path when available.
-      if (isMobile() && nav.canShare && nav.canShare({ files: [file] })) {
-        try {
-          await nav.share({ files: [file], text: shareText, url: shareUrl,
-            title: `Cromo de ${playerName}` });
-          successBurst(btnRefs.current[net]);
-          return;
-        } catch (e) {
-          // User cancelled the sheet or share failed — fall through to
-          // download + deep-link so they still have a path.
-          if ((e as Error)?.name !== "AbortError") {
-            console.warn("[share] webShare failed, falling back", e);
-          } else {
-            return; // user cancelled, no further action
-          }
-        }
-      }
-
-      // 2) Download the PNG to disk so the user can attach it manually.
-      downloadBlob(blob, "cromo.png");
-
-      // 3) Deep-link to the target app / web sharer.
-      const url = buildDeepLink(net, shareText, shareUrl);
-      // For Instagram on desktop there's no useful web sharer.
-      if (net === "ig" && !isMobile()) {
-        setHint("Imagen descargada. Súbela desde la app de Instagram.");
-        successBurst(btnRefs.current[net]);
-        return;
-      }
-      window.open(url, "_blank", "noopener");
-      successBurst(btnRefs.current[net]);
-      if (isMobile()) {
-        setHint(`Cromo descargado. Adjuntalo en ${NETWORK_LABEL[net]}.`);
-      } else {
-        setHint(`Cromo descargado. Adjuntalo en la ventana de ${NETWORK_LABEL[net]}.`);
-      }
+      const fileName = buildFileName(playerName);
+      const exp = await exportCardToPng({ fileName });
+      const a = document.createElement("a");
+      a.href = exp.url; a.download = fileName; a.rel = "noopener";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(exp.url), 4000);
+      setHint(`Cromo descargado (${exp.width}×${exp.height} px).`);
+      successBurst(btnRefs.current.dl);
     } catch (err) {
-      console.error("[share] failed", err);
-      setHint("Error al compartir.");
+      console.error("[cromo-download]", err);
+      setHint(errorHint(err));
     } finally {
       setBusy(null);
     }
   };
 
   return (
-    <>
-      <div ref={flashRef} aria-hidden="true"
-        className="fixed inset-0 bg-white pointer-events-none transition-opacity duration-150 z-[59]"
-        style={{ opacity: 0 }} />
-
-      <div className="space-y-2">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {(["wa", "tw", "fb", "ig"] as Network[]).map((net) => {
-            const Icon = ICON[net];
-            const accent = NETWORK_ACCENT[net];
-            const isBusy = busy === net;
-            return (
-              <button key={net} ref={(el) => { btnRefs.current[net] = el; }}
-                onClick={() => shareTo(net)}
-                disabled={busy !== null}
-                aria-label={`Compartir en ${NETWORK_LABEL[net]}`}
-                className="neon-btn neon-btn-ghost text-[11px] py-3"
-                style={{
-                  borderColor: `${accent}40`,
-                  background: `linear-gradient(180deg, ${accent}18 0%, rgba(255,255,255,0.02) 100%)`,
-                  color: accent,
-                }}>
-                <Icon />
-                <span className="font-semibold tracking-widest">
-                  {isBusy ? "…" : NETWORK_LABEL[net]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-[10px] text-court-muted text-center">
-          {hint ?? "Cada botón abre la app y descarga el cromo para adjuntarlo."}
-        </p>
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {(["wa", "tw", "fb", "ig"] as ShareNetwork[]).map((net) => {
+          const Icon = ICON[net];
+          const accent = NETWORK_ACCENT[net];
+          const isBusy = busy === net;
+          return (
+            <button key={net}
+              ref={(el) => { btnRefs.current[net] = el; }}
+              onClick={() => handleShare(net)}
+              disabled={busy !== null}
+              aria-label={`Compartir en ${NETWORK_LABEL[net]}`}
+              className="neon-btn neon-btn-ghost text-[11px] py-3"
+              style={{
+                borderColor: `${accent}40`,
+                background: `linear-gradient(180deg, ${accent}18 0%, rgba(255,255,255,0.02) 100%)`,
+                color: accent,
+              }}>
+              <Icon />
+              <span className="font-semibold tracking-widest">
+                {isBusy ? "…" : NETWORK_LABEL[net]}
+              </span>
+            </button>
+          );
+        })}
       </div>
-    </>
+
+      <button ref={(el) => { btnRefs.current.dl = el; }}
+        onClick={handleDownload}
+        disabled={busy !== null}
+        className="neon-btn neon-btn-ghost w-full text-[11px]">
+        <IconDownload />
+        <span className="font-semibold tracking-widest">
+          {busy === "dl" ? "Generando…" : "Descargar PNG en alta resolución"}
+        </span>
+      </button>
+
+      <p className="text-[10px] text-court-muted text-center">
+        {hint ?? "Cada cromo se exporta a 1360×1812 px. La imagen es idéntica a la que ves."}
+      </p>
+    </div>
   );
 }

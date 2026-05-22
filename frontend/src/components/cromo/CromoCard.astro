@@ -1,4 +1,11 @@
 ---
+// Single source of truth for the cromo visual. The card is always rendered
+// at the canonical pixel size (680×906); the surrounding `.cromo-fit`
+// wrapper uses a CSS container query to scale it down for the preview.
+// `lib/cromo-export.ts` clones #cromo-root into an off-screen sandbox at
+// the same pixel dimensions when the user shares — that's why we keep
+// every measurement in absolute px and avoid `clamp` / `vw` / aspect-ratio
+// inside the card itself.
 import type { Player, Achievement } from "../../lib/types.js";
 import { cromoTier, tierTheme, POSITION_ABBR } from "../../lib/cromo.js";
 import { overallColor } from "../../lib/display.js";
@@ -14,137 +21,227 @@ const stats = [
   ["REG", p.dribbling], ["DEF", p.defense], ["FIS", p.physical],
 ] as const;
 ---
-<div id="cromo-root" class:list={["cromo", theme.frameClass]}>
-  <div class="cromo-bg" aria-hidden="true"></div>
-  <div class="cromo-shine" aria-hidden="true"></div>
+<div class="cromo-fit">
+  <div id="cromo-root" class:list={["cromo", theme.frameClass]}>
+    <!-- Layered background: vignette + metallic gradient + diagonal texture + radial spotlight -->
+    <div class="cromo-bg" aria-hidden="true"></div>
+    <div class="cromo-texture" aria-hidden="true"></div>
+    <div class="cromo-spotlight" aria-hidden="true"></div>
+    <div class="cromo-vignette" aria-hidden="true"></div>
 
-  <!-- Top-left: overall + position -->
-  <div class="cromo-corner">
-    <div class:list={["cromo-overall", overallColor(p.overall)]}>{p.overall}</div>
-    <div class="cromo-position">{positionAbbr}</div>
-    <div class="cromo-divider"></div>
-  </div>
+    <!-- Outer metallic frame -->
+    <div class="cromo-frame" aria-hidden="true"></div>
 
-  <!-- Tier badge top-right -->
-  <div class="cromo-tier">{theme.tierLabel}</div>
+    <!-- Top-left: rating + position -->
+    <div class="cromo-corner">
+      <div class:list={["cromo-overall", overallColor(p.overall)]}>{p.overall}</div>
+      <div class="cromo-divider" aria-hidden="true"></div>
+      <div class="cromo-position">{positionAbbr}</div>
+    </div>
 
-  <!-- Avatar (cut-out, transparent) -->
-  <div class="cromo-photo">
-    {p.avatar ? (
-      <img src={p.avatar} alt="" />
-    ) : (
-      <div class="cromo-photo-fallback">{p.name.charAt(0).toUpperCase()}</div>
-    )}
-  </div>
+    <!-- Tier badge top-right -->
+    <div class="cromo-tier">
+      <span class="cromo-tier-dot" aria-hidden="true"></span>
+      {theme.tierLabel}
+    </div>
 
-  <!-- Footer: divider, name, stats -->
-  <div class="cromo-footer">
-    <div class="cromo-divider-line" aria-hidden="true"></div>
-    <p class="cromo-name">{p.name}</p>
-    <div class="cromo-stats">
-      {stats.map(([k, v]) => (
-        <div class="cromo-stat">
-          <span class="cromo-stat-val">{v}</span>
-          <span class="cromo-stat-key">{k}</span>
-        </div>
-      ))}
+    <!-- Avatar zone — radial halo + cut-out photo -->
+    <div class="cromo-photo-halo" aria-hidden="true"></div>
+    <div class="cromo-photo">
+      {p.avatar ? (
+        <img src={p.avatar} alt="" crossorigin="anonymous" decoding="sync" />
+      ) : (
+        <div class="cromo-photo-fallback">{p.name.charAt(0).toUpperCase()}</div>
+      )}
+    </div>
+
+    <!-- Footer: brand line, name, stats grid -->
+    <div class="cromo-footer">
+      <div class="cromo-brand" aria-hidden="true">
+        <span class="cromo-brand-dot"></span>
+        <span class="cromo-brand-text">VBL · VILLENA BASKET LEAGUE</span>
+        <span class="cromo-brand-dot"></span>
+      </div>
+      <p class="cromo-name">{p.name}</p>
+      <div class="cromo-stats">
+        {stats.map(([k, v]) => (
+          <div class="cromo-stat">
+            <span class="cromo-stat-val">{v}</span>
+            <span class="cromo-stat-key">{k}</span>
+          </div>
+        ))}
+      </div>
     </div>
   </div>
 </div>
 
 <style>
-  .cromo {
-    position: relative;
-    width: clamp(260px, 86vw, 340px);
+  /* --- Preview-scale wrapper. The inner card stays at 680×906 px logical
+         (the same pixel box exportCardToPng captures). Container queries
+         scale the visual via transform; the box reserved in the layout
+         shrinks via aspect-ratio so the surrounding column collapses. --- */
+  .cromo-fit {
+    width: 100%;
+    max-width: 380px;
     margin: 0 auto;
-    aspect-ratio: 3 / 4;
-    border-radius: 22px;
+    aspect-ratio: 680 / 906;
+    container-type: inline-size;
+    position: relative;
+    overflow: visible;
+  }
+  .cromo-fit .cromo {
+    position: absolute;
+    top: 0; left: 0;
+    width: 680px;
+    height: 906px;
+    transform-origin: top left;
+    transform: scale(calc(100cqw / 680));
+  }
+
+  /* --- Canonical card box. Absolute px everywhere — no clamp / vw / %. --- */
+  .cromo {
+    border-radius: 32px;
     overflow: hidden;
     isolation: isolate;
-    color: white;
+    color: #fff;
+    font-family: var(--font-display, "Bebas Neue", "Inter", sans-serif);
     box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.08) inset,
-      0 22px 50px -12px rgba(0, 0, 0, 0.65),
-      0 0 50px -10px var(--cromo-glow, transparent);
+      0 0 0 1px rgba(255,255,255,0.06) inset,
+      0 36px 80px -28px rgba(0,0,0,0.85),
+      0 0 80px -20px var(--cromo-glow, transparent);
   }
 
-  /* Background gradient + tier glow + subtle vertical court-line texture */
+  /* Metallic outer frame — plain solid border so html2canvas renders it 1:1.
+     The dual-tone metallic feel comes from the inset highlight + outer
+     glow below, not from a CSS mask (which html2canvas can't reproduce). */
+  .cromo-frame {
+    position: absolute;
+    inset: 6px;
+    border-radius: 26px;
+    border: 2px solid var(--cromo-frame-2);
+    box-shadow:
+      inset 0 0 0 1px rgba(255,255,255,0.07),
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      0 0 30px -8px var(--cromo-glow);
+    pointer-events: none;
+    z-index: 4;
+  }
+
   .cromo-bg {
-    position: absolute; inset: 0;
+    position: absolute; inset: 0; z-index: 0;
     background:
-      radial-gradient(ellipse at 50% 0%, var(--cromo-c2) 0%, transparent 55%),
-      radial-gradient(ellipse at 50% 100%, var(--cromo-c2) 0%, transparent 60%),
-      linear-gradient(160deg, var(--cromo-c1) 0%, var(--cromo-c3) 100%);
-    z-index: 0;
+      radial-gradient(ellipse 80% 60% at 50% 30%, var(--cromo-c2) 0%, transparent 60%),
+      linear-gradient(170deg, var(--cromo-c1) 0%, var(--cromo-c3) 55%, #06080f 100%);
   }
-  .cromo-bg::after {
-    content: "";
-    position: absolute; inset: 0;
-    background: repeating-linear-gradient(
-      105deg,
-      transparent 0 22px,
-      rgba(255, 255, 255, 0.035) 22px 24px
-    );
+  .cromo-texture {
+    position: absolute; inset: 0; z-index: 0;
+    background:
+      repeating-linear-gradient(115deg,
+        transparent 0 36px,
+        rgba(255,255,255,0.045) 36px 38px,
+        transparent 38px 80px,
+        rgba(255,255,255,0.025) 80px 82px),
+      repeating-linear-gradient(65deg,
+        transparent 0 60px,
+        rgba(0,0,0,0.08) 60px 62px);
+    opacity: 0.95;
     pointer-events: none;
   }
-  .cromo-shine {
-    position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 25% 110%, rgba(255,255,255,0.20), transparent 55%);
-    mix-blend-mode: screen;
-    z-index: 1;
+  .cromo-spotlight {
+    position: absolute; inset: 0; z-index: 1;
+    background: radial-gradient(ellipse 70% 50% at 50% 38%, rgba(255,255,255,0.22), transparent 65%);
+    pointer-events: none;
+  }
+  .cromo-vignette {
+    position: absolute; inset: 0; z-index: 5;
+    background:
+      radial-gradient(ellipse 110% 110% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%);
     pointer-events: none;
   }
 
-  /* --- Top corners --- */
+  /* --- Top-left corner: overall + divider + position --- */
   .cromo-corner {
-    position: absolute; top: 18px; left: 22px; z-index: 3;
-    display: flex; flex-direction: column; align-items: center;
-    gap: 4px;
+    position: absolute;
+    top: 36px;
+    left: 44px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   .cromo-overall {
-    font-family: var(--font-display, "Bebas Neue", sans-serif);
-    font-size: 64px;
-    line-height: 0.82;
+    font-size: 104px;
     font-weight: 900;
-    letter-spacing: -0.02em;
-    text-shadow: 0 3px 14px rgba(0,0,0,0.55);
-  }
-  .cromo-position {
-    font-family: var(--font-display, "Bebas Neue", sans-serif);
-    font-size: 18px;
-    letter-spacing: 0.1em;
-    color: rgba(255,255,255,0.95);
-    margin-top: 4px;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.55);
+    letter-spacing: -0.04em;
+    line-height: 0.85;
+    text-shadow:
+      0 4px 22px rgba(0,0,0,0.65),
+      0 1px 0 rgba(255,255,255,0.08);
   }
   .cromo-divider {
-    width: 30px; height: 2px;
-    background: linear-gradient(90deg, transparent, currentColor, transparent);
+    width: 56px; height: 3px;
+    margin: 10px 0 6px;
+    background: linear-gradient(90deg, transparent, currentColor 35%, currentColor 65%, transparent);
     opacity: 0.55;
-    margin-top: 4px;
+  }
+  .cromo-position {
+    font-size: 30px;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.95);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
   }
 
+  /* --- Tier badge --- */
   .cromo-tier {
-    position: absolute; top: 18px; right: 18px; z-index: 3;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.3em;
-    padding: 5px 10px;
-    border: 1px solid rgba(255,255,255,0.28);
+    position: absolute;
+    top: 42px;
+    right: 44px;
+    z-index: 6;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
     border-radius: 999px;
-    background: rgba(0,0,0,0.28);
-    backdrop-filter: blur(4px);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.34em;
     text-transform: uppercase;
+    color: var(--cromo-tier-text, #fff);
+    background:
+      linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.3)),
+      var(--cromo-tier-bg, rgba(0,0,0,0.5));
+    border: 1px solid var(--cromo-frame-2);
+    box-shadow:
+      0 4px 14px rgba(0,0,0,0.45),
+      inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .cromo-tier-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--cromo-frame-2);
+    box-shadow: 0 0 10px var(--cromo-frame-2);
   }
 
-  /* --- Avatar area (cut-out person on gradient, no card behind) --- */
-  .cromo-photo {
+  /* --- Avatar zone --- */
+  .cromo-photo-halo {
     position: absolute;
-    top: 13%;
+    top: 100px;
     left: 50%;
     transform: translateX(-50%);
-    width: 64%;
-    aspect-ratio: 1;
+    width: 540px;
+    height: 540px;
+    z-index: 1;
+    background: radial-gradient(circle at 50% 45%, var(--cromo-c2) 0%, transparent 55%);
+    opacity: 0.55;
+    pointer-events: none;
+    filter: blur(4px);
+  }
+  .cromo-photo {
+    position: absolute;
+    top: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 480px;
+    height: 510px;
     z-index: 2;
     display: flex;
     align-items: flex-end;
@@ -156,102 +253,135 @@ const stats = [
     object-fit: contain;
     object-position: center bottom;
     filter:
-      drop-shadow(0 18px 22px rgba(0, 0, 0, 0.55))
-      drop-shadow(0 0 4px rgba(0, 0, 0, 0.4));
+      drop-shadow(0 36px 36px rgba(0,0,0,0.55))
+      drop-shadow(0 0 10px rgba(0,0,0,0.4));
   }
   .cromo-photo-fallback {
-    width: 76%;
-    aspect-ratio: 1;
+    width: 360px; height: 360px;
     border-radius: 999px;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.1);
     display: flex; align-items: center; justify-content: center;
-    font-family: var(--font-display, "Bebas Neue", sans-serif);
-    font-size: 88px; color: rgba(255,255,255,0.55);
+    font-size: 180px;
+    color: rgba(255,255,255,0.45);
   }
 
-  /* --- Footer band: divider line, name, stats grid --- */
+  /* --- Footer: brand + name + stats --- */
   .cromo-footer {
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    padding: 14px 20px 22px;
-    z-index: 3;
-    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.30) 30%, rgba(0,0,0,0.72) 100%);
+    padding: 28px 44px 36px;
+    z-index: 6;
+    background: linear-gradient(180deg,
+      transparent 0%,
+      rgba(0,0,0,0.10) 25%,
+      rgba(0,0,0,0.55) 60%,
+      rgba(0,0,0,0.92) 100%);
   }
-  .cromo-divider-line {
-    width: 70%;
-    height: 1px;
-    margin: 0 auto 14px;
+  .cromo-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .cromo-brand-text {
+    font-size: 11px;
+    letter-spacing: 0.4em;
+    color: rgba(255,255,255,0.55);
+  }
+  .cromo-brand-dot {
+    width: 56px; height: 1px;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
   }
   .cromo-name {
-    font-family: var(--font-display, "Bebas Neue", sans-serif);
-    font-size: 22px;
+    font-size: 44px;
     line-height: 1;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     text-align: center;
-    margin: 0 0 14px;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.55);
+    margin: 0 0 22px;
+    text-shadow:
+      0 4px 18px rgba(0,0,0,0.55),
+      0 1px 0 rgba(255,255,255,0.1);
     text-transform: uppercase;
     color: #fff;
+    font-weight: 800;
   }
   .cromo-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 6px 8px;
+    gap: 10px 10px;
   }
   .cromo-stat {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: center;
-    gap: 5px;
-    padding: 6px 4px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 8px;
-    font-family: var(--font-display, "Bebas Neue", sans-serif);
+    gap: 10px;
+    padding: 12px 8px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02));
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      0 2px 6px rgba(0,0,0,0.35);
   }
   .cromo-stat-val {
-    font-size: 22px;
+    font-size: 36px;
     font-weight: 800;
     color: #fff;
     line-height: 1;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.5);
   }
   .cromo-stat-key {
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    color: rgba(255,255,255,0.7);
+    font-size: 13px;
+    letter-spacing: 0.24em;
+    color: rgba(255,255,255,0.65);
   }
 
-  /* --- Tier palettes (one per year) --- */
+  /* --- Tier palettes --- */
   .frame-v1 {
-    --cromo-c1: #4a4035;
-    --cromo-c2: #c08a4b;
-    --cromo-c3: #1c150f;
-    --cromo-glow: rgba(192, 138, 75, 0.45);
+    --cromo-c1: #5a4a3a;
+    --cromo-c2: #d4a05c;
+    --cromo-c3: #1a120c;
+    --cromo-glow: rgba(212, 160, 92, 0.45);
+    --cromo-frame-1: rgba(212, 160, 92, 0.85);
+    --cromo-frame-2: #f0c987;
+    --cromo-tier-text: #f0c987;
   }
   .frame-v2 {
-    --cromo-c1: #2a3450;
-    --cromo-c2: #7c8aae;
-    --cromo-c3: #0d1422;
-    --cromo-glow: rgba(124, 138, 174, 0.45);
+    --cromo-c1: #2b3858;
+    --cromo-c2: #98abdd;
+    --cromo-c3: #0b1224;
+    --cromo-glow: rgba(152, 171, 221, 0.5);
+    --cromo-frame-1: rgba(152, 171, 221, 0.85);
+    --cromo-frame-2: #c6d4ef;
+    --cromo-tier-text: #c6d4ef;
   }
   .frame-v3 {
-    --cromo-c1: #563a0c;
-    --cromo-c2: #f5c518;
+    --cromo-c1: #5e3f0a;
+    --cromo-c2: #ffd34a;
     --cromo-c3: #1a1206;
-    --cromo-glow: rgba(245, 197, 24, 0.55);
+    --cromo-glow: rgba(255, 211, 74, 0.55);
+    --cromo-frame-1: rgba(255, 211, 74, 0.85);
+    --cromo-frame-2: #ffe27a;
+    --cromo-tier-text: #ffe27a;
   }
   .frame-v4 {
-    --cromo-c1: #0d3a2b;
-    --cromo-c2: #16d39b;
-    --cromo-c3: #04150f;
-    --cromo-glow: rgba(22, 211, 155, 0.5);
+    --cromo-c1: #0f4032;
+    --cromo-c2: #2af0b1;
+    --cromo-c3: #021510;
+    --cromo-glow: rgba(42, 240, 177, 0.5);
+    --cromo-frame-1: rgba(42, 240, 177, 0.85);
+    --cromo-frame-2: #7df3cb;
+    --cromo-tier-text: #7df3cb;
   }
   .frame-v5\+ {
-    --cromo-c1: #2a0d5a;
-    --cromo-c2: #d34ce0;
+    --cromo-c1: #2d0e60;
+    --cromo-c2: #e066f0;
     --cromo-c3: #07041a;
-    --cromo-glow: rgba(211, 76, 224, 0.55);
+    --cromo-glow: rgba(224, 102, 240, 0.55);
+    --cromo-frame-1: rgba(224, 102, 240, 0.85);
+    --cromo-frame-2: #f4a8f9;
+    --cromo-tier-text: #f4a8f9;
   }
 </style>
