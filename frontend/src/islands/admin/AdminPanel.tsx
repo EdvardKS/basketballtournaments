@@ -7,6 +7,8 @@ import Modal from "./Modal.js";
 import InscripcionesTab, { type Registration } from "./InscripcionesTab.js";
 import QuickScoreSheet from "./QuickScoreSheet.js";
 import AdminBracketView from "./AdminBracketView.js";
+import MatchdayScoreModal from "./MatchdayScoreModal.js";
+import { isMatchday } from "../../lib/matchScore.js";
 import TournamentForm from "../TournamentForm.js";
 import DraftBoard from "../DraftBoard.js";
 import AdminScheduleConfirm from "../AdminScheduleConfirm.js";
@@ -102,8 +104,12 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
   const [groups, setGroups] = useState<GroupWithMembers[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  // SPEC-015 — matchday scorer modal managed at panel root so multiple tabs
+  // can open it for any match.
+  const [scoreModalMatch, setScoreModalMatch] = useState<Match | null>(null);
 
   const selected = tournaments.find((t) => t.id === selectedId) ?? null;
+  const matchdayActive = isMatchday(selected?.matchDate ?? null);
   // Derive the visible sub-phase from data — single source of truth for tabs.
   const phase: TournamentPhase = selected ? derivePhase(selected, matches) : "pre";
   const tabs = useMemo(() => tabsForPhase(phase), [phase]);
@@ -319,6 +325,8 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
                 allPlayers={allPlayers}
                 captainIds={captainIds}
                 canManageRegistrations={canManageRegistrations}
+                matchdayActive={matchdayActive}
+                onOpenScorer={setScoreModalMatch}
                 onChange={loadDetail}
                 onTournamentSaved={onTournamentSaved}
                 onTournamentDeleted={onTournamentDeleted}
@@ -338,12 +346,21 @@ export default function AdminPanel({ tournaments: initialTournaments, initialAct
           onCancel={() => setCreateOpen(false)}
         />
       </Modal>
+
+      {/* SPEC-015 matchday scorer — opened from any tab via setScoreModalMatch. */}
+      <MatchdayScoreModal
+        open={scoreModalMatch !== null}
+        match={scoreModalMatch}
+        onClose={() => setScoreModalMatch(null)}
+        onAfterChange={loadDetail}
+      />
     </div>
   );
 }
 
 function TabContent({
   tab, phase, tournament, detail, matches, groups, allPlayers, captainIds, canManageRegistrations,
+  matchdayActive, onOpenScorer,
   onChange, onTournamentSaved, onTournamentDeleted,
 }: {
   tab: TabKey;
@@ -355,6 +372,8 @@ function TabContent({
   allPlayers: Player[];
   captainIds: Set<string>;
   canManageRegistrations: boolean;
+  matchdayActive: boolean;
+  onOpenScorer: (m: Match) => void;
   onChange: () => void;
   onTournamentSaved: (t: Tournament) => void;
   onTournamentDeleted: (id: string) => void;
@@ -417,10 +436,22 @@ function TabContent({
       );
     }
     return (
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {groups.map((g) => (
-          <GroupSummaryCard key={g.group.id} group={g} matches={matches} />
-        ))}
+      <div className="space-y-5">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          {groups.map((g) => (
+            <GroupSummaryCard key={g.group.id} group={g} matches={matches} />
+          ))}
+        </div>
+        {/* SPEC-015 — on matchday, surface pending group matches right under
+            the standings so the admin doesn't have to switch tabs to score. */}
+        {matchdayActive && (
+          <MatchdayPendingMatches
+            matches={matches}
+            stage="group"
+            onOpenScorer={onOpenScorer}
+            emptyLabel="Todos los partidos de grupo están cerrados."
+          />
+        )}
       </div>
     );
   }
@@ -432,6 +463,8 @@ function TabContent({
         matches={matches}
         groups={groups}
         onChange={onChange}
+        matchdayActive={matchdayActive}
+        onOpenScorer={onOpenScorer}
       />
     );
   }
@@ -980,12 +1013,14 @@ function BracketConfigPicker({
 }
 
 function AdminBracketEditor({
-  tournament, matches, groups, onChange,
+  tournament, matches, groups, onChange, matchdayActive, onOpenScorer,
 }: {
   tournament: Tournament;
   matches: Match[];
   groups: GroupWithMembers[];
   onChange: () => void;
+  matchdayActive: boolean;
+  onOpenScorer: (m: Match) => void;
 }) {
   const ko = matches.filter((m) => m.stage !== "group");
   const formatLabel = tournament.bracketFormat === "top1_plus_best2_seconds"
@@ -1030,6 +1065,15 @@ function AdminBracketEditor({
             <AdminBracketView matches={ko} isAdmin />
           </div>
 
+          {matchdayActive && (
+            <MatchdayPendingMatches
+              matches={ko}
+              stage="knockout"
+              onOpenScorer={onOpenScorer}
+              emptyLabel="Todas las eliminatorias están cerradas."
+            />
+          )}
+
           <div className="glass p-4 sm:p-6">
             <h3 className="font-hero text-xl text-white mb-3">Marcador rápido (eliminatorias)</h3>
             <QuickScoreSheet matches={ko} tournamentId={tournament.id} />
@@ -1041,6 +1085,76 @@ function AdminBracketEditor({
 }
 
 // --- Lightweight inline summaries used only in the admin tabs --------------
+
+// SPEC-015 — pending-match cards rendered on matchday below standings or
+// next to the bracket. Click opens the matchday scorer modal.
+function MatchdayPendingMatches({
+  matches, stage, onOpenScorer, emptyLabel,
+}: {
+  matches: Match[];
+  stage: "group" | "knockout";
+  onOpenScorer: (m: Match) => void;
+  emptyLabel: string;
+}) {
+  const stageFilter = (m: Match) => stage === "group"
+    ? m.stage === "group"
+    : m.stage !== "group";
+  const pending = matches
+    .filter((m) => stageFilter(m) && m.status !== "completed")
+    .sort((a, b) => {
+      if (a.status !== b.status) return a.status === "in_progress" ? -1 : 1;
+      const ta = a.scheduledAt ? new Date(a.scheduledAt).getTime() : Infinity;
+      const tb = b.scheduledAt ? new Date(b.scheduledAt).getTime() : Infinity;
+      return ta - tb;
+    });
+  if (pending.length === 0) {
+    return (
+      <div className="glass p-6 text-center text-court-muted text-sm">{emptyLabel}</div>
+    );
+  }
+  return (
+    <div className="glass p-4 sm:p-6">
+      <header className="flex items-center justify-between mb-4">
+        <h3 className="font-hero text-xl text-white">Partidos pendientes</h3>
+        <span className="text-xs text-court-muted">{pending.length} pendiente{pending.length === 1 ? "" : "s"}</span>
+      </header>
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {pending.map((m) => {
+          const inProgress = m.status === "in_progress";
+          const time = m.scheduledAt
+            ? new Date(m.scheduledAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+            : null;
+          return (
+            <li key={m.id}>
+              <button
+                type="button"
+                onClick={() => onOpenScorer(m)}
+                className="w-full text-left p-4 rounded-xl border transition-all hover:scale-[1.01]"
+                style={inProgress
+                  ? { background: "rgba(255,45,45,0.06)", borderColor: "rgba(255,45,45,0.45)", boxShadow: "0 0 22px rgba(255,45,45,0.18)" }
+                  : { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.12)" }}
+              >
+                <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-court-muted">
+                  <span>{m.stage === "group" ? "Grupo" : m.stage}{time && <> · {time}</>}</span>
+                  {inProgress
+                    ? <span className="text-[var(--color-neon-red)] font-bold">En juego</span>
+                    : <span>Pendiente</span>}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="font-semibold text-white truncate">{m.homeTeamName ?? m.homeSeedLabel ?? "—"}</span>
+                  <span className="font-hero text-xl text-white/70 tabular-nums shrink-0">
+                    {m.homeScore ?? 0}<span className="text-white/30 mx-1">-</span>{m.awayScore ?? 0}
+                  </span>
+                  <span className="font-semibold text-white truncate text-right">{m.awayTeamName ?? m.awaySeedLabel ?? "—"}</span>
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 function GroupSummaryCard({ group: g, matches }: { group: GroupWithMembers; matches: Match[] }) {
   const groupMatches = matches.filter((m) => m.stage === "group" && m.groupId === g.group.id);
