@@ -13,16 +13,33 @@ bloqueo antes de avanzar.
 
 | Área | Estado | Evidencia |
 |------|--------|-----------|
-| Baseline | Pendiente | — |
-| DB | Pendiente | — |
-| Backend sesiones | Pendiente | — |
-| Backend submit/idempotencia | Pendiente | — |
-| Frontend pública | Pendiente | — |
-| Admin matchday | Pendiente | — |
-| Eliminatorias | Pendiente | — |
-| SPEC-014 regresión | Pendiente | — |
-| Full cycle | Pendiente | — |
+| Baseline | Completada | `pnpm check` backend/frontend con errores legacy `-ISS-` documentados; no introducidos por SPEC-015 |
+| DB | Completada | Migración `db/init/19_match_score_sessions.sql` aplicada vía `[migrate] applying 19_match_score_sessions.sql` |
+| Backend sesiones | Completada | `backend/src/services/match-score-sessions.ts` + admin endpoints; smoke `test/spec-015.sh` T1–T4 verde |
+| Backend submit/idempotencia | Completada | `test/spec-015.sh` T10–T13 verde: standings sum=2 invariante tras doble submit |
+| Frontend pública | Completada | `pnpm build` verde; ruta `/score/[token].astro` + `MatchScorePage.tsx` empaquetados |
+| Admin matchday | Completada | `AdminPanel.tsx` enfoca clasificación + `MatchdayPendingMatches` bajo tablas; `isMatchday()` por TZ `Europe/Madrid` |
+| Eliminatorias | Completada | `AdminBracketEditor` integra `MatchdayPendingMatches` en KO sin tocar bracket dinámico |
+| SPEC-014 regresión | Completada | `test/spec-014.sh` PASS=7 FAIL=0 |
+| Full cycle | Completada | `docker exec basket_backend python3 /app/test/full_cycle.py` → "ciclo completo" |
 | Revisión documental | Completada | Contratos reforzados: timezone, errores, payload, transacción, tests de carrera |
+
+### 2026-05-22 — Implementación SPEC-015
+
+- Rama: `feat/spec-014-tournament-lifecycle-completion`
+- Comandos:
+  - `bash test/spec-015.sh` → PASS=16 FAIL=0
+  - `bash test/spec-014.sh` → PASS=7 FAIL=0
+  - `docker exec basket_backend python3 /app/test/full_cycle.py` → ✓ ciclo completo
+  - `docker exec basket_frontend pnpm build` → built without errors
+- Evidencia funcional:
+  - Admin POST/GET/DELETE `/api/matches/:id/score-session` operativo (sólo rol admin)
+  - Token público: `GET/POST start|pause|score|submit /api/match-score/:token` sin cookie
+  - Doble submit → `410 SCORE_SESSION_CLOSED`, `group_members` no doble-contabiliza
+  - Admin completa partido → token caduca a `410 MATCH_ALREADY_COMPLETED`
+  - Token inexistente → `404 SCORE_SESSION_NOT_FOUND`
+  - Delta no permitido (`{delta:7}`) → `400 VALIDATION`
+- Decisión: Avanza — implementación lista para QA UI.
 
 ## Checklist por fase
 

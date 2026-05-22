@@ -1,6 +1,6 @@
 # Matches — Constitución del servicio
 
-**Versión**: `1.0.0` — 2026-05-22
+**Versión**: `1.1.0` — 2026-05-22
 **Owner**: producto
 **Estado**: vigente
 
@@ -32,4 +32,7 @@ Detalle en `backend/src/routes/matches.ts`.
 
 ```
 1.0.0 — 2026-05-22 — Constitución inicial documentando el estado actual del servicio.
+1.1.0 — 2026-05-22 — SPEC-015: sesiones temporales de marcador (URL pública /score/:token,
+                     cronómetro persistido, submit idempotente vía updateScore + completeMatch).
+                     No cambia semántica de `completed` ni motor de clasificación/bracket.
 ```
