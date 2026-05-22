@@ -111,3 +111,47 @@ export interface TournamentDetail {
   registrations: unknown[];
   teams: TeamWithPlayers[];
 }
+
+// SPEC-015 — Temporary match-score sessions (admin-managed clock + scoreboard
+// shareable as a /score/:token URL).
+export type MatchScoreSessionStatus = "active" | "submitted" | "revoked" | "expired";
+export type ScoreSide = "home" | "away";
+export type ScoreDelta = -1 | 1 | 2;
+
+export interface PublicScoreSessionState {
+  editable: boolean;
+  closedReason: "submitted" | "revoked" | "expired" | "match_completed" | null;
+  session: {
+    id: string;
+    status: MatchScoreSessionStatus;
+    homeScore: number;
+    awayScore: number;
+    durationSeconds: number;
+    elapsedSeconds: number;
+    startedAt: string | null;
+    pausedAt: string | null;
+  };
+  match: {
+    id: string;
+    status: MatchStatus;
+    stage: MatchStage;
+    homeTeamId: string | null;
+    awayTeamId: string | null;
+    homeTeamName: string | null;
+    awayTeamName: string | null;
+    homeScore: number | null;
+    awayScore: number | null;
+  };
+}
+
+export interface AdminScoreSessionResponse {
+  url: string;
+  token: string;
+  expiresWhen: "match_completed";
+  session: { id: string; matchId: string; status: MatchScoreSessionStatus };
+}
+
+export interface AdminScoreSessionStatus {
+  active: boolean;
+  session?: { id: string; matchId: string; status: MatchScoreSessionStatus };
+}

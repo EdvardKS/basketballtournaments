@@ -1,0 +1,15 @@
+---
+// SPEC-015 — Public scorer page. Reachable WITHOUT login: the path's
+// token is the only authorization. Never load the user session here, never
+// pass any cookies through to the API — that's why the island below uses
+// `credentials: "omit"`.
+import Main from "../../layouts/Main.astro";
+import MatchScorePage from "../../islands/MatchScorePage.js";
+
+const { token } = Astro.params;
+---
+<Main title="Marcador" player={null}>
+  <section class="max-w-3xl mx-auto px-4 py-8">
+    <MatchScorePage client:load token={token ?? ""} />
+  </section>
+</Main>
