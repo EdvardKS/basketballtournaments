@@ -14,8 +14,33 @@ import {
 import { listTeamsForTournament } from "../services/teams.js";
 import { exportTournamentRegistrationsCsv } from "../services/registration-backup.js";
 import { listPhotos, uploadPhoto, deletePhoto } from "../services/tournament-photos.js";
+import {
+  resolveTournamentTheme, seedExtraPalettes, listAllThemes, paletteSchema,
+} from "../services/cromo-themes.js";
 
 export const tournamentsRouter = Router();
+export const cromoThemesAdminRouter = Router();
+
+// SPEC-013: per-tournament theme. Public read. Idempotent + race-safe.
+tournamentsRouter.get("/:id/theme", asyncRoute(async (req, res) => {
+  const theme = await resolveTournamentTheme(req.params.id);
+  res.json(theme);
+}));
+
+// SPEC-013: admin catalog ops. Mounted at /admin/tournament-themes from
+// routes/index.ts.
+cromoThemesAdminRouter.get("/", requireRole("admin"), asyncRoute(async (_req, res) => {
+  res.json(await listAllThemes());
+}));
+
+const seedSchema = z.object({
+  extraPalettes: z.array(paletteSchema).optional(),
+});
+cromoThemesAdminRouter.post("/seed", requireRole("admin"), asyncRoute(async (req, res) => {
+  const body = seedSchema.parse(req.body ?? {});
+  const result = await seedExtraPalettes(body.extraPalettes ?? []);
+  res.json(result);
+}));
 
 tournamentsRouter.get("/:id/photos", asyncRoute(async (req, res) => {
   res.json(await listPhotos(req.params.id));
