@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import {
   listTournaments, getTournament, createTournament, patchTournament,
   softDeleteTournament, lockBracket, unlockBracket,
+  listHistoricalTournaments,
 } from "../services/tournaments.js";
 import {
   listRegistrations, registerForTournament,
@@ -25,6 +26,11 @@ export const cromoThemesAdminRouter = Router();
 tournamentsRouter.get("/:id/theme", asyncRoute(async (req, res) => {
   const theme = await resolveTournamentTheme(req.params.id);
   res.json(theme);
+}));
+
+// SPEC-014: historial = completed OR match_date already past.
+tournamentsRouter.get("/historical", asyncRoute(async (_req, res) => {
+  res.json(await listHistoricalTournaments());
 }));
 
 // SPEC-013: admin catalog ops. Mounted at /admin/tournament-themes from

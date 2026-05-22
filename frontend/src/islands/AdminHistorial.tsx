@@ -108,7 +108,14 @@ export default function AdminHistorial({ tournaments }: Props) {
 
       <section data-reveal className="card">
         <p className="neon-section-overline">Edición seleccionada</p>
-        <h3 className="font-hero text-2xl text-white leading-none">{current.name}</h3>
+        <h3 className="font-hero text-2xl text-white leading-none">
+          {current.name}
+          {!isCompleted && (
+            <span className="ml-3 inline-block align-middle px-2 py-0.5 rounded-md text-[10px] tracking-[0.3em] font-bold border border-[var(--color-neon-orange)] text-[var(--color-neon-orange)]" title="Aún quedan matches por puntuar">
+              PENDIENTE DE CIERRE
+            </span>
+          )}
+        </h3>
         <p className="text-xs text-court-muted mt-1">{current.location} · {current.matchDate ?? current.date}</p>
         {current.description && <p className="text-sm text-white mt-2">{current.description}</p>}
       </section>

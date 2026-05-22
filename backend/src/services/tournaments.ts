@@ -75,6 +75,27 @@ export const listTournaments = async () => {
   return rows.map(toTournament);
 };
 
+// SPEC-014: tournaments visible in the admin historial. Includes completed
+// tournaments PLUS tournaments whose match_date has already passed even if
+// not formally completed (some matches may still be pending). The latter
+// carry `pendingClose: true` so the UI can badge them.
+export const listHistoricalTournaments = async () => {
+  const rows = await query<Record<string, unknown> & { match_date: string | Date | null; status: string }>(
+    `SELECT * FROM tournaments
+      WHERE deleted_at IS NULL
+        AND (
+          status = 'completed'
+          OR (match_date IS NOT NULL AND match_date::DATE < CURRENT_DATE)
+          OR (match_date IS NULL AND date::DATE < CURRENT_DATE)
+        )
+      ORDER BY COALESCE(match_date::TEXT, date) DESC, created_at DESC`,
+  );
+  return rows.map((r) => ({
+    ...toTournament(r),
+    pendingClose: r.status !== "completed",
+  }));
+};
+
 export const getTournament = async (id: string) => {
   await transitionTournament(id);
   const row = await queryOne(

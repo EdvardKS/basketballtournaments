@@ -9,8 +9,10 @@ const { redirect, session } = await requireRole(Astro.request, "admin");
 if (redirect) return Astro.redirect(redirect);
 
 const cookie = getCookieHeader(Astro.request);
+// SPEC-014: historial returns both completed and tournaments with
+// match_date already past (some matches may still be pending).
 let tournaments: Tournament[] = [];
-try { tournaments = await api<Tournament[]>("/tournaments", {}, cookie); } catch { /* empty */ }
+try { tournaments = await api<Tournament[]>("/tournaments/historical", {}, cookie); } catch { /* empty */ }
 ---
 <Main title="Historial de torneos" player={session.player}>
   <div class="max-w-7xl mx-auto px-4 py-8 space-y-4">

@@ -172,13 +172,19 @@ export const completeMatch = async (matchId: string) => {
       await q("UPDATE tournaments SET status='active' WHERE id=$1", [m.tournamentId]);
     }
 
-    // If the final just closed, mark the tournament completed and pin the
-    // winning TEAM as winner_id. The FK fk_tournaments_winner references
-    // teams(id) — earlier code wrote the captain's player id, which crashed
-    // with a 23503 foreign-key violation when the user finalized the final.
+    // If the final just closed, pin the winning TEAM as winner_id. The FK
+    // fk_tournaments_winner references teams(id) — earlier code wrote the
+    // captain's player id, which crashed with a 23503 foreign-key violation.
+    //
+    // SPEC-014: the tournament status only flips to 'completed' when EVERY
+    // match in the tournament is completed — including the third_place and
+    // any lingering group/quarter matches. The previous behaviour marked
+    // the tournament completed as soon as the final closed, which made the
+    // admin panel offer "Crear nuevo torneo" while half the bracket still
+    // had pending scores.
     if (m.stage === "final" && winnerId) {
       await q(
-        "UPDATE tournaments SET status='completed', winner_id=$1 WHERE id=$2",
+        "UPDATE tournaments SET winner_id=$1 WHERE id=$2",
         [winnerId, m.tournamentId],
       );
       const loserId = winnerId === m.homeTeamId ? m.awayTeamId : m.homeTeamId;
@@ -188,6 +194,27 @@ export const completeMatch = async (matchId: string) => {
       await autoGrantOnThirdPlace(m.tournamentId, winnerId);
     }
 
+    // SPEC-014: try to close the tournament now. Idempotent — only flips
+    // status when no matches remain pending.
+    await closeIfAllMatchesCompleted(q, m.tournamentId);
+
     return toMatch(updated[0]);
   });
+};
+
+// SPEC-014: close a tournament iff every match has status 'completed' and
+// the tournament is not already in a terminal state. Forward-only.
+const closeIfAllMatchesCompleted = async (
+  q: <R = Record<string, unknown>>(text: string, params?: unknown[]) => Promise<R[]>,
+  tournamentId: string,
+): Promise<void> => {
+  const pending = await q<{ id: string }>(
+    "SELECT id FROM matches WHERE tournament_id=$1 AND status<>'completed' LIMIT 1",
+    [tournamentId],
+  );
+  if (pending.length > 0) return;
+  await q(
+    "UPDATE tournaments SET status='completed' WHERE id=$1 AND status<>'completed'",
+    [tournamentId],
+  );
 };
