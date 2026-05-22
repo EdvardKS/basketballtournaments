@@ -14,7 +14,7 @@ const FRAMES = [
   "frame-v2",  // year 1
   "frame-v3",  // year 2
   "frame-v4",  // year 3
-  "frame-v5+", // year 4+
+  "frame-v5plus", // year 4+
 ] as const;
 
 export interface TierTheme {

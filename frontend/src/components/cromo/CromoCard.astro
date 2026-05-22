@@ -1,11 +1,10 @@
 ---
-// Single source of truth for the cromo visual. The card is always rendered
-// at the canonical pixel size (680×906); the surrounding `.cromo-fit`
-// wrapper uses a CSS container query to scale it down for the preview.
-// `lib/cromo-export.ts` clones #cromo-root into an off-screen sandbox at
-// the same pixel dimensions when the user shares — that's why we keep
-// every measurement in absolute px and avoid `clamp` / `vw` / aspect-ratio
-// inside the card itself.
+// Single source of truth for the cromo visual. The card is ALWAYS the box
+// `lib/cromo-export.ts` rasterizes (680×906 logical px) — the surrounding
+// `.cromo-fit` wrapper only scales the preview down via a CSS container
+// query. All positional rules live on `.cromo` directly (NOT on
+// `.cromo-fit .cromo`) so the exported clone, which is detached from the
+// `.cromo-fit` ancestor, renders byte-for-byte identical to the preview.
 import type { Player, Achievement } from "../../lib/types.js";
 import { cromoTier, tierTheme, POSITION_ABBR } from "../../lib/cromo.js";
 import { overallColor } from "../../lib/display.js";
@@ -21,46 +20,54 @@ const stats = [
   ["REG", p.dribbling], ["DEF", p.defense], ["FIS", p.physical],
 ] as const;
 ---
-<div class="cromo-fit">
-  <div id="cromo-root" class:list={["cromo", theme.frameClass]}>
-    <!-- Layered background: vignette + metallic gradient + diagonal texture + radial spotlight -->
+<div class="cromo-fit" style="width:clamp(280px,100%,380px);margin:0 auto;aspect-ratio:680/906;position:relative;overflow:hidden;box-sizing:border-box;--cromo-scale:0.559;">
+  <div id="cromo-root" class:list={["cromo", theme.frameClass]} style="position:absolute;top:0;left:0;width:680px;height:906px;transform-origin:top left;transform:scale(var(--cromo-scale,0.559));">
+    <!-- Layered background: base gradient + foil + spotlight + vignette. -->
     <div class="cromo-bg" aria-hidden="true"></div>
-    <div class="cromo-texture" aria-hidden="true"></div>
+    <div class="cromo-foil" aria-hidden="true"></div>
     <div class="cromo-spotlight" aria-hidden="true"></div>
     <div class="cromo-vignette" aria-hidden="true"></div>
 
-    <!-- Outer metallic frame -->
-    <div class="cromo-frame" aria-hidden="true"></div>
+    <!-- Dual-tone metallic frame (outer + inner border). -->
+    <div class="cromo-frame cromo-frame-outer" aria-hidden="true"></div>
+    <div class="cromo-frame cromo-frame-inner" aria-hidden="true"></div>
 
-    <!-- Top-left: rating + position -->
+    <!-- FUT-style corner notches. -->
+    <span class="cromo-corner-deco cromo-corner-tl" aria-hidden="true"></span>
+    <span class="cromo-corner-deco cromo-corner-tr" aria-hidden="true"></span>
+    <span class="cromo-corner-deco cromo-corner-bl" aria-hidden="true"></span>
+    <span class="cromo-corner-deco cromo-corner-br" aria-hidden="true"></span>
+
+    <!-- Top-left: rating + divider + position. -->
     <div class="cromo-corner">
       <div class:list={["cromo-overall", overallColor(p.overall)]}>{p.overall}</div>
       <div class="cromo-divider" aria-hidden="true"></div>
       <div class="cromo-position">{positionAbbr}</div>
     </div>
 
-    <!-- Tier badge top-right -->
+    <!-- Tier badge top-right. -->
     <div class="cromo-tier">
       <span class="cromo-tier-dot" aria-hidden="true"></span>
       {theme.tierLabel}
     </div>
 
-    <!-- Avatar zone — radial halo + cut-out photo -->
-    <div class="cromo-photo-halo" aria-hidden="true"></div>
-    <div class="cromo-photo">
+    <!-- Avatar zone: pseudo-shadow + masked photo (no CSS filters that
+         html-to-image can't reproduce — we use real DOM nodes). -->
+    <div class="cromo-photo-shadow" aria-hidden="true"></div>
+    <div class="cromo-photo-mask">
       {p.avatar ? (
-        <img src={p.avatar} alt="" crossorigin="anonymous" decoding="sync" />
+        <img class="cromo-photo-img" src={p.avatar} alt="" crossorigin="anonymous" decoding="sync" />
       ) : (
         <div class="cromo-photo-fallback">{p.name.charAt(0).toUpperCase()}</div>
       )}
     </div>
 
-    <!-- Footer: brand line, name, stats grid -->
+    <!-- Footer: brand line, name, stats grid. -->
     <div class="cromo-footer">
       <div class="cromo-brand" aria-hidden="true">
-        <span class="cromo-brand-dot"></span>
+        <span class="cromo-brand-hair"></span>
         <span class="cromo-brand-text">VBL · VILLENA BASKET LEAGUE</span>
-        <span class="cromo-brand-dot"></span>
+        <span class="cromo-brand-hair"></span>
       </div>
       <p class="cromo-name">{p.name}</p>
       <div class="cromo-stats">
@@ -76,30 +83,35 @@ const stats = [
 </div>
 
 <style>
-  /* --- Preview-scale wrapper. The inner card stays at 680×906 px logical
-         (the same pixel box exportCardToPng captures). Container queries
-         scale the visual via transform; the box reserved in the layout
-         shrinks via aspect-ratio so the surrounding column collapses. --- */
+  /* Preview wrapper. Inner card stays at 680x906 px logical (what the
+     export sandbox captures). Scale ratio is set by the inline script
+     below via ResizeObserver — CSS container queries proved unreliable
+     in this Astro layout. */
   .cromo-fit {
-    width: 100%;
-    max-width: 380px;
+    width: clamp(280px, 100%, 380px);
     margin: 0 auto;
     aspect-ratio: 680 / 906;
-    container-type: inline-size;
     position: relative;
-    overflow: visible;
+    overflow: hidden;
+    box-sizing: border-box;
+    /* CSS fallback in case the JS observer hasn't run yet: 380 / 680.
+       The inline script below overrides this with the exact value once
+       layout is measured. */
+    --cromo-scale: 0.559;
   }
-  .cromo-fit .cromo {
-    position: absolute;
-    top: 0; left: 0;
-    width: 680px;
-    height: 906px;
+  .cromo-fit > .cromo {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
     transform-origin: top left;
-    transform: scale(calc(100cqw / 680));
+    transform: scale(var(--cromo-scale));
   }
 
   /* --- Canonical card box. Absolute px everywhere — no clamp / vw / %. --- */
   .cromo {
+    position: relative;
+    width: 680px;
+    height: 906px;
     border-radius: 32px;
     overflow: hidden;
     isolation: isolate;
@@ -111,150 +123,175 @@ const stats = [
       0 0 80px -20px var(--cromo-glow, transparent);
   }
 
-  /* Metallic outer frame — plain solid border so html2canvas renders it 1:1.
-     The dual-tone metallic feel comes from the inset highlight + outer
-     glow below, not from a CSS mask (which html2canvas can't reproduce). */
+  /* --- Metallic frame (dual concentric borders, FUT style). --- */
   .cromo-frame {
     position: absolute;
-    inset: 6px;
-    border-radius: 26px;
-    border: 2px solid var(--cromo-frame-2);
-    box-shadow:
-      inset 0 0 0 1px rgba(255,255,255,0.07),
-      inset 0 1px 0 rgba(255,255,255,0.12),
-      0 0 30px -8px var(--cromo-glow);
     pointer-events: none;
-    z-index: 4;
+  }
+  .cromo-frame-outer {
+    inset: 0;
+    border-radius: 32px;
+    border: 3px solid var(--cromo-frame-2);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      0 0 36px -6px var(--cromo-glow);
+    z-index: 8;
+  }
+  .cromo-frame-inner {
+    inset: 10px;
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow:
+      inset 0 0 0 1px rgba(0,0,0,0.35);
+    z-index: 7;
   }
 
+  /* --- FUT-style corner notches. 32px triangles in tier color. --- */
+  .cromo-corner-deco {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    z-index: 9;
+    pointer-events: none;
+    background: var(--cromo-frame-2);
+    box-shadow: 0 0 12px var(--cromo-glow);
+  }
+  .cromo-corner-tl { top: 0;    left: 0;    clip-path: polygon(0 0, 100% 0, 0 100%); border-top-left-radius: 32px; }
+  .cromo-corner-tr { top: 0;    right: 0;   clip-path: polygon(100% 0, 100% 100%, 0 0); border-top-right-radius: 32px; }
+  .cromo-corner-bl { bottom: 0; left: 0;    clip-path: polygon(0 0, 0 100%, 100% 100%); border-bottom-left-radius: 32px; }
+  .cromo-corner-br { bottom: 0; right: 0;   clip-path: polygon(100% 0, 100% 100%, 0 100%); border-bottom-right-radius: 32px; }
+
+  /* --- Background layers. --- */
   .cromo-bg {
     position: absolute; inset: 0; z-index: 0;
     background:
-      radial-gradient(ellipse 80% 60% at 50% 30%, var(--cromo-c2) 0%, transparent 60%),
+      radial-gradient(ellipse 65% 45% at 50% 28%, var(--cromo-c2) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 50% 18%, color-mix(in oklab, var(--cromo-c2) 30%, transparent), transparent 70%),
       linear-gradient(170deg, var(--cromo-c1) 0%, var(--cromo-c3) 55%, #06080f 100%);
   }
-  .cromo-texture {
-    position: absolute; inset: 0; z-index: 0;
-    background:
-      repeating-linear-gradient(115deg,
-        transparent 0 36px,
-        rgba(255,255,255,0.045) 36px 38px,
-        transparent 38px 80px,
-        rgba(255,255,255,0.025) 80px 82px),
-      repeating-linear-gradient(65deg,
-        transparent 0 60px,
-        rgba(0,0,0,0.08) 60px 62px);
-    opacity: 0.95;
+  /* Diagonal foil — confined to the upper half so the stats area stays
+     readable. mask-image is supported by html-to-image and evergreen browsers. */
+  .cromo-foil {
+    position: absolute; inset: 0; z-index: 1;
+    background: repeating-linear-gradient(115deg,
+      rgba(255,255,255,0.08) 0 2px,
+      transparent 2px 16px);
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 80%);
+            mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 80%);
+    opacity: 0.65;
     pointer-events: none;
   }
   .cromo-spotlight {
-    position: absolute; inset: 0; z-index: 1;
-    background: radial-gradient(ellipse 70% 50% at 50% 38%, rgba(255,255,255,0.22), transparent 65%);
+    position: absolute; inset: 0; z-index: 2;
+    background: radial-gradient(ellipse 60% 45% at 50% 32%, rgba(255,255,255,0.22), transparent 70%);
     pointer-events: none;
   }
   .cromo-vignette {
-    position: absolute; inset: 0; z-index: 5;
-    background:
-      radial-gradient(ellipse 110% 110% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%);
+    position: absolute; inset: 0; z-index: 6;
+    background: radial-gradient(ellipse 110% 110% at 50% 50%, transparent 55%, rgba(0,0,0,0.6) 100%);
     pointer-events: none;
   }
 
-  /* --- Top-left corner: overall + divider + position --- */
+  /* --- Top-left corner: overall + divider + position. --- */
   .cromo-corner {
     position: absolute;
-    top: 36px;
-    left: 44px;
-    z-index: 6;
+    top: 40px;
+    left: 48px;
+    z-index: 10;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
   .cromo-overall {
-    font-size: 104px;
+    font-size: 112px;
     font-weight: 900;
-    letter-spacing: -0.04em;
-    line-height: 0.85;
+    letter-spacing: -0.05em;
+    line-height: 0.82;
     text-shadow:
       0 4px 22px rgba(0,0,0,0.65),
       0 1px 0 rgba(255,255,255,0.08);
   }
   .cromo-divider {
-    width: 56px; height: 3px;
-    margin: 10px 0 6px;
+    width: 48px; height: 3px;
+    margin: 8px 0 6px;
     background: linear-gradient(90deg, transparent, currentColor 35%, currentColor 65%, transparent);
-    opacity: 0.55;
+    opacity: 0.7;
   }
   .cromo-position {
-    font-size: 30px;
-    letter-spacing: 0.18em;
-    color: rgba(255,255,255,0.95);
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    color: rgba(255,255,255,0.96);
     text-shadow: 0 2px 8px rgba(0,0,0,0.5);
   }
 
-  /* --- Tier badge --- */
+  /* --- Tier badge (top-right metallic insignia). --- */
   .cromo-tier {
     position: absolute;
-    top: 42px;
-    right: 44px;
-    z-index: 6;
+    top: 46px;
+    right: 48px;
+    z-index: 10;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
+    gap: 10px;
+    padding: 10px 18px;
     border-radius: 999px;
     font-size: 16px;
     font-weight: 700;
-    letter-spacing: 0.34em;
+    letter-spacing: 0.36em;
     text-transform: uppercase;
     color: var(--cromo-tier-text, #fff);
     background:
-      linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.3)),
-      var(--cromo-tier-bg, rgba(0,0,0,0.5));
-    border: 1px solid var(--cromo-frame-2);
+      linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.35)),
+      radial-gradient(ellipse 60% 100% at 50% 0%,
+        color-mix(in oklab, var(--cromo-frame-2) 30%, transparent), transparent 70%);
+    border: 1.5px solid var(--cromo-frame-2);
     box-shadow:
       0 4px 14px rgba(0,0,0,0.45),
-      inset 0 1px 0 rgba(255,255,255,0.15);
+      inset 0 1px 0 rgba(255,255,255,0.18);
   }
   .cromo-tier-dot {
     width: 8px; height: 8px; border-radius: 50%;
     background: var(--cromo-frame-2);
-    box-shadow: 0 0 10px var(--cromo-frame-2);
+    box-shadow: 0 0 12px var(--cromo-frame-2);
   }
 
-  /* --- Avatar zone --- */
-  .cromo-photo-halo {
+  /* Avatar zone. Real DOM nodes for shadow + mask (no filter rules, so
+     html-to-image reproduces the result 1:1). Photo mask is top 100px,
+     height 530px, so its feet sit 270px from the card bottom. We place
+     the shadow 246px from the bottom so its centre lands a touch below
+     the feet — where a real coleccionable casts. */
+  .cromo-photo-shadow {
+    position: absolute;
+    bottom: 246px;
+    left: 50%;
+    width: 380px;
+    height: 70px;
+    transform: translateX(-50%);
+    z-index: 2;
+    background: radial-gradient(ellipse 50% 50% at 50% 50%,
+      rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 45%, transparent 75%);
+    pointer-events: none;
+  }
+  .cromo-photo-mask {
     position: absolute;
     top: 100px;
     left: 50%;
     transform: translateX(-50%);
-    width: 540px;
-    height: 540px;
-    z-index: 1;
-    background: radial-gradient(circle at 50% 45%, var(--cromo-c2) 0%, transparent 55%);
-    opacity: 0.55;
-    pointer-events: none;
-    filter: blur(4px);
-  }
-  .cromo-photo {
-    position: absolute;
-    top: 90px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 480px;
-    height: 510px;
-    z-index: 2;
+    width: 500px;
+    height: 530px;
+    z-index: 3;
+    overflow: hidden;
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    border-radius: 24px;
   }
-  .cromo-photo img {
+  .cromo-photo-img {
     width: 100%;
     height: 100%;
     object-fit: contain;
     object-position: center bottom;
-    filter:
-      drop-shadow(0 36px 36px rgba(0,0,0,0.55))
-      drop-shadow(0 0 10px rgba(0,0,0,0.4));
   }
   .cromo-photo-fallback {
     width: 360px; height: 360px;
@@ -266,43 +303,48 @@ const stats = [
     color: rgba(255,255,255,0.45);
   }
 
-  /* --- Footer: brand + name + stats --- */
+  /* --- Footer: brand + name + stats. --- */
   .cromo-footer {
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    padding: 28px 44px 36px;
-    z-index: 6;
+    padding: 28px 44px 40px;
+    z-index: 10;
     background: linear-gradient(180deg,
       transparent 0%,
       rgba(0,0,0,0.10) 25%,
-      rgba(0,0,0,0.55) 60%,
-      rgba(0,0,0,0.92) 100%);
+      rgba(0,0,0,0.62) 55%,
+      rgba(0,0,0,0.94) 100%);
   }
   .cromo-brand {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    margin-bottom: 14px;
+    gap: 14px;
+    margin-bottom: 12px;
   }
   .cromo-brand-text {
     font-size: 11px;
-    letter-spacing: 0.4em;
+    letter-spacing: 0.5em;
     color: rgba(255,255,255,0.55);
+    white-space: nowrap;
   }
-  .cromo-brand-dot {
+  .cromo-brand-hair {
     width: 56px; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
   }
   .cromo-name {
-    font-size: 44px;
+    font-size: 46px;
     line-height: 1;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     text-align: center;
-    margin: 0 0 22px;
+    margin: 0 auto 22px;
+    max-width: 600px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     text-shadow:
-      0 4px 18px rgba(0,0,0,0.55),
-      0 1px 0 rgba(255,255,255,0.1);
+      0 2px 0 rgba(0,0,0,0.4),
+      0 6px 20px rgba(0,0,0,0.6);
     text-transform: uppercase;
     color: #fff;
     font-weight: 800;
@@ -310,35 +352,36 @@ const stats = [
   .cromo-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px 10px;
+    gap: 8px 12px;
   }
   .cromo-stat {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 12px 8px;
-    border-radius: 12px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02));
-    border: 1px solid rgba(255,255,255,0.10);
+    gap: 4px;
+    padding: 14px 6px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04));
+    border: 1px solid rgba(255,255,255,0.16);
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.08),
-      0 2px 6px rgba(0,0,0,0.35);
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      0 2px 8px rgba(0,0,0,0.4);
   }
   .cromo-stat-val {
-    font-size: 36px;
-    font-weight: 800;
+    font-size: 40px;
+    font-weight: 900;
     color: #fff;
-    line-height: 1;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    line-height: 0.9;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.55);
   }
   .cromo-stat-key {
-    font-size: 13px;
-    letter-spacing: 0.24em;
+    font-size: 12px;
+    letter-spacing: 0.28em;
     color: rgba(255,255,255,0.65);
+    font-weight: 600;
   }
 
-  /* --- Tier palettes --- */
+  /* --- Tier palettes (v1 bronze → v5+ amethyst). --- */
   .frame-v1 {
     --cromo-c1: #5a4a3a;
     --cromo-c2: #d4a05c;
@@ -375,7 +418,7 @@ const stats = [
     --cromo-frame-2: #7df3cb;
     --cromo-tier-text: #7df3cb;
   }
-  .frame-v5\+ {
+  .frame-v5plus {
     --cromo-c1: #2d0e60;
     --cromo-c2: #e066f0;
     --cromo-c3: #07041a;
@@ -385,3 +428,36 @@ const stats = [
     --cromo-tier-text: #f4a8f9;
   }
 </style>
+
+<script is:inline>
+  // Drive the preview scale via JS so the inner .cromo stays at 680x906 px
+  // logical (what the export sandbox captures) while the visual preview
+  // always fits its column. CSS has a 0.559 fallback for the 380px default,
+  // this script refines it to the exact column width on every resize.
+  (() => {
+    const tick = (el) => {
+      const w = el.clientWidth || el.getBoundingClientRect().width;
+      if (!w) return;
+      el.style.setProperty("--cromo-scale", String(w / 680));
+    };
+    const mount = () => {
+      const nodes = document.querySelectorAll(".cromo-fit");
+      nodes.forEach((el) => {
+        if (el.dataset.cromoFitMounted === "1") return;
+        el.dataset.cromoFitMounted = "1";
+        requestAnimationFrame(() => tick(el));
+        try {
+          new ResizeObserver(() => tick(el)).observe(el);
+        } catch (e) { console.warn("[cromo-fit] observer failed", e); }
+      });
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", mount, { once: true });
+    } else {
+      mount();
+    }
+    // Astro view transitions / soft navigations re-attach the component
+    // without firing DOMContentLoaded, so we also listen to astro:page-load.
+    document.addEventListener("astro:page-load", mount);
+  })();
+</script>

@@ -5,7 +5,7 @@
 import { useRef, useState, type ComponentType } from "react";
 import { successBurst } from "../lib/neon.js";
 import { shareCard, type ShareNetwork, type ShareResult } from "../lib/cromo-share.js";
-import { exportCardToPng, buildFileName, CromoExportError } from "../lib/cromo-export.js";
+import { downloadCard, CromoExportError } from "../lib/cromo-export.js";
 
 interface Props { playerName: string; playerId: string }
 
@@ -92,12 +92,7 @@ export default function CromoShare({ playerName, playerId }: Props) {
   const handleDownload = async () => {
     setBusy("dl"); setHint(null);
     try {
-      const fileName = buildFileName(playerName);
-      const exp = await exportCardToPng({ fileName });
-      const a = document.createElement("a");
-      a.href = exp.url; a.download = fileName; a.rel = "noopener";
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(exp.url), 4000);
+      const exp = await downloadCard(playerName);
       setHint(`Cromo descargado (${exp.width}×${exp.height} px).`);
       successBurst(btnRefs.current.dl);
     } catch (err) {
@@ -146,7 +141,7 @@ export default function CromoShare({ playerName, playerId }: Props) {
         </span>
       </button>
 
-      <p className="text-[10px] text-court-muted text-center">
+      <p className="text-[10px] text-court-muted text-center" aria-live="polite">
         {hint ?? "Cada cromo se exporta a 1360×1812 px. La imagen es idéntica a la que ves."}
       </p>
     </div>

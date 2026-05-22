@@ -2,28 +2,34 @@
 //
 // Root-cause notes — why the previous capture “se deshacía”:
 //
-// 1. The card was sized with `clamp(260px, 86vw, 340px)`, so html2canvas was
-//    snapshotting whatever pixel size the responsive viewport produced at the
-//    moment of capture (mobile → ~280px, desktop with zoom → wrong px). The
-//    output therefore depended on the device.
-// 2. There was no font-ready / image-decoded gate, so Bebas Neue often hadn't
-//    loaded when we shot the canvas and the captured frame used the system
-//    fallback (different metrics → name + stats jumped).
-// 3. `backdrop-filter` and `mix-blend-mode` were used; html2canvas can't
-//    render either — visual elements silently disappeared in the PNG.
-// 4. We were capturing the live, scaled, padded node, so any layout from the
-//    surrounding dashboard leaked into the screenshot.
+//  1. Old `clamp(260px, 86vw, 340px)` sizing made html2canvas snapshot the
+//     current responsive pixel size (different on mobile vs desktop, vs zoom).
+//     → Fixed by rendering at a canonical 680×906 logical size, scaled only
+//       for preview via container queries.
+//  2. No font-ready / image-decoded gate → Bebas Neue often missed the
+//     capture and the PNG used the system fallback (different metrics).
+//     → Fixed via `waitForFonts` + `waitForImages`.
+//  3. The library itself (`html2canvas` v1.4.1) cannot reproduce
+//     `filter: blur()`, `filter: drop-shadow()`, several radial gradients
+//     and `box-shadow` with negative offset. The on-screen card used all of
+//     these for halo, photo shadow and metallic glow → those layers
+//     silently disappeared in the PNG, leaving a flat "HTML card" look.
+//     → Fixed by replacing html2canvas with `html-to-image` (toBlob), which
+//       inlines the live computed styles into an SVG <foreignObject> and
+//       lets the browser rasterize — every CSS effect the browser can paint
+//       on screen ends up in the PNG byte-for-byte.
+//  4. The live node lived inside the dashboard layout, so parent transforms
+//     and padding leaked into the screenshot.
+//     → Fixed by cloning the node into an off-screen sandbox at the
+//       canonical pixel size with no inherited transforms.
 //
-// Fix: render the cromo at a fixed logical size (680×906) — the screen
-// preview keeps the same node and scales it via container queries, so the
-// pixel box of the inner card is always 680×906. For export we still detach
-// the node into a deterministic off-screen mount with explicit dimensions,
-// wait for fonts + image decode, then html2canvas it at scale 2 → 1360×1812.
+// Public surface stays identical: `exportCardToPng(opts) → ExportedCard`.
 
-import { CROMO_W, CROMO_H } from "./cromo-dimensions.js";
+import { toBlob } from "html-to-image";
+import { CROMO_W, CROMO_H, EXPORT_SCALE } from "./cromo-dimensions.js";
 
 export interface ExportOptions {
-  /** Scale multiplier (1 = 680×906, 2 = 1360×1812). Default 2. */
+  /** Pixel ratio multiplier (1 = 680×906, 2 = 1360×1812). Default 2. */
   scale?: number;
   /** Override the source node. Defaults to `#cromo-root`. */
   source?: HTMLElement | null;
@@ -53,35 +59,32 @@ const slugify = (s: string): string =>
 export const buildFileName = (playerName: string): string =>
   `cromo-${slugify(playerName)}.png`;
 
-// Wait until every web font this card uses has been loaded. We can't just
-// poll `document.fonts.ready` once because Chrome resolves that promise
-// before custom faces in shadow-DOM-less Astro pages finish — explicitly
-// `load()` each face we depend on.
+// Wait until every web font the card uses has been loaded. `document.fonts.
+// ready` resolves before custom faces are actually registered in some
+// Chromium builds — explicitly `load()` each face we depend on.
 const waitForFonts = async (): Promise<void> => {
   if (typeof document === "undefined" || !("fonts" in document)) return;
   try {
     await document.fonts.ready;
-    // Force-load the two display weights the cromo cares about. If the face
-    // is missing the call rejects silently — we don't want to abort the
-    // export because of that.
     await Promise.all([
-      document.fonts.load('900 96px "Bebas Neue"').catch(() => undefined),
-      document.fonts.load('700 36px "Bebas Neue"').catch(() => undefined),
+      document.fonts.load('900 112px "Bebas Neue"').catch(() => undefined),
+      document.fonts.load('900 46px "Bebas Neue"').catch(() => undefined),
+      document.fonts.load('700 16px "Bebas Neue"').catch(() => undefined),
+      document.fonts.load('800 40px "Inter"').catch(() => undefined),
     ]);
   } catch {/* best-effort */}
 };
 
-// Resolve once every <img> inside the source node has natural dimensions.
+// Resolve once every <img> inside the source node has natural dimensions
+// AND decoded pixel data — html-to-image otherwise rasterizes a 0×0 placeholder.
 const waitForImages = async (root: HTMLElement): Promise<void> => {
   const imgs = Array.from(root.querySelectorAll("img"));
   await Promise.all(imgs.map((img) => new Promise<void>((resolve) => {
     if (img.complete && img.naturalWidth > 0) { resolve(); return; }
     img.addEventListener("load",  () => resolve(), { once: true });
     img.addEventListener("error", () => resolve(), { once: true });
-    // 4s safety net.
     setTimeout(() => resolve(), 4000);
   })));
-  // For decoded pixel data — modern browsers expose img.decode().
   await Promise.all(imgs.map((img) =>
     "decode" in img && typeof img.decode === "function"
       ? img.decode().catch(() => undefined)
@@ -98,14 +101,13 @@ const mountSandbox = (sourceNode: HTMLElement) => {
     "top:0",
     `width:${CROMO_W}px`,
     `height:${CROMO_H}px`,
-    "transform:translate(-200vw,-200vh)", // off-screen but rendered
+    "transform:translate(-200vw,-200vh)",
     "pointer-events:none",
     "z-index:-1",
     "background:transparent",
     "isolation:isolate",
   ].join(";");
   const clone = sourceNode.cloneNode(true) as HTMLElement;
-  // Strip the IDs from the clone so we don't pollute the document.
   clone.removeAttribute("id");
   clone.querySelectorAll<HTMLElement>("[id]").forEach((el) => el.removeAttribute("id"));
   // Lock the clone's own box to the canonical pixel size — defeats any
@@ -114,7 +116,10 @@ const mountSandbox = (sourceNode: HTMLElement) => {
     + `;width:${CROMO_W}px !important`
     + `;height:${CROMO_H}px !important`
     + ";transform:none !important"
-    + ";margin:0 !important";
+    + ";margin:0 !important"
+    + ";position:relative !important"
+    + ";top:0 !important"
+    + ";left:0 !important";
   sandbox.appendChild(clone);
   document.body.appendChild(sandbox);
   return { sandbox, clone };
@@ -132,32 +137,56 @@ export const exportCardToPng = async (opts: ExportOptions = {}): Promise<Exporte
     await waitForFonts();
     await waitForImages(clone);
 
-    const { default: html2canvas } = await import("html2canvas");
-    const scale = opts.scale ?? 2;
-    const canvas = await html2canvas(clone, {
-      backgroundColor: null,
-      scale,
+    const pixelRatio = opts.scale ?? EXPORT_SCALE;
+    // `toBlob` inlines computed styles into an SVG <foreignObject>, so any
+    // CSS the browser paints on screen (blur, drop-shadow, gradients) ends
+    // up in the PNG. `cacheBust` is off because all our assets live in
+    // data URLs already (see backend/players.ts → avatar field).
+    // `skipFonts: true` because Bebas Neue + Inter are already loaded into
+    // `document.fonts` (we waited above) — html-to-image's default embedder
+    // tries to fetch the Google Fonts CSS to inline @font-face and trips on
+    // CORS, throwing the whole capture away. The browser uses the loaded
+    // face when rasterizing the foreignObject anyway.
+    const blob = await toBlob(clone, {
       width: CROMO_W,
       height: CROMO_H,
-      windowWidth: CROMO_W,
-      windowHeight: CROMO_H,
-      useCORS: true,
-      allowTaint: false,
-      logging: false,
+      pixelRatio,
+      cacheBust: false,
+      skipFonts: true,
+      backgroundColor: undefined,
+      style: { transform: "none", margin: "0" },
     });
-
-    const blob = await new Promise<Blob | null>((res) =>
-      canvas.toBlob((b) => res(b), "image/png", 1.0));
     if (!blob) throw new CromoExportError("BLOB_NULL");
 
     const url = URL.createObjectURL(blob);
     const fileName = opts.fileName ?? "cromo.png";
     const file = new File([blob], fileName, { type: "image/png" });
-    return { blob, file, url, width: canvas.width, height: canvas.height };
+    return {
+      blob, file, url,
+      width:  CROMO_W * pixelRatio,
+      height: CROMO_H * pixelRatio,
+    };
   } catch (e) {
     if (e instanceof CromoExportError) throw e;
     throw new CromoExportError("EXPORT_FAILED", e);
   } finally {
     sandbox.remove();
   }
+};
+
+// Plain download (no share intent). Used by the explicit "Descargar PNG"
+// button so the UI doesn't need to re-implement the anchor dance.
+export const downloadCard = async (playerName: string): Promise<ExportedCard> => {
+  const fileName = buildFileName(playerName);
+  const exp = await exportCardToPng({ fileName });
+  const a = document.createElement("a");
+  a.href = exp.url;
+  a.download = fileName;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoke after a tick so iOS Safari has time to start the download.
+  setTimeout(() => URL.revokeObjectURL(exp.url), 4000);
+  return exp;
 };
