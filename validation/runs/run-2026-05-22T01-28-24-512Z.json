@@ -1,0 +1,62 @@
+{
+  "runId": "2026-05-22T01-28-24-512Z",
+  "seed": 1779413304512,
+  "base": "http://127.0.0.1:4010",
+  "startedAt": "2026-05-22T01:28:24.512Z",
+  "endedAt": "2026-05-22T01:28:24.638Z",
+  "durationMs": 124,
+  "allOk": false,
+  "tournamentId": null,
+  "tokens": {
+    "in": 1590,
+    "out": 32882
+  },
+  "steps": [
+    {
+      "name": "admin/login",
+      "ok": true,
+      "info": {
+        "id": "admin-1",
+        "name": "Administrador base1",
+        "mobile": "700000001",
+        "username": "base1",
+        "email": "base1@villena.test",
+        "role": "admin",
+        "position": "base",
+        "avatar": null,
+        "isPublic": false,
+        "age": null,
+        "gdprAccepted": false,
+        "gdprAcceptedAt": null,
+        "pace": 50,
+        "shooting": 50,
+        "passing": 50,
+        "dribbling": 50,
+        "defense": 50,
+        "physical": 50,
+        "overall": 50,
+        "createdAt": "2026-04-24T14:55:40.719Z"
+      },
+      "at": "2026-05-22T01:28:24.566Z"
+    },
+    {
+      "name": "players/create",
+      "ok": true,
+      "info": {
+        "created": 8
+      },
+      "at": "2026-05-22T01:28:24.631Z"
+    },
+    {
+      "name": "slot/ensure",
+      "ok": false,
+      "info": {
+        "error": "BLOCKED_BY_LIVE_TOURNAMENT id=e0363f21-b8c5-4557-bb59-1835ff933461 name=LK-46251 status=setup"
+      },
+      "at": "2026-05-22T01:28:24.638Z"
+    }
+  ],
+  "fatalError": {
+    "message": "BLOCKED_BY_LIVE_TOURNAMENT id=e0363f21-b8c5-4557-bb59-1835ff933461 name=LK-46251 status=setup"
+  }
+}
