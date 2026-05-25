@@ -22,8 +22,6 @@ services:
       # Schema + seed SQL are applied by the backend on boot (see
       # backend/src/db/migrate.ts). No docker-entrypoint-initdb.d mount:
       # that path only runs on *first* DB init, which breaks upgrades.
-    ports:
-      - "5434:5432"
     networks:
       - basket_net_prod
     healthcheck:
@@ -46,8 +44,6 @@ services:
       - ./db/init:/app/migrations:ro
       - ./db/seeds:/app/seeds:ro
       - ./backend/data:/app/data
-    ports:
-      - "4010:4000"
     networks:
       - basket_net_prod
 
@@ -61,14 +57,15 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    ports:
-      - "4322:4321"
     networks:
       - basket_net_prod
+      - reverse_proxy
 
 networks:
   basket_net_prod:
     driver: bridge
+  reverse_proxy:
+    external: true
 
 volumes:
   basket_pgdata_prod:
