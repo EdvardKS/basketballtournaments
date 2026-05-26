@@ -1,0 +1,19 @@
+{
+  "name": "vbl-playwright-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "TDD Playwright E2E suite for VBL — function-by-function (unit/) + flow-by-flow (flow/) — see ./README.md",
+  "scripts": {
+    "test": "playwright test",
+    "test:unit": "playwright test unit/",
+    "test:flow": "playwright test flow/",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.10.0"
+  }
+}
