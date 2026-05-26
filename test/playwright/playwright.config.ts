@@ -14,6 +14,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  globalSetup: "./support/global-setup.ts",
   reporter: [
     ["list"],
     ["html", { open: "never", outputFolder: "playwright-report" }],

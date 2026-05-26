@@ -15,13 +15,17 @@
 // mensaje explícito.
 
 import { test, expect } from "../support/fixtures.js";
-import { loginAdmin, softDeleteTournament, runSuffix } from "../support/api.js";
+import { loginAdmin, softDeleteTournament, cleanupLiveTournaments, LIVE_STATUSES, runSuffix } from "../support/api.js";
 import { makeOpenTournamentPayload } from "../support/seed.js";
-
-const LIVE_STATUSES = new Set(["upcoming", "open", "draft", "setup", "scheduled", "active"]);
 
 test.describe("Flow 01 · bootstrap + crear torneo", () => {
   test.describe.configure({ mode: "serial" });
+
+  // Cleanup guard: before this flow runs, ensure no live tournaments leak from
+  // any prior spec. Runs in addition to globalSetup.
+  test.beforeAll(async ({ apiAdmin }) => {
+    await cleanupLiveTournaments(apiAdmin);
+  });
 
   test("§1+§2 — login admin con cookie bootstrap", async ({ apiAnon }) => {
     const player = await loginAdmin(apiAnon);

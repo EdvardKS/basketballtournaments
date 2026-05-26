@@ -133,6 +133,27 @@ export async function softDeleteTournament(api: ApiClient, id: string, exactName
   return api.del(`/tournaments/${id}`, { confirm: "DELETE", name: exactName });
 }
 
+// Tournament statuses considered "live" per sdd/constitution/tournaments.md
+// (anything in the active flow before `completed`). Used by cleanup helpers
+// to know what to soft-delete between tests.
+export const LIVE_STATUSES = new Set([
+  "upcoming", "open", "draft", "setup", "scheduled", "active",
+]);
+
+// Removes every live tournament. Used in globalSetup + per-spec beforeAll to
+// guarantee `assertSingleLive` isn't tripped by leftover state from a prior
+// run / spec. Always logs in as admin via the provided client.
+export async function cleanupLiveTournaments(api: ApiClient): Promise<number> {
+  const res = await api.get("/tournaments");
+  if (!res.ok()) return 0;
+  const list = await res.json() as Array<{ id: string; status: string; name: string }>;
+  const live = list.filter((t) => LIVE_STATUSES.has(t.status));
+  for (const t of live) {
+    await softDeleteTournament(api, t.id, t.name);
+  }
+  return live.length;
+}
+
 // Useful for tests that need a unique suffix so re-runs don't collide.
 export function runSuffix(): string {
   return String(Date.now()).slice(-8);
