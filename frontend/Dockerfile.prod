@@ -13,7 +13,7 @@ COPY public ./public
 RUN pnpm build
 
 FROM node:20-alpine AS runtime
-RUN corepack enable
+RUN corepack enable && apk add --no-cache curl
 WORKDIR /app
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
@@ -24,7 +24,11 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
 EXPOSE 4321
 
+# curl resolves localhost as IPv4 first; busybox wget prefers IPv6 (::1)
+# and the Astro node server binds only to IPv4 → wget fails with "Connection
+# refused" even though the server is up. Match the curl-based healthcheck
+# used by every other frontend in the VPS.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 \
-  CMD wget -qO- http://localhost:4321/ >/dev/null 2>&1 || exit 1
+  CMD curl -fsS http://localhost:4321/ >/dev/null || exit 1
 
 CMD ["node", "dist/server/entry.mjs"]
