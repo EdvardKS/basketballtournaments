@@ -10,7 +10,7 @@ servicios Docker:
 ## Arranque rápido
 
 **Desarrollo** (HMR, montajes de fuentes):
-
+TEST
 ```bash
 docker compose -f docker-compose.dev.yml up -d --build
 # abre http://localhost:4322
