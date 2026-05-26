@@ -6,7 +6,7 @@ servicios Docker:
 - **db** → Postgres 16 (puerto host `5434`)
 - **backend** → Express + TypeScript (puerto host `4010`)
 - **frontend** → Astro 5 + React islands (puerto host `4322`)
-
+test
 ## Arranque rápido
 
 **Desarrollo** (HMR, montajes de fuentes):
