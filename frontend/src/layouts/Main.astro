@@ -3,6 +3,7 @@ import "../styles/global.css";
 import Navbar from "../components/Navbar.astro";
 import UserNav from "../components/UserNav.astro";
 import Footer from "../components/Footer.astro";
+import SponsorBadge from "../components/SponsorBadge.astro";
 import Toast from "../islands/ui/Toast.js";
 import type { Player } from "../lib/types.js";
 
@@ -14,6 +15,10 @@ interface Props {
 
 const { title = "Villena Basket League", description = "Liga de baloncesto amateur de Villena", player } = Astro.props;
 const currentPath = Astro.url.pathname;
+// Hide the floating sponsor badge only on admin operational views. Visible
+// everywhere else (landing, login, register, tournaments, captain/player
+// dashboards, legal pages) — the sponsorship is meant to be public.
+const isAdminView = currentPath.startsWith("/dashboard/admin");
 ---
 <!doctype html>
 <html lang="es">
@@ -43,6 +48,7 @@ const currentPath = Astro.url.pathname;
       <slot />
     </main>
     <Footer />
+    {!isAdminView && <SponsorBadge />}
     <Toast client:load />
   </body>
 </html>

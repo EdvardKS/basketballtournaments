@@ -1,0 +1,14 @@
+---
+import Main from "../layouts/Main.astro";
+import { loadSession } from "../lib/session.js";
+import { legalContent } from "../lib/legal.js";
+const session = await loadSession(Astro.request);
+const { title, content } = legalContent["aviso-legal"];
+---
+<Main title={title} player={session.player}>
+  <article class="max-w-3xl mx-auto px-4 py-12">
+    <h1 class="font-display text-5xl text-white mb-2">{title}</h1>
+    <p class="text-court-muted text-sm mb-8">Última actualización: enero 2026</p>
+    <div class="card text-sm text-court-muted whitespace-pre-line leading-relaxed">{content}</div>
+  </article>
+</Main>

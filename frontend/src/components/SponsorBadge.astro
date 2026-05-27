@@ -1,0 +1,38 @@
+---
+// Floating sponsor button. Rendered globally from Main.astro on every
+// non-admin route. Links to the official sponsor (Asador La Morenica).
+interface Props {
+  fixed?: boolean;  // floating (default) vs inline
+}
+const { fixed = true } = Astro.props;
+const base = "inline-flex items-center gap-2 rounded-full bg-white text-black font-semibold ring-1 ring-orange-300/70 transition-shadow";
+const floating = fixed
+  ? "fixed bottom-4 right-4 z-40 px-3 py-2 text-[11px] shadow-[0_0_18px_3px_rgba(255,140,0,0.55)] hover:shadow-[0_0_26px_6px_rgba(255,140,0,0.85)]"
+  : "px-5 py-3 text-sm shadow-[0_0_22px_4px_rgba(255,140,0,0.6)] hover:shadow-[0_0_32px_8px_rgba(255,140,0,0.9)]";
+---
+<a
+  href="https://asadorlamorenica.com"
+  target="_blank"
+  rel="noopener sponsored"
+  aria-label="Patrocinador oficial · Asador La Morenica"
+  class={`${base} ${floating}`}
+>
+  <img
+    src="/img/asador-logo.png"
+    alt="Asador La Morenica"
+    class={fixed ? "h-5 w-auto" : "h-8 w-auto"}
+    loading="lazy"
+    decoding="async"
+  />
+  {fixed ? (
+    <>
+      <span class="hidden sm:inline">Patrocinador oficial · asadorlamorenica.com</span>
+      <span class="sm:hidden uppercase tracking-wider">Patrocinador</span>
+    </>
+  ) : (
+    <span class="flex flex-col leading-tight">
+      <span class="text-[10px] uppercase tracking-[0.2em] text-orange-700">Patrocinador oficial</span>
+      <span>asadorlamorenica.com</span>
+    </span>
+  )}
+</a>

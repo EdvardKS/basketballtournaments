@@ -4,40 +4,33 @@ import { loadSession } from "../lib/session.js";
 const session = await loadSession(Astro.request);
 ---
 <Main title="Legal & Privacidad" player={session.player}>
-  <article class="max-w-3xl mx-auto px-4 py-12">
-    <h1 class="font-display text-5xl text-white mb-2">Legal &amp; Privacidad</h1>
-    <p class="text-court-muted text-sm mb-8">Última actualización: enero 2026</p>
-
-    <div class="card space-y-6 text-sm text-court-muted">
-      <section>
-        <h2 class="font-display text-xl text-white mb-2">Responsable del tratamiento</h2>
-        <p>Villena Basket League (VBL) · Villena, Alicante, España · contacto@vbl.local</p>
-      </section>
-
-      <section>
-        <h2 class="font-display text-xl text-white mb-2">Datos recogidos</h2>
-        <p>Al registrarte recopilamos: nombre completo, número de teléfono, correo electrónico (opcional), edad y foto de perfil (opcional). Estos datos se usan exclusivamente para gestionar tu participación en los torneos.</p>
-      </section>
-
-      <section>
-        <h2 class="font-display text-xl text-white mb-2">Base legal</h2>
-        <p>El tratamiento se basa en tu <strong class="text-white">consentimiento explícito</strong> (Art. 6.1.a RGPD) otorgado al aceptar esta política en el momento del registro.</p>
-      </section>
-
-      <section>
-        <h2 class="font-display text-xl text-white mb-2">Visibilidad de datos</h2>
-        <p>Los visitantes no registrados no pueden ver nombres de jugadores. Los usuarios registrados sí pueden ver los nombres de otros jugadores del torneo. Solo los administradores tienen acceso a datos de contacto (teléfono, email).</p>
-      </section>
-
-      <section>
-        <h2 class="font-display text-xl text-white mb-2">Tus derechos</h2>
-        <p>Tienes derecho a acceder, rectificar, suprimir, limitar el tratamiento y oponerte al mismo. Ejercita estos derechos contactando con nosotros.</p>
-      </section>
-
-      <section>
-        <h2 class="font-display text-xl text-white mb-2">Conservación</h2>
-        <p>Los datos se conservan mientras participas activamente en la liga. Puedes solicitar su eliminación en cualquier momento.</p>
-      </section>
-    </div>
+  <article class="max-w-3xl mx-auto px-4 py-12 space-y-6">
+    <h1 class="font-display text-5xl text-white">Legal &amp; Privacidad</h1>
+    <p class="text-court-muted text-sm">
+      La información legal de esta aplicación está dividida en tres documentos:
+    </p>
+    <ul class="space-y-3 text-base">
+      <li>
+        <a href="/aviso-legal" class="text-white underline underline-offset-4 hover:text-court-accent">
+          Aviso legal
+        </a>
+        <span class="text-court-muted"> · Datos identificativos del titular, objeto y condiciones de uso.</span>
+      </li>
+      <li>
+        <a href="/privacidad" class="text-white underline underline-offset-4 hover:text-court-accent">
+          Política de privacidad
+        </a>
+        <span class="text-court-muted"> · Responsable del tratamiento, finalidad, legitimación, conservación y derechos del interesado.</span>
+      </li>
+      <li>
+        <a href="/cookies" class="text-white underline underline-offset-4 hover:text-court-accent">
+          Política de cookies
+        </a>
+        <span class="text-court-muted"> · Tipos de cookies utilizadas, gestión y actualización.</span>
+      </li>
+    </ul>
+    <p class="text-court-muted text-xs pt-4 border-t border-court-border">
+      Titular y responsable: Asador La Morenica · C/ Celada 72, Villena (03400) Alicante · 965813907 / 686536975 · asadorlamorenica@gmail.com
+    </p>
   </article>
 </Main>

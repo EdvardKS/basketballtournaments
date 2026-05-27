@@ -6,6 +6,7 @@ import HowItWorks from "../components/landing/HowItWorks.astro";
 import UrgencyStrip from "../components/landing/UrgencyStrip.astro";
 import StatsSection from "../components/landing/StatsSection.astro";
 import HistorySection from "../components/landing/HistorySection.astro";
+import SponsorBadge from "../components/SponsorBadge.astro";
 import InstagramPhone from "../islands/InstagramPhone.js";
 import { FEATURED_PHOTOS } from "../lib/gallery.js";
 import { loadSession } from "../lib/session.js";
@@ -98,6 +99,23 @@ const playersTotal = completed.reduce((acc, t) => acc + (t.maxTeams ?? 0) * (t.t
   )}
 
   <HistorySection tournaments={tournaments} />
+
+  <section class="max-w-5xl mx-auto px-4 py-12">
+    <div class="rounded-2xl bg-gradient-to-br from-black via-stone-900 to-stone-950 border border-orange-500/30 p-6 sm:p-10 flex flex-col sm:flex-row items-center gap-6 shadow-[0_0_40px_8px_rgba(255,140,0,0.25)]">
+      <div class="flex-1 space-y-3 text-center sm:text-left">
+        <p class="text-[11px] uppercase tracking-[0.3em] text-orange-400 font-semibold">
+          Patrocinador oficial
+        </p>
+        <h2 class="font-display text-3xl sm:text-4xl text-white">
+          Asador La Morenica
+        </h2>
+        <p class="text-court-muted max-w-xl mx-auto sm:mx-0">
+          Esta liga existe gracias al apoyo de Asador La Morenica. Cordero al horno, pollo asado y los mejores arroces de Villena. Pásate por C/ Celada 72 o pide a domicilio.
+        </p>
+      </div>
+      <SponsorBadge fixed={false} />
+    </div>
+  </section>
 
   <section class="max-w-7xl mx-auto px-4 py-16 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-center">
     <div class="space-y-4">
