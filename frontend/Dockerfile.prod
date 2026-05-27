@@ -28,7 +28,14 @@ EXPOSE 4321
 # and the Astro node server binds only to IPv4 → wget fails with "Connection
 # refused" even though the server is up. Match the curl-based healthcheck
 # used by every other frontend in the VPS.
-HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 \
-  CMD curl -fsS http://localhost:4321/ >/dev/null || exit 1
+#
+# Hit /healthz instead of /: the landing page does SSR with an awaited
+# fetch to the backend (/tournaments) and the 3s healthcheck timeout was
+# tripping during cold boot of the canary (DB freshly migrated, backend
+# warming up) — even though prod was healthy. /healthz is a static response
+# that has no upstream dependency, so the canary turns healthy as soon as
+# the Astro node server is bound, not after the first slow API hop.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=8 \
+  CMD curl -fsS http://localhost:4321/healthz >/dev/null || exit 1
 
 CMD ["node", "dist/server/entry.mjs"]
