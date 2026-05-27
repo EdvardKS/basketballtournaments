@@ -85,6 +85,13 @@ const applyDir = async (
   opts: { failOnError: boolean },
 ): Promise<void> => {
   if (!fs.existsSync(dir)) {
+    // In production, a missing migrations mount means the deploy is broken
+    // (schema would never be applied → bootstrapAdmin crashes on first query).
+    // Refuse to silently continue so the container fails healthcheck and the
+    // operator/canary pipeline catches it.
+    if (opts.failOnError && process.env.NODE_ENV === "production") {
+      throw new Error(`[${label}] required mount ${dir} missing — refusing to boot in production`);
+    }
     console.log(`[${label}] ${dir} not mounted — skipping`);
     return;
   }
@@ -92,6 +99,9 @@ const applyDir = async (
 
   const files = listFiles(dir);
   if (files.length === 0) {
+    if (opts.failOnError && process.env.NODE_ENV === "production") {
+      throw new Error(`[${label}] no *.sql files in ${dir} — refusing to boot in production`);
+    }
     console.log(`[${label}] no *.sql files in ${dir}`);
     return;
   }
