@@ -23,6 +23,7 @@ export const createApp = () => {
     credentials: true,
   }));
   app.use(express.json({ limit: "2mb" }));
+  app.use(express.urlencoded({ extended: false })); // backend-served reset form
   app.use(session({
     store: new PgSession({
       pool,

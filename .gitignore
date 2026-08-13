@@ -36,3 +36,7 @@ backend/test/tmp_*
 
 # Docker volumes mount points when used outside compose
 pgdata/
+*.bak
+*.bak.*
+.pnpm-store/
+frontend/.pnpm-store/

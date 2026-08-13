@@ -37,6 +37,12 @@ services:
     container_name: basket_backend_prod
     restart: unless-stopped
     env_file: ./backend/.env.prod
+    environment:
+      # SMTP relay (shared mail_net). No auth; From must be *@mail.iaeks.com.
+      SMTP_HOST: ${SMTP_HOST:-smtp}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_FROM: ${SMTP_FROM:-basket@mail.iaeks.com}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://basket.edvardks.com}
     depends_on:
       db:
         condition: service_healthy
@@ -46,6 +52,7 @@ services:
       - ./backend/data:/app/data
     networks:
       - basket_net_prod
+      - mail_net
 
   frontend:
     build:
@@ -65,6 +72,9 @@ networks:
   basket_net_prod:
     driver: bridge
   reverse_proxy:
+    external: true
+  # Shared SMTP relay network (host "smtp"). Created once: docker network create mail_net
+  mail_net:
     external: true
 
 volumes:

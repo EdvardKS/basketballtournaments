@@ -1,18 +1,36 @@
 // Authentication: verify credentials and return the player record.
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { queryOne } from "../db/query.js";
 import { toPlayer } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
+import { verifyPassword, hashPassword, isHashed } from "./password.js";
 
 // Any of mobile / username / email works as the login identifier.
+// Password is verified in JS (bcrypt, with legacy plaintext fallback) instead
+// of in SQL, so old plaintext rows migrate to bcrypt transparently on login.
 export const authenticate = async (identifier: string, password: string) => {
   const id = identifier.trim();
-  const row = await queryOne(
+  const row = await queryOne<Record<string, unknown>>(
     `SELECT * FROM players
-     WHERE (mobile = $1 OR username = $1 OR LOWER(email) = LOWER($1)) AND password = $2`,
-    [id, password],
+     WHERE (mobile = $1 OR username = $1 OR LOWER(email) = LOWER($1))`,
+    [id],
   );
   if (!row) throw new HttpError(401, "INVALID_CREDENTIALS");
+  const stored = (row.password as string | null) ?? null;
+  if (!(await verifyPassword(password, stored))) {
+    throw new HttpError(401, "INVALID_CREDENTIALS");
+  }
+  // Opportunistic upgrade: re-hash legacy plaintext passwords on login.
+  if (!isHashed(stored)) {
+    try {
+      await queryOne("UPDATE players SET password=$1 WHERE id=$2 RETURNING id", [
+        await hashPassword(password),
+        row.id as string,
+      ]);
+    } catch {
+      /* non-fatal: login already succeeded */
+    }
+  }
   return toPlayer(row);
 };
 
@@ -96,8 +114,64 @@ export const recoverResetPassword = async (
   }
   await queryOne(
     "UPDATE players SET password=$1 WHERE id=$2 RETURNING id",
-    [newPassword, entry.playerId],
+    [await hashPassword(newPassword), entry.playerId],
   );
   recoveryTokens.delete(recoveryToken);
   return { ok: true };
+};
+
+// ---------------------------------------------------------------------------
+// Email-based password recovery (DB-backed tokens). Complements the in-memory
+// arithmetic-challenge flow above: here the proof of identity is owning the
+// email inbox, so we email a single-use link instead of asking for the
+// mobile+email+username triple.
+
+const sha256hex = (s: string) =>
+  createHash("sha256").update(s).digest("hex");
+
+export const requestEmailPasswordReset = async (email: string) => {
+  const clean = email.trim();
+  if (!clean) return null;
+  const row = await queryOne<{ id: string; name: string | null; email: string | null }>(
+    "SELECT id, name, email FROM players WHERE LOWER(email) = LOWER($1)",
+    [clean],
+  );
+  if (!row?.email) return null;
+  const token = randomId(24);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+  await queryOne(
+    `INSERT INTO password_reset_tokens (token_hash, player_id, expires_at)
+     VALUES ($1, $2, $3) RETURNING token_hash`,
+    [sha256hex(token), row.id, expiresAt],
+  );
+  return { token, player: { id: row.id, name: row.name, email: row.email } };
+};
+
+export const resetPasswordWithEmailToken = async (
+  token: string, newPassword: string,
+) => {
+  if (typeof newPassword !== "string" || newPassword.length < 6 || newPassword.length > 100) {
+    throw new HttpError(400, "PASSWORD_INVALID");
+  }
+  const tokenHash = sha256hex(String(token));
+  const entry = await queryOne<{ player_id: string; expires_at: string; used_at: string | null }>(
+    "SELECT player_id, expires_at, used_at FROM password_reset_tokens WHERE token_hash=$1",
+    [tokenHash],
+  );
+  if (!entry || entry.used_at || new Date(entry.expires_at).getTime() < Date.now()) {
+    throw new HttpError(400, "TOKEN_INVALID");
+  }
+  await queryOne(
+    "UPDATE players SET password=$1 WHERE id=$2 RETURNING id",
+    [await hashPassword(newPassword), entry.player_id],
+  );
+  await queryOne(
+    "UPDATE password_reset_tokens SET used_at=NOW() WHERE token_hash=$1 RETURNING token_hash",
+    [tokenHash],
+  );
+  const player = await queryOne<{ name: string | null; email: string | null }>(
+    "SELECT name, email FROM players WHERE id=$1",
+    [entry.player_id],
+  );
+  return { ok: true, player };
 };

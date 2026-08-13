@@ -4,6 +4,9 @@ import { z } from "zod";
 import { query, queryOne } from "../db/query.js";
 import { toPlayer } from "../db/mappers.js";
 import { HttpError } from "../middleware/error.js";
+import { hashPassword } from "./password.js";
+import { sendMail } from "../lib/mailer.js";
+import { welcomeEmail } from "../lib/emails.js";
 
 export const STAT_KEYS = ["pace","shooting","passing","dribbling","defense","physical"] as const;
 type StatKey = typeof STAT_KEYS[number];
@@ -42,10 +45,14 @@ export const createPlayer = async (raw: unknown) => {
      VALUES ($1,$2,$3,'player',$4,$5,$6,$7,$8,$9,NOW(),40,40,40,40,40,40,$10)
      RETURNING *`,
     [data.name, data.mobile, data.email ?? null,
-     data.position, data.password, data.isPublic, data.avatar ?? null,
+     data.position, await hashPassword(data.password), data.isPublic, data.avatar ?? null,
      data.age ?? null, data.gdprAccepted, overall],
   );
-  return toPlayer(row!);
+  const player = toPlayer(row!);
+  if (data.email) {
+    sendMail({ to: data.email, ...welcomeEmail(data.name) }).catch(() => {});
+  }
+  return player;
 };
 
 export const listPlayers = async () => {
